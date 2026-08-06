@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
 import { api } from '@/api/client'
@@ -13,8 +14,8 @@ import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay } from '@/utils
 const props = defineProps<{ entry: ApodEntry; latest?: string }>()
 
 const router = useRouter()
+const toast = useToast()
 const { isFavorite, toggle } = useFavorites()
-const copied = ref(false)
 const alsoOnThisDay = ref<ApodSummary[]>([])
 
 const explanation = computed(() => withInternalLinks(props.entry.explanation_html))
@@ -61,12 +62,30 @@ async function loadOnThisDay() {
   }
 }
 
+function saveToggle() {
+  const wasSaved = isFavorite(props.entry.date)
+  toggle(props.entry.date)
+  toast.add({
+    severity: wasSaved ? 'secondary' : 'success',
+    summary: wasSaved ? 'Removed from favorites' : 'Saved to favorites',
+    detail: props.entry.title,
+    life: 2200,
+  })
+}
+
 async function copyLink() {
+  const url = `${location.origin}/${props.entry.date}`
   try {
-    await navigator.clipboard.writeText(`${location.origin}/${props.entry.date}`)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1600)
-  } catch {}
+    await navigator.clipboard.writeText(url)
+    toast.add({ severity: 'success', summary: 'Link copied', detail: url, life: 2200 })
+  } catch {
+    toast.add({
+      severity: 'warn',
+      summary: 'Could not copy',
+      detail: 'Your browser blocked clipboard access.',
+      life: 3000,
+    })
+  }
 }
 
 function onKey(event: KeyboardEvent) {
@@ -84,94 +103,114 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
-  <article class="stack">
+  <article class="entry">
     <header class="head">
       <div class="row justify">
         <time :datetime="entry.date" class="muted">{{ formatDate(entry.date) }}</time>
-        <nav class="row nav">
-          <RouterLink
-            v-if="previous"
-            :to="`/${previous}`"
-            class="icon-link"
-            title="Previous day (←)"
-            aria-label="Previous day"
-          >
-            <i class="pi pi-chevron-left" aria-hidden="true" />
+        <nav class="row nav" aria-label="Adjacent days">
+          <RouterLink v-if="previous" v-slot="{ navigate }" :to="`/${previous}`" custom>
+            <Button
+              v-tooltip.bottom="'Previous day (←)'"
+              icon="pi pi-chevron-left"
+              severity="secondary"
+              outlined
+              rounded
+              aria-label="Previous day"
+              @click="navigate"
+            />
           </RouterLink>
-          <RouterLink
-            v-if="next"
-            :to="`/${next}`"
-            class="icon-link"
-            title="Next day (→)"
-            aria-label="Next day"
-          >
-            <i class="pi pi-chevron-right" aria-hidden="true" />
+          <RouterLink v-if="next" v-slot="{ navigate }" :to="`/${next}`" custom>
+            <Button
+              v-tooltip.bottom="'Next day (→)'"
+              icon="pi pi-chevron-right"
+              severity="secondary"
+              outlined
+              rounded
+              aria-label="Next day"
+              @click="navigate"
+            />
           </RouterLink>
         </nav>
       </div>
       <h1 class="title">{{ entry.title }}</h1>
     </header>
 
-    <MediaFrame :media="entry.media" :title="entry.title" />
+    <div class="layout">
+      <div class="media-column">
+        <MediaFrame :media="entry.media" :title="entry.title" />
 
-    <div class="row actions">
-      <button
-        type="button"
-        class="action"
-        :class="{ active: isFavorite(entry.date) }"
-        @click="toggle(entry.date)"
-      >
-        <i :class="isFavorite(entry.date) ? 'pi pi-star-fill' : 'pi pi-star'" aria-hidden="true" />
-        {{ isFavorite(entry.date) ? 'Saved' : 'Save' }}
-      </button>
-      <button type="button" class="action" @click="copyLink">
-        <i :class="copied ? 'pi pi-check' : 'pi pi-link'" aria-hidden="true" />
-        {{ copied ? 'Copied' : 'Copy link' }}
-      </button>
-      <a class="action" :href="entry.source_url" target="_blank" rel="noopener">
-        <i class="pi pi-external-link" aria-hidden="true" /> Original
-      </a>
-    </div>
-
-    <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
-      <template v-for="(credit, index) in credits" :key="credit.label + index">
-        <dt>{{ credit.label }}</dt>
-        <dd>
-          <span v-html="credit.html" />
-          <span
-            v-if="index === 0 && entry.has_copyright"
-            class="rights"
-            title="Credited to a named copyright holder rather than released as public domain by NASA"
-          >
-            Copyrighted
-          </span>
-          <a
-            v-if="index === 0 && license"
-            class="rights"
-            :href="license.url"
-            target="_blank"
-            rel="noopener license"
-            title="Released under this licence rather than as public domain by NASA"
-          >
-            {{ license.name }}
+        <div class="row actions">
+          <Button
+            :label="isFavorite(entry.date) ? 'Saved' : 'Save'"
+            :icon="isFavorite(entry.date) ? 'pi pi-star-fill' : 'pi pi-star'"
+            :severity="isFavorite(entry.date) ? 'primary' : 'secondary'"
+            outlined
+            size="small"
+            @click="saveToggle"
+          />
+          <Button
+            label="Copy link"
+            icon="pi pi-link"
+            severity="secondary"
+            outlined
+            size="small"
+            @click="copyLink"
+          />
+          <a class="plain" :href="entry.source_url" target="_blank" rel="noopener">
+            <Button
+              label="Original"
+              icon="pi pi-external-link"
+              severity="secondary"
+              outlined
+              size="small"
+              tabindex="-1"
+            />
           </a>
-        </dd>
-      </template>
-    </dl>
+        </div>
 
-    <div class="prose" v-html="explanation" @click="onInternalLink" />
+        <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
+          <template v-for="(credit, index) in credits" :key="credit.label + index">
+            <dt>{{ credit.label }}</dt>
+            <dd>
+              <span v-html="credit.html" />
+              <span
+                v-if="index === 0 && entry.has_copyright"
+                class="rights"
+                title="Credited to a named copyright holder rather than released as public domain by NASA"
+              >
+                Copyrighted
+              </span>
+              <a
+                v-if="index === 0 && license"
+                class="rights"
+                :href="license.url"
+                target="_blank"
+                rel="noopener license"
+                title="Released under this licence rather than as public domain by NASA"
+              >
+                {{ license.name }}
+              </a>
+            </dd>
+          </template>
+        </dl>
+      </div>
 
-    <ul v-if="entry.keywords?.length" class="row tags">
-      <li v-for="keyword in entry.keywords" :key="keyword">
-        <RouterLink :to="{ name: 'search', query: { q: keyword } }" class="tag">
-          {{ keyword }}
-        </RouterLink>
-      </li>
-    </ul>
+      <div class="text-column">
+        <div class="prose" v-html="explanation" @click="onInternalLink" />
 
-    <p v-if="entry.tomorrow_teaser" class="muted teaser">
-      Tomorrow's picture: <em>{{ entry.tomorrow_teaser }}</em>
-    </p>
+        <ul v-if="entry.keywords?.length" class="row tags">
+          <li v-for="keyword in entry.keywords" :key="keyword">
+            <RouterLink :to="{ name: 'search', query: { q: keyword } }" class="plain">
+              <Tag :value="keyword" severity="secondary" rounded class="tag" />
+            </RouterLink>
+          </li>
+        </ul>
+
+        <p v-if="entry.tomorrow_teaser" class="muted teaser">
+          Tomorrow's picture: <em>{{ entry.tomorrow_teaser }}</em>
+        </p>
+      </div>
+    </div>
 
     <section v-if="alsoOnThisDay.length" class="stack">
       <h2 class="section-title">On this day in other years</h2>
@@ -181,6 +220,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </template>
 
 <style scoped>
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
 .head {
   display: flex;
   flex-direction: column;
@@ -194,40 +239,90 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .title {
   font-size: clamp(1.6rem, 1.1rem + 2vw, 2.4rem);
   font-weight: 700;
+  text-wrap: balance;
 }
 
 .nav {
-  gap: 0.25rem;
-}
-
-.icon-link,
-.action {
-  display: inline-flex;
-  align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  background: var(--bg-elevated);
-  color: inherit;
+  flex: none;
+}
+
+.layout {
+  display: grid;
+  gap: var(--gap);
+  align-items: start;
+}
+
+@media (min-width: 62rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .media-column {
+    position: sticky;
+    top: 4.75rem;
+  }
+}
+
+.media-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+}
+
+.text-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+@media (max-width: 61.99rem) {
+  .layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .media-column,
+  .text-column {
+    display: contents;
+  }
+
+  .media-column > :first-child {
+    order: 1;
+  }
+
+  .actions {
+    order: 2;
+  }
+
+  .prose {
+    order: 3;
+  }
+
+  .tags {
+    order: 4;
+  }
+
+  .credits {
+    order: 5;
+  }
+
+  .teaser {
+    order: 6;
+  }
+}
+
+.actions {
+  gap: 0.5rem;
+}
+
+.plain {
   text-decoration: none;
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.icon-link:hover,
-.action:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-  color: var(--accent);
-}
-
-.action.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: inherit;
+  display: inline-flex;
 }
 
 .credits {
@@ -274,18 +369,12 @@ a.rights:hover {
 }
 
 .tag {
-  display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.82rem;
-  text-decoration: none;
-  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
 }
 
-.tag:hover {
+.tags a:hover .tag {
   color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 .teaser {

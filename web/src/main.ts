@@ -1,5 +1,7 @@
 import { createApp } from 'vue'
 import PrimeVue from 'primevue/config'
+import ConfirmationService from 'primevue/confirmationservice'
+import ToastService from 'primevue/toastservice'
 import Tooltip from 'primevue/tooltip'
 
 import App from './App.vue'
@@ -16,10 +18,12 @@ createApp(App)
       preset: ApodPreset,
       options: {
         darkModeSelector: '.app-dark',
-        cssLayer: { name: 'primevue', order: 'theme, base, primevue' },
+        cssLayer: { name: 'primevue', order: 'base, primevue' },
       },
     },
     ripple: false,
   })
+  .use(ToastService)
+  .use(ConfirmationService)
   .directive('tooltip', Tooltip)
   .mount('#app')

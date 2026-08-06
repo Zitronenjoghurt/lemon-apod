@@ -20,10 +20,10 @@ function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
 <template>
   <div v-if="loading && !entries.length" class="grid" aria-busy="true" aria-label="Loading entries">
     <div v-for="index in placeholders" :key="index" class="card skeleton-card">
-      <div class="skeleton thumb" />
+      <Skeleton width="100%" height="0" class="thumb" />
       <div class="lines">
-        <div class="skeleton line short" />
-        <div class="skeleton line" />
+        <Skeleton width="40%" height="0.8rem" />
+        <Skeleton width="100%" height="0.8rem" />
       </div>
     </div>
   </div>
@@ -55,14 +55,6 @@ function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-}
-
-.line {
-  height: 0.8rem;
-}
-
-.line.short {
-  width: 40%;
 }
 
 .empty {

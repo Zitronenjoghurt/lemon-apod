@@ -12,14 +12,22 @@ const router = useRouter()
 const PAGE_SIZE = 30
 const DEBOUNCE_MS = 250
 
-const KINDS: { label: string; value: MediaKind | '' }[] = [
-  { label: 'Anything', value: '' },
+const ANY = 'any' as const
+type KindChoice = MediaKind | typeof ANY
+
+const KINDS: { label: string; value: KindChoice }[] = [
+  { label: 'Anything', value: ANY },
   { label: 'Images', value: 'image_jpg' },
-  { label: 'Video', value: 'youtube' },
+  { label: 'Video', value: 'video_mp4' },
+]
+
+const SORTS: { label: string; value: 'relevance' | 'date' }[] = [
+  { label: 'Relevance', value: 'relevance' },
+  { label: 'Newest', value: 'date' },
 ]
 
 const query = ref(String(route.query.q ?? ''))
-const kind = ref<MediaKind | ''>((route.query.kind as MediaKind) ?? '')
+const kind = ref<KindChoice>((route.query.kind as MediaKind) ?? ANY)
 const sort = ref<'relevance' | 'date'>(route.query.sort === 'date' ? 'date' : 'relevance')
 const page = ref(Number.parseInt(String(route.query.page ?? '1'), 10) || 1)
 
@@ -32,17 +40,13 @@ const {
   api.search(
     query.value,
     {
-      kind: kind.value || undefined,
+      kind: kind.value === ANY ? undefined : kind.value,
       sort: sort.value,
       offset: (page.value - 1) * PAGE_SIZE,
       limit: PAGE_SIZE,
     },
     signal,
   ),
-)
-
-const totalPages = computed(() =>
-  results.value ? Math.max(1, Math.ceil(results.value.total / PAGE_SIZE)) : 1,
 )
 
 let debounce: ReturnType<typeof setTimeout> | undefined
@@ -56,7 +60,7 @@ function search(resetPage: boolean) {
       name: 'search',
       query: {
         q: query.value || undefined,
-        kind: kind.value || undefined,
+        kind: kind.value === ANY ? undefined : kind.value,
         sort: sort.value === 'relevance' ? undefined : sort.value,
         page: page.value === 1 ? undefined : String(page.value),
       },
@@ -66,18 +70,18 @@ function search(resetPage: boolean) {
   }, DEBOUNCE_MS)
 }
 
-function selectKind(value: MediaKind | '') {
-  kind.value = value
+function selectKind(value: KindChoice | null) {
+  kind.value = value ?? ANY
   search(true)
 }
 
-function selectSort(value: 'relevance' | 'date') {
-  sort.value = value
+function selectSort(value: 'relevance' | 'date' | null) {
+  sort.value = value ?? 'relevance'
   search(true)
 }
 
-function goTo(target: number) {
-  page.value = Math.min(Math.max(1, target), totalPages.value)
+function onPage(event: { page: number }) {
+  page.value = event.page + 1
   search(false)
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -96,64 +100,58 @@ watch(
 onMounted(() => {
   if (query.value.trim()) run()
 })
+
+const hasQuery = computed(() => query.value.trim().length > 0)
 </script>
 
 <template>
   <div class="stack">
-    <div class="search-bar card">
-      <i class="pi pi-search" aria-hidden="true" />
-      <input
+    <IconField class="search-field">
+      <InputIcon class="pi pi-search" />
+      <InputText
         v-model="query"
         type="search"
         placeholder="Search 30 years of explanations, titles and credits…"
         aria-label="Search entries"
         autofocus
+        fluid
+        size="large"
         @input="search(true)"
       />
+    </IconField>
+
+    <div class="filters">
+      <SelectButton
+        :model-value="kind"
+        :options="KINDS"
+        option-label="label"
+        option-value="value"
+        size="small"
+        aria-labelledby="kind-label"
+        @update:model-value="selectKind"
+      />
+      <span id="kind-label" class="sr-only">Media kind</span>
+
+      <SelectButton
+        :model-value="sort"
+        :options="SORTS"
+        option-label="label"
+        option-value="value"
+        size="small"
+        aria-labelledby="sort-label"
+        @update:model-value="selectSort"
+      />
+      <span id="sort-label" class="sr-only">Sort order</span>
     </div>
 
-    <div class="row filters">
-      <div class="row group" role="group" aria-label="Media kind">
-        <button
-          v-for="option in KINDS"
-          :key="option.value"
-          type="button"
-          class="chip"
-          :class="{ active: kind === option.value }"
-          @click="selectKind(option.value)"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-
-      <div class="row group" role="group" aria-label="Sort order">
-        <button
-          type="button"
-          class="chip"
-          :class="{ active: sort === 'relevance' }"
-          @click="selectSort('relevance')"
-        >
-          Relevance
-        </button>
-        <button
-          type="button"
-          class="chip"
-          :class="{ active: sort === 'date' }"
-          @click="selectSort('date')"
-        >
-          Newest
-        </button>
-      </div>
-    </div>
-
-    <p v-if="results && query.trim()" class="muted count" aria-live="polite">
+    <p v-if="results && hasQuery" class="muted count" aria-live="polite">
       {{ results.total.toLocaleString() }}
       {{ results.total === 1 ? 'result' : 'results' }}
     </p>
 
-    <p v-if="error" class="muted">{{ error }}</p>
+    <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
 
-    <p v-else-if="!query.trim()" class="muted empty">
+    <p v-else-if="!hasQuery" class="muted empty">
       Type to search titles, explanations, credits and keywords.
     </p>
 
@@ -164,77 +162,26 @@ onMounted(() => {
       empty="No entries matched that search."
     />
 
-    <nav v-if="results && totalPages > 1" class="row pager" aria-label="Pagination">
-      <button type="button" class="chip" :disabled="page <= 1" @click="goTo(page - 1)">
-        <i class="pi pi-chevron-left" aria-hidden="true" /> Previous
-      </button>
-      <span class="muted">Page {{ page }} of {{ totalPages }}</span>
-      <button type="button" class="chip" :disabled="page >= totalPages" @click="goTo(page + 1)">
-        Next <i class="pi pi-chevron-right" aria-hidden="true" />
-      </button>
-    </nav>
+    <Paginator
+      v-if="results && results.total > PAGE_SIZE"
+      :rows="PAGE_SIZE"
+      :total-records="results.total"
+      :first="(page - 1) * PAGE_SIZE"
+      @page="onPage"
+    />
   </div>
 </template>
 
 <style scoped>
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1.1rem;
-}
-
-.search-bar i {
-  color: var(--text-muted);
-}
-
-.search-bar input {
-  flex: 1;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 1.05rem;
-  color: inherit;
-  outline: none;
-  min-width: 0;
+.search-field {
+  width: 100%;
 }
 
 .filters {
+  display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 1rem;
-}
-
-.group {
-  gap: 0.35rem;
-}
-
-.chip {
-  font: inherit;
-  font-size: 0.86rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.chip:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.chip.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
-}
-
-.chip:disabled {
-  opacity: 0.45;
-  cursor: default;
+  gap: 0.75rem;
 }
 
 .count {
@@ -247,9 +194,18 @@ onMounted(() => {
   text-align: center;
 }
 
-.pager {
-  justify-content: center;
-  gap: 1rem;
-  padding-top: 1rem;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 30rem) {
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

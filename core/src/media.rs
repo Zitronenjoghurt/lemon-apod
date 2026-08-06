@@ -9,6 +9,7 @@ pub enum MediaKind {
     ImagePng,
     ImageGif,
     VideoMp4,
+    #[serde(rename = "youtube")]
     YouTube,
     Vimeo,
     Other,
@@ -155,8 +156,6 @@ impl Media {
                 Some(id) => ThumbSource::Vimeo(id.to_owned()),
                 None => ThumbSource::None,
             },
-            // Nothing on the page stands in for a self-hosted video: APOD sets no poster
-            // attribute, so the only thumbnail available is one decoded from the file itself.
             MediaKind::VideoMp4 => match self.url.as_deref() {
                 Some(url) => ThumbSource::Frame(url.to_owned()),
                 None => ThumbSource::None,
@@ -169,6 +168,35 @@ impl Media {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_kind_spells_itself_the_same_way_everywhere() {
+        let kinds = [
+            MediaKind::ImageJpg,
+            MediaKind::ImagePng,
+            MediaKind::ImageGif,
+            MediaKind::VideoMp4,
+            MediaKind::YouTube,
+            MediaKind::Vimeo,
+            MediaKind::Other,
+            MediaKind::None,
+        ];
+
+        for kind in kinds {
+            let displayed = kind.to_string();
+            let serialized = serde_json::to_string(&kind).unwrap();
+            assert_eq!(
+                serialized,
+                format!("\"{displayed}\""),
+                "{displayed:?} serializes differently than it displays"
+            );
+            assert_eq!(MediaKind::from_str(&displayed), Ok(kind));
+            assert_eq!(
+                serde_json::from_str::<MediaKind>(&serialized).unwrap(),
+                kind
+            );
+        }
+    }
 
     #[test]
     fn classifies_by_extension_and_host() {

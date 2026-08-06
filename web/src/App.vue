@@ -1,24 +1,35 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { ref } from 'vue'
+import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { throttled } from '@/api/client'
 import { useFavorites } from '@/composables/useFavorites'
 import { useTheme } from '@/composables/useTheme'
 
+const router = useRouter()
 const { theme, cycle } = useTheme()
 const { count } = useFavorites()
 
+const menuOpen = ref(false)
+
 const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
+const themeLabel = { auto: 'Match system', dark: 'Dark', light: 'Light' }
+
+const links = [
+  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
+  { to: '/search', label: 'Search', icon: 'pi pi-search' },
+  { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
+  { to: '/random', label: 'Random', icon: 'pi pi-sync' },
+]
+
+router.afterEach(() => (menuOpen.value = false))
 </script>
 
 <template>
   <a href="#main" class="skip">Skip to content</a>
 
   <header class="site-header">
-    <div class="container row justify">
+    <div class="container bar">
       <RouterLink to="/" class="brand">
-        <!-- A ringed planet, drawn rather than set as a glyph. The four-pointed star this
-             replaced had turned into the Gemini logo, and rare astronomy glyphs like U+2609
-             fall back to tofu on plenty of systems. -->
         <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
           <ellipse
             cx="12"
@@ -37,27 +48,46 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
         <span>APOD Archive</span>
       </RouterLink>
 
-      <nav class="row nav" aria-label="Main">
-        <RouterLink to="/archive">Archive</RouterLink>
-        <RouterLink to="/search">Search</RouterLink>
-        <RouterLink to="/favorites">
-          Favorites<span v-if="count" class="count">{{ count }}</span>
+      <nav class="row nav wide-only" aria-label="Main">
+        <RouterLink v-for="link in links" :key="link.to" :to="link.to">
+          {{ link.label }}
+          <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
         </RouterLink>
-        <RouterLink to="/random" title="A random entry">Random</RouterLink>
-        <button
-          type="button"
-          class="theme"
-          :title="`Theme: ${theme}`"
-          :aria-label="`Theme: ${theme}. Click to change.`"
-          @click="cycle"
-        >
-          <i class="pi" :class="themeIcon[theme]" aria-hidden="true" />
-        </button>
       </nav>
+
+      <div class="row trailing">
+        <Button
+          v-tooltip.bottom="`Theme: ${themeLabel[theme]}`"
+          :icon="`pi ${themeIcon[theme]}`"
+          severity="secondary"
+          text
+          rounded
+          :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
+          @click="cycle"
+        />
+        <Button
+          class="narrow-only"
+          icon="pi pi-bars"
+          severity="secondary"
+          text
+          rounded
+          aria-label="Open menu"
+          @click="menuOpen = true"
+        />
+      </div>
     </div>
   </header>
 
-  <!-- The API throttles rather than fails; saying so beats a spinner that looks stuck. -->
+  <Drawer v-model:visible="menuOpen" position="right" header="Menu">
+    <nav class="menu" aria-label="Main">
+      <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="menu-link">
+        <i :class="link.icon" aria-hidden="true" />
+        <span>{{ link.label }}</span>
+        <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
+      </RouterLink>
+    </nav>
+  </Drawer>
+
   <Transition name="fade">
     <div v-if="throttled" class="throttle" role="status">
       <i class="pi pi-clock" aria-hidden="true" /> Slowing down for a moment…
@@ -73,20 +103,20 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   </main>
 
   <footer class="site-footer">
-    <div class="container stack">
+    <div class="container">
       <p class="muted">
         An unofficial archive of NASA's
         <a href="https://apod.nasa.gov/apod/" target="_blank" rel="noopener">
           Astronomy Picture of the Day</a
-        >. Not affiliated with or endorsed by NASA.
-      </p>
-      <p class="muted small">
-        Pictures and videos load from NASA's own servers and belong to the people and institutions
-        credited on each entry. Explanations come from the original APOD pages, which every entry
-        links to.
+        >. Not affiliated with or endorsed by NASA. Pictures and videos load from NASA's own servers
+        and belong to the people and institutions credited on each entry; explanations come from the
+        original APOD pages, which every entry links to.
       </p>
     </div>
   </footer>
+
+  <Toast position="bottom-center" />
+  <ConfirmDialog />
 </template>
 
 <style scoped>
@@ -113,12 +143,11 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   border-bottom: 1px solid var(--border);
 }
 
-.site-header .container {
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   min-height: 3.75rem;
-}
-
-.justify {
-  justify-content: space-between;
 }
 
 .brand {
@@ -129,6 +158,7 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   letter-spacing: -0.01em;
   text-decoration: none;
   color: inherit;
+  margin-right: auto;
 }
 
 .mark {
@@ -160,6 +190,11 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   border-bottom-color: var(--accent);
 }
 
+.trailing {
+  gap: 0.15rem;
+  flex: none;
+}
+
 .count {
   display: inline-block;
   margin-left: 0.35rem;
@@ -170,17 +205,38 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   padding: 0 0.4rem;
 }
 
-.theme {
-  background: none;
-  border: 0;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0.25rem;
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.theme:hover {
+.menu-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 0.75rem;
+  border-radius: 0.6rem;
+  text-decoration: none;
   color: var(--text);
+}
+
+.menu-link:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.menu-link.router-link-active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.menu-link i {
+  width: 1.25rem;
+  text-align: center;
+}
+
+.menu-link .count {
+  margin-left: auto;
 }
 
 .throttle {
@@ -201,26 +257,23 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
 }
 
 .page {
-  padding-block: 2rem 4rem;
-  min-height: 60vh;
+  padding-block: 2rem 3rem;
+  flex: 1 0 auto;
 }
 
 .site-footer {
   border-top: 1px solid var(--border);
-  padding-block: 2rem 3rem;
-  font-size: 0.9rem;
-}
-
-.site-footer .stack {
-  gap: 0.6rem;
+  padding-block: 1.1rem 1.4rem;
+  font-size: 0.8rem;
 }
 
 .site-footer p {
-  margin: 0;
-}
-
-.small {
-  font-size: 0.82rem;
+  margin-inline: auto;
+  margin-block: 0;
+  max-width: 80ch;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: pretty;
 }
 
 .fade-enter-active,
@@ -233,14 +286,17 @@ const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
   opacity: 0;
 }
 
-@media (max-width: 34rem) {
-  .nav {
-    gap: 0.75rem;
-    font-size: 0.86rem;
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 48rem) {
+  .wide-only {
+    display: none;
   }
 
-  .brand span:last-child {
-    display: none;
+  .narrow-only {
+    display: inline-flex;
   }
 }
 </style>

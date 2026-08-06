@@ -8,7 +8,7 @@ edition.workspace = true
 apod-core = { workspace = true }
 
 anyhow = { workspace = true }
-axum = { version = "0.8.8", features = ["macros"] }
+axum = { version = "0.8.9", features = ["macros"] }
 chrono = { workspace = true }
 r2d2 = { workspace = true }
 r2d2_sqlite = { workspace = true }
@@ -16,7 +16,9 @@ rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tower-http = { version = "0.6.8", features = ["fs", "set-header", "trace"] }
+# Held at 0.6 deliberately: tower_governor 0.8 requires tower-http ^0.6, and moving this to 0.7
+# compiles both copies into the binary for no gain. Bump once the governor follows.
+tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }
 thiserror = { workspace = true }
 tower_governor = "0.8.0"
 tracing = { workspace = true }

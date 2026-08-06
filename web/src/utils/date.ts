@@ -25,6 +25,10 @@ export function year(date: string): number {
   return Number.parseInt(date.slice(0, 4), 10)
 }
 
+export function month(date: string): number {
+  return Number.parseInt(date.slice(5, 7), 10)
+}
+
 export const FIRST_ENTRY = '1995-06-16'
 
 function shift(date: string, days: number): string | null {

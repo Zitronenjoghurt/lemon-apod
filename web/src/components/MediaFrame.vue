@@ -2,14 +2,11 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { isImage, type Media } from '@/api/types'
 
-const props = withDefaults(
-  defineProps<{
-    media: Media
-    title: string
-    linkFullResolution?: boolean
-  }>(),
-  { linkFullResolution: true },
-)
+const props = defineProps<{
+  media: Media
+  title: string
+  maxHeight?: string
+}>()
 
 const SLOW_AFTER_MS = 6000
 
@@ -72,56 +69,71 @@ const fullResolution = computed(() => {
   const { hd_url: hd, url } = props.media
   return hd && hd !== url ? hd : null
 })
+
+const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url && !failed.value)
 </script>
 
 <template>
-  <figure class="media">
-    <template v-if="isImage(media.kind) && media.url && !failed">
-      <component
-        :is="linkFullResolution && fullResolution ? 'a' : 'div'"
-        :href="fullResolution ?? undefined"
-        target="_blank"
-        rel="noopener"
-        class="frame"
-        :class="{ zoomable: linkFullResolution && fullResolution }"
-      >
-        <img
-          v-if="media.thumb_url && !loaded"
-          :src="media.thumb_url"
-          :alt="''"
-          aria-hidden="true"
-          class="placeholder"
-        />
-        <img
-          :key="media.url ?? ''"
-          :src="media.url"
-          :alt="title"
-          fetchpriority="high"
-          decoding="async"
-          class="full"
-          :class="{ ready: loaded }"
-          @load="loaded = true"
-          @error="failed = true"
-        />
-        <div v-if="!loaded" class="loading" role="status">
-          <span class="badge-loading">
-            <span class="spinner" aria-hidden="true" />
-            <span class="text">
-              Loading full image from NASA
-              <span v-if="slow" class="sub">This one is large, still downloading</span>
+  <figure class="media" :style="maxHeight ? { '--media-max': maxHeight } : undefined">
+    <Image
+      v-if="showsImage"
+      preview
+      class="shot"
+      :pt="{ toolbar: { class: 'shot-toolbar' } }"
+      :alt="title"
+    >
+      <template #image>
+        <div class="frame">
+          <img
+            v-if="media.thumb_url && !loaded"
+            :src="media.thumb_url"
+            alt=""
+            aria-hidden="true"
+            class="placeholder"
+          />
+          <img
+            :key="media.url ?? ''"
+            :src="media.url ?? ''"
+            :alt="title"
+            fetchpriority="high"
+            decoding="async"
+            class="full"
+            :class="{ ready: loaded }"
+            @load="loaded = true"
+            @error="failed = true"
+          />
+          <div v-if="!loaded" class="loading" role="status">
+            <span class="badge-loading">
+              <span class="spinner" aria-hidden="true" />
+              <span class="text">
+                Loading full image from NASA
+                <span v-if="slow" class="sub">This one is large, still downloading</span>
+              </span>
             </span>
-          </span>
+          </div>
         </div>
-      </component>
-      <figcaption v-if="fullResolution && linkFullResolution" class="hint muted">
-        <i class="pi pi-search-plus" aria-hidden="true" /> Open full resolution
-      </figcaption>
-    </template>
+      </template>
+
+      <template #original="{ style, previewCallback }">
+        <img
+          :src="fullResolution ?? media.url ?? ''"
+          :alt="title"
+          :style="style"
+          class="original"
+          @click="previewCallback"
+        />
+      </template>
+
+      <template #previewicon>
+        <i class="pi pi-search-plus" aria-hidden="true" />
+      </template>
+    </Image>
 
     <video
       v-else-if="media.kind === 'video_mp4' && media.url"
       class="frame"
       controls
+      playsinline
       preload="none"
       :poster="media.thumb_url ?? undefined"
     >
@@ -131,10 +143,10 @@ const fullResolution = computed(() => {
     <template v-else-if="(media.kind === 'youtube' || media.kind === 'vimeo') && videoId">
       <iframe
         v-if="playing"
-        class="frame"
+        class="frame embed"
         :src="embedUrl"
         :title="title"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
         allowfullscreen
       />
       <button v-else type="button" class="frame facade" @click="playing = true">
@@ -144,7 +156,6 @@ const fullResolution = computed(() => {
       </button>
     </template>
 
-    <!-- Interactive embeds, applets and the handful of pages with no media at all -->
     <a
       v-else
       class="frame placeholder-card"
@@ -161,25 +172,41 @@ const fullResolution = computed(() => {
 <style scoped>
 .media {
   margin: 0;
+  --media-max: min(62vh, 40rem);
+}
+
+@media (max-width: 61.99rem) {
+  .media {
+    --media-max: 46vh;
+  }
 }
 
 .frame {
   display: block;
   width: 100%;
+  max-height: var(--media-max);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-elevated) 30%, var(--bg));
   position: relative;
-  aspect-ratio: 16 / 10;
+}
+
+video.frame,
+.embed,
+.facade,
+.placeholder-card {
+  aspect-ratio: 16 / 9;
+  height: auto;
 }
 
 .frame img,
-.frame video,
+video.frame,
 .frame iframe {
   display: block;
   width: 100%;
   height: 100%;
+  max-height: var(--media-max);
   object-fit: contain;
   border: 0;
 }
@@ -269,22 +296,15 @@ const fullResolution = computed(() => {
   }
 }
 
-.zoomable {
-  cursor: zoom-in;
-}
-
-.hint {
-  font-size: 0.85rem;
-  margin-top: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.original {
+  max-width: 95vw;
+  max-height: 95vh;
+  object-fit: contain;
 }
 
 .facade {
   padding: 0;
   cursor: pointer;
-  border: 1px solid var(--border);
 }
 
 .facade img {
@@ -326,7 +346,6 @@ const fullResolution = computed(() => {
   gap: 0.6rem;
   color: var(--text-muted);
   text-decoration: none;
-  aspect-ratio: 16 / 7;
 }
 
 .placeholder-card i {
@@ -339,5 +358,46 @@ const fullResolution = computed(() => {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+}
+</style>
+
+<style>
+.shot {
+  display: block;
+  position: relative;
+  border-radius: var(--radius);
+}
+
+.shot .p-image-preview-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: rgb(8 10 20 / 0.55);
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: zoom-in;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.shot .p-image-preview-mask:hover,
+.shot .p-image-preview-mask:focus-visible {
+  opacity: 1;
+}
+
+.shot-toolbar {
+  gap: 0.35rem;
+}
+
+.p-image-mask {
+  background: rgb(4 5 12 / 0.94);
+  backdrop-filter: blur(4px);
 }
 </style>

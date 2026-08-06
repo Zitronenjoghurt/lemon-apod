@@ -1,4 +1,4 @@
-@layer theme, base, primevue;
+@layer base, primevue;
 
 @layer base {
   :root {
@@ -49,6 +49,12 @@
     line-height: 1.65;
     -webkit-font-smoothing: antialiased;
     transition: background-color 0.2s ease;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
   }
 
   a {

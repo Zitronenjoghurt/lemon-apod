@@ -1,20 +1,38 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import EntryGrid from '@/components/EntryGrid.vue'
 import { api } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
 
 const { favorites, count, clear } = useFavorites()
+const confirm = useConfirm()
+const toast = useToast()
+
 const entries = ref<ApodSummary[]>([])
 const loading = ref(false)
-const confirming = ref(false)
 
 function confirmClear() {
-  clear()
-  confirming.value = false
+  confirm.require({
+    header: 'Clear all favorites?',
+    message: `This removes all ${count.value} saved entries from this browser. There is no undo.`,
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
+    acceptProps: { label: 'Clear all', severity: 'danger' },
+    accept: () => {
+      const removed = count.value
+      clear()
+      toast.add({
+        severity: 'success',
+        summary: 'Favorites cleared',
+        detail: `${removed} ${removed === 1 ? 'entry' : 'entries'} removed.`,
+        life: 2500,
+      })
+    },
+  })
 }
 
 async function load() {
@@ -52,17 +70,16 @@ watch(favorites, load, { immediate: true })
   <div class="stack">
     <header class="row justify">
       <h1>Favorites</h1>
-      <button v-if="count" type="button" class="chip" @click="confirming = true">Clear all</button>
+      <Button
+        v-if="count"
+        label="Clear all"
+        icon="pi pi-trash"
+        severity="danger"
+        outlined
+        size="small"
+        @click="confirmClear"
+      />
     </header>
-
-    <ConfirmDialog
-      :open="confirming"
-      title="Clear all favorites?"
-      :message="`This removes all ${count} saved entries from this browser. There is no undo.`"
-      confirm-label="Clear all"
-      @confirm="confirmClear"
-      @cancel="confirming = false"
-    />
 
     <p class="muted note">
       Saved in this browser only. There are no accounts, and nothing is sent to the server.
@@ -96,20 +113,5 @@ h1 {
   padding: 3rem 0;
   text-align: center;
   line-height: 2.2;
-}
-
-.chip {
-  font: inherit;
-  font-size: 0.86rem;
-  padding: 0.25rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.chip:hover {
-  color: var(--text);
 }
 </style>

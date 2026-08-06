@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+
+const links = [
+  { to: '/', label: 'Latest entry', icon: 'pi pi-image' },
+  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
+  { to: '/random', label: 'Something random', icon: 'pi pi-sync' },
+]
 </script>
 
 <template>
@@ -8,9 +14,16 @@ import { RouterLink } from 'vue-router'
     <h1>Nothing out here</h1>
     <p class="muted">That page doesn't exist. Entries live at <code>/YYYY-MM-DD</code>.</p>
     <div class="row links">
-      <RouterLink to="/">Latest entry</RouterLink>
-      <RouterLink to="/archive">Archive</RouterLink>
-      <RouterLink to="/random">Something random</RouterLink>
+      <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="plain">
+        <Button
+          :label="link.label"
+          :icon="link.icon"
+          severity="secondary"
+          outlined
+          size="small"
+          tabindex="-1"
+        />
+      </RouterLink>
     </div>
   </div>
 </template>
@@ -47,7 +60,14 @@ code {
 }
 
 .links {
-  gap: 1.25rem;
-  margin-top: 0.5rem;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+.plain {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
 }
 </style>

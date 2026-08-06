@@ -15,7 +15,7 @@ onMounted(run)
 
   <div v-else-if="error" class="card notice">
     <p>{{ error }}</p>
-    <button type="button" @click="run">Try again</button>
+    <Button label="Try again" icon="pi pi-refresh" outlined @click="run" />
   </div>
 
   <EntryDetail v-else-if="entry" :entry="entry" :latest="entry.date" />
@@ -25,15 +25,13 @@ onMounted(run)
 .notice {
   padding: 2rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
-.notice button {
-  font: inherit;
-  padding: 0.4rem 1rem;
-  border-radius: 0.6rem;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: inherit;
-  cursor: pointer;
+.notice p {
+  margin: 0;
 }
 </style>

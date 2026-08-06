@@ -105,7 +105,14 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 fn sha256(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    use std::fmt::Write;
+
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 #[cfg(test)]
@@ -113,6 +120,18 @@ mod tests {
     use super::*;
 
     const MIN_BYTES: usize = 512;
+
+    #[test]
+    fn hashes_stay_64_lowercase_hex_digits() {
+        assert_eq!(
+            sha256(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            sha256(b"abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 
     #[test]
     fn accepts_a_real_looking_page() {

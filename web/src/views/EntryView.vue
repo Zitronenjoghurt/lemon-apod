@@ -32,12 +32,14 @@ watch(date, run, { immediate: true })
       Either APOD published nothing that day, or the archiver has not reached it yet. It walks
       backwards from today, so older dates arrive last.
     </p>
-    <RouterLink to="/">Back to the latest entry</RouterLink>
+    <RouterLink to="/" class="plain">
+      <Button label="Back to the latest entry" icon="pi pi-arrow-left" outlined tabindex="-1" />
+    </RouterLink>
   </div>
 
   <div v-else-if="error" class="card notice">
     <p>{{ error }}</p>
-    <button type="button" @click="run">Try again</button>
+    <Button label="Try again" icon="pi pi-refresh" outlined @click="run" />
   </div>
 
   <EntryDetail v-else-if="entry" :entry="entry" :latest="latest ?? undefined" />
@@ -49,7 +51,7 @@ watch(date, run, { immediate: true })
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
   align-items: center;
 }
 
@@ -62,13 +64,9 @@ watch(date, run, { immediate: true })
   margin: 0;
 }
 
-.notice button {
-  font: inherit;
-  padding: 0.4rem 1rem;
-  border-radius: 0.6rem;
-  border: 1px solid var(--border);
-  background: var(--bg);
+.plain {
+  text-decoration: none;
   color: inherit;
-  cursor: pointer;
+  display: inline-flex;
 }
 </style>

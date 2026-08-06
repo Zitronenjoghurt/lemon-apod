@@ -1,12 +1,5 @@
 export type MediaKind =
-  | 'image_jpg'
-  | 'image_png'
-  | 'image_gif'
-  | 'video_mp4'
-  | 'youtube'
-  | 'vimeo'
-  | 'other'
-  | 'none'
+  'image_jpg' | 'image_png' | 'image_gif' | 'video_mp4' | 'youtube' | 'vimeo' | 'other' | 'none'
 
 export interface Media {
   kind: MediaKind

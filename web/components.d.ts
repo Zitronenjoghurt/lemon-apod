@@ -11,13 +11,29 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    ConfirmDialog: typeof import('./src/components/ConfirmDialog.vue')['default']
+    Button: typeof import('primevue/button')['default']
+    ConfirmDialog: typeof import('primevue/confirmdialog')['default']
+    Drawer: typeof import('primevue/drawer')['default']
     EntryCard: typeof import('./src/components/EntryCard.vue')['default']
     EntryDetail: typeof import('./src/components/EntryDetail.vue')['default']
     EntryGrid: typeof import('./src/components/EntryGrid.vue')['default']
     EntrySkeleton: typeof import('./src/components/EntrySkeleton.vue')['default']
+    IconField: typeof import('primevue/iconfield')['default']
+    Image: typeof import('primevue/image')['default']
+    InputIcon: typeof import('primevue/inputicon')['default']
+    InputText: typeof import('primevue/inputtext')['default']
     MediaFrame: typeof import('./src/components/MediaFrame.vue')['default']
+    Message: typeof import('primevue/message')['default']
+    Paginator: typeof import('primevue/paginator')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    Select: typeof import('primevue/select')['default']
+    SelectButton: typeof import('primevue/selectbutton')['default']
+    Skeleton: typeof import('primevue/skeleton')['default']
+    Tag: typeof import('primevue/tag')['default']
+    Toast: typeof import('primevue/toast')['default']
+  }
+  export interface GlobalDirectives {
+    Tooltip: typeof import('primevue/tooltip')['default']
   }
 }

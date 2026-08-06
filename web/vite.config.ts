@@ -5,6 +5,8 @@ import vue from '@vitejs/plugin-vue'
 import Components from 'unplugin-vue-components/vite'
 import { defineConfig } from 'vite'
 
+const backend = process.env.APOD_API ?? 'http://localhost:51995'
+
 export default defineConfig({
   plugins: [vue(), Components({ resolvers: [PrimeVueResolver()] })],
   resolve: {
@@ -12,8 +14,8 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:51995',
-      '/thumbs': 'http://localhost:51995',
+      '/api': backend,
+      '/thumbs': backend,
     },
   },
 })

@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import EntryGrid from '@/components/EntryGrid.vue'
 import { api } from '@/api/client'
-import { useAsync } from '@/composables/useAsync'
+import type { ApodSummary } from '@/api/types'
 import { useLatestDate } from '@/composables/useLatestDate'
-import { year as yearOf } from '@/utils/date'
+import { FIRST_ENTRY, month as monthOf, year as yearOf } from '@/utils/date'
 
-const FIRST_YEAR = 1995
-const MONTHS = Array.from({ length: 12 }, (_, index) =>
-  new Date(Date.UTC(2000, index, 1)).toLocaleString(undefined, { month: 'short' }),
-)
+const FIRST_YEAR = yearOf(FIRST_ENTRY)
+const FIRST_MONTH = monthOf(FIRST_ENTRY)
+const PAGE_SIZE = 60
+
+const MONTHS = Array.from({ length: 12 }, (_, index) => ({
+  label: new Date(Date.UTC(2000, index, 1)).toLocaleString(undefined, { month: 'long' }),
+  value: index + 1,
+}))
 
 const route = useRoute()
+const router = useRouter()
+
 const latest = useLatestDate()
 
 const newestYear = computed(() => (latest.value ? yearOf(latest.value) : null))
 
-// No year in the URL lands on the newest one with every month shown, which is what someone
-// opening the archive is nearly always after. Until the latest date arrives there is nothing
-// to default to, and the grid shows its skeletons.
 const year = computed(() =>
   route.params.year ? Number(route.params.year) : (newestYear.value ?? null),
 )
@@ -28,6 +31,13 @@ const month = computed(() => (route.params.month ? Number(route.params.month) : 
 const years = computed(() => {
   const newest = newestYear.value ?? new Date().getUTCFullYear()
   return Array.from({ length: newest - FIRST_YEAR + 1 }, (_, index) => newest - index)
+})
+
+const months = computed(() => {
+  if (!year.value) return MONTHS
+  const from = year.value === FIRST_YEAR ? FIRST_MONTH : 1
+  const to = latest.value && year.value === newestYear.value ? monthOf(latest.value) : MONTHS.length
+  return MONTHS.filter((entry) => entry.value >= from && entry.value <= to)
 })
 
 const range = computed(() => {
@@ -40,70 +50,133 @@ const range = computed(() => {
   return { from: `${year.value}-01-01`, to: `${year.value}-12-31` }
 })
 
-const {
-  data: page,
-  loading,
-  error,
-  run,
-} = useAsync((signal) =>
-  api.entries(
-    { from: range.value?.from, to: range.value?.to, limit: month.value ? 40 : 60, order: 'desc' },
-    signal,
-  ),
-)
+function goToYear(value: number | null) {
+  if (value) router.push(`/archive/${value}`)
+}
 
-watch(
-  range,
-  (value) => {
-    if (value) run()
-  },
-  { immediate: true },
-)
+function goToMonth(value: number | null) {
+  if (!year.value) return
+  router.push(
+    value ? `/archive/${year.value}/${String(value).padStart(2, '0')}` : `/archive/${year.value}`,
+  )
+}
+
+const entries = ref<ApodSummary[]>([])
+const cursor = ref<string | undefined>()
+const loading = ref(false)
+const loadingMore = ref(false)
+const error = ref<string>()
+
+let controller: AbortController | undefined
+
+async function load(append: boolean) {
+  if (!range.value) return
+
+  controller?.abort()
+  controller = new AbortController()
+  const { signal } = controller
+
+  error.value = undefined
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    entries.value = []
+    cursor.value = undefined
+  }
+
+  try {
+    const page = await api.entries(
+      {
+        from: range.value.from,
+        to: range.value.to,
+        limit: PAGE_SIZE,
+        order: 'desc',
+        cursor: append ? cursor.value : undefined,
+      },
+      signal,
+    )
+    if (signal.aborted) return
+
+    entries.value = append ? [...entries.value, ...page.items] : page.items
+    cursor.value = page.next_cursor
+  } catch (thrown) {
+    if (signal.aborted || (thrown instanceof DOMException && thrown.name === 'AbortError')) return
+    error.value = thrown instanceof Error ? thrown.message : 'Something went wrong.'
+  } finally {
+    if (!signal.aborted) {
+      loading.value = false
+      loadingMore.value = false
+    }
+  }
+}
+
+watch(range, () => load(false), { immediate: true })
+
+const periodLabel = computed(() => {
+  if (!year.value) return ''
+  const name = MONTHS.find((entry) => entry.value === month.value)?.label
+  return name ? `${name} ${year.value}` : String(year.value)
+})
+
+const countLabel = computed(() => {
+  const shown = entries.value.length
+  const noun = shown === 1 ? 'entry' : 'entries'
+  return cursor.value
+    ? `${shown} ${noun} so far from ${periodLabel.value}`
+    : `All ${shown} ${noun} from ${periodLabel.value}`
+})
 </script>
 
 <template>
   <div class="stack">
     <header class="stack head">
       <h1>Archive</h1>
-      <nav class="row years" aria-label="Years">
-        <RouterLink
-          v-for="option in years"
-          :key="option"
-          :to="`/archive/${option}`"
-          class="chip"
-          :class="{ active: year === option }"
-        >
-          {{ option }}
-        </RouterLink>
-      </nav>
 
-      <nav v-if="year" class="row months" aria-label="Months">
-        <RouterLink :to="`/archive/${year}`" class="chip" :class="{ active: !month }"
-          >All</RouterLink
-        >
-        <RouterLink
-          v-for="(label, index) in MONTHS"
-          :key="label"
-          :to="`/archive/${year}/${String(index + 1).padStart(2, '0')}`"
-          class="chip"
-          :class="{ active: month === index + 1 }"
-        >
-          {{ label }}
-        </RouterLink>
-      </nav>
+      <div class="row pickers">
+        <Select
+          :model-value="year"
+          :options="years"
+          placeholder="Year"
+          class="year"
+          aria-label="Year"
+          @update:model-value="goToYear"
+        />
+        <Select
+          :model-value="month"
+          :options="months"
+          option-label="label"
+          option-value="value"
+          placeholder="All months"
+          show-clear
+          class="month"
+          aria-label="Month"
+          @update:model-value="goToMonth"
+        />
+      </div>
     </header>
 
-    <p v-if="error" class="muted">{{ error }}</p>
+    <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+
     <EntryGrid
       v-else
-      :entries="page?.items"
+      :entries="entries"
       :loading="loading || !year"
-      empty="Nothing archived for this period yet."
+      :empty="`Nothing archived for ${periodLabel || 'this period'} yet.`"
     />
 
-    <p v-if="page?.next_cursor" class="muted more">
-      Showing the most recent entries for this period. Narrow it down by month to see the rest.
-    </p>
+    <div v-if="!loading && entries.length" class="more">
+      <p class="muted count" aria-live="polite">{{ countLabel }}</p>
+      <Button
+        v-if="cursor"
+        label="Load more"
+        icon="pi pi-chevron-down"
+        severity="secondary"
+        outlined
+        :loading="loadingMore"
+        @click="load(true)"
+      />
+    </div>
   </div>
 </template>
 
@@ -116,35 +189,40 @@ h1 {
   font-size: 1.6rem;
 }
 
-.years,
-.months {
-  gap: 0.35rem;
+.pickers {
+  gap: 0.6rem;
 }
 
-.chip {
-  font-size: 0.86rem;
-  padding: 0.25rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  text-decoration: none;
+.year {
+  min-width: 8rem;
 }
 
-.chip:hover {
-  color: var(--text);
+.month {
+  min-width: 10rem;
 }
 
-.chip.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
-}
-
-.empty,
 .more {
-  padding: 2rem 0;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.count {
+  margin: 0;
   font-size: 0.9rem;
+}
+
+@media (max-width: 30rem) {
+  .pickers {
+    flex-wrap: nowrap;
+  }
+
+  .year,
+  .month {
+    flex: 1;
+    min-width: 0;
+  }
 }
 </style>

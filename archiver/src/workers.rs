@@ -9,7 +9,7 @@ use anyhow::Result;
 use apod_core::ApodDate;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
-use rand::Rng;
+use rand::RngExt;
 use std::time::Duration;
 
 const MAX_SLEEP: Duration = Duration::from_secs(900);

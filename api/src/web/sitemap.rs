@@ -50,15 +50,15 @@ pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response
 }
 
 fn push_url(xml: &mut String, location: &str, change_frequency: Option<&str>) {
-    xml.push_str("  <url><loc>");
+    xml.push_str("  <url>\n    <loc>");
     xml.push_str(&escape(location));
-    xml.push_str("</loc>");
+    xml.push_str("</loc>\n");
     if let Some(frequency) = change_frequency {
-        xml.push_str("<changefreq>");
+        xml.push_str("    <changefreq>");
         xml.push_str(frequency);
-        xml.push_str("</changefreq>");
+        xml.push_str("</changefreq>\n");
     }
-    xml.push_str("</url>\n");
+    xml.push_str("  </url>\n");
 }
 
 fn escape(raw: &str) -> String {
@@ -87,6 +87,19 @@ mod tests {
         push_url(&mut xml, "https://x/2024-03-05", None);
 
         assert!(xml.contains("<changefreq>daily</changefreq>"));
-        assert!(xml.contains("<loc>https://x/2024-03-05</loc></url>"));
+        assert!(!xml.contains("<loc>https://x/2024-03-05</loc>\n    <changefreq>"));
+    }
+
+    #[test]
+    fn no_two_elements_share_a_line() {
+        let mut xml = String::new();
+        push_url(&mut xml, "https://x/", Some("daily"));
+        push_url(&mut xml, "https://x/archive/2026", Some("weekly"));
+
+        for line in xml.lines() {
+            let opening_tags = line.matches('<').count() - line.matches("</").count();
+            assert!(opening_tags <= 1, "two elements on one line: {line}");
+        }
+        assert!(!xml.contains("</loc><changefreq>"));
     }
 }

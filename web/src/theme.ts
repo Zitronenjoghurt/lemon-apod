@@ -16,8 +16,30 @@ export const ApodPreset = definePreset(Aura, {
       900: '#312e81',
       950: '#1e1b4b',
     },
+    borderRadius: {
+      none: '0',
+      xs: '0.25rem',
+      sm: '0.4rem',
+      md: '0.6rem',
+      lg: '0.85rem',
+      xl: '1.1rem',
+    },
+    focusRing: {
+      width: '2px',
+      style: 'solid',
+      color: '{primary.color}',
+      offset: '3px',
+    },
     colorScheme: {
       light: {
+        primary: {
+          color: '#4f46e5',
+          contrastColor: '#ffffff',
+          hoverColor: '#4338ca',
+          activeColor: '#3730a3',
+        },
+        content: { background: '#ffffff', borderColor: '#e2e6f0' },
+        text: { color: '#131629', mutedColor: '#5b6178' },
         surface: {
           0: '#ffffff',
           50: '#f8fafc',
@@ -32,8 +54,22 @@ export const ApodPreset = definePreset(Aura, {
           900: '#0f172a',
           950: '#020617',
         },
+        formField: {
+          background: '#ffffff',
+          borderColor: '#e2e6f0',
+          color: '#131629',
+          placeholderColor: '#5b6178',
+        },
       },
       dark: {
+        primary: {
+          color: '#818cf8',
+          contrastColor: '#0b0d17',
+          hoverColor: '#a5b4fc',
+          activeColor: '#c7d2fe',
+        },
+        content: { background: '#101322', borderColor: '#212639' },
+        text: { color: '#e9ebf5', mutedColor: '#969db8' },
         surface: {
           0: '#ffffff',
           50: '#e6e8f0',
@@ -48,11 +84,13 @@ export const ApodPreset = definePreset(Aura, {
           900: '#0d0f1a',
           950: '#070810',
         },
+        formField: {
+          background: '#101322',
+          borderColor: '#212639',
+          color: '#e9ebf5',
+          placeholderColor: '#969db8',
+        },
       },
     },
-  },
-  components: {
-    button: { root: { borderRadius: '0.6rem' } },
-    inputtext: { root: { borderRadius: '0.6rem' } },
   },
 })
