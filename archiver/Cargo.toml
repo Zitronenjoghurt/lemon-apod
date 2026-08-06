@@ -1,0 +1,27 @@
+[package]
+name = "apod-archiver"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[dependencies]
+apod-core = { workspace = true }
+
+anyhow = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+clap = { version = "4.5.51", features = ["derive"] }
+image = { version = "0.25.9", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+rand = "0.9.2"
+reqwest = { version = "0.13.1", default-features = false, features = ["http2", "rustls", "webpki-roots"] }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10.9"
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+webp = "0.3.0"

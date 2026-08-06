@@ -1,0 +1,213 @@
+use crate::entry::ApodEntry;
+use crate::media::MediaKind;
+use regex::Regex;
+use std::fmt;
+use std::sync::LazyLock;
+
+const MIN_EXPLANATION_CHARS: usize = 80;
+const MAX_TITLE_CHARS: usize = 200;
+
+static LOOKS_LIKE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<\s*/?[a-zA-Z]").unwrap());
+static HREF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"href="([^"]*)""#).unwrap());
+
+fn has_relative_link(html: &str) -> bool {
+    HREF.captures_iter(html).any(|caps| {
+        let href = &caps[1];
+        !["http://", "https://", "mailto:"]
+            .iter()
+            .any(|scheme| href.starts_with(scheme))
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum QualityWarning {
+    ContainsHtml,
+    CreditMissing,
+    EmptyField,
+    ExplanationSuspiciouslyShort,
+    LeadingWhitespace,
+    MultiWhitespace,
+    NoMedia,
+    NonAbsoluteLink,
+    TitleMultiline,
+    TitleSuspiciouslyLong,
+    TrailingWhitespace,
+    UnknownMediaKind,
+}
+
+impl fmt::Display for QualityWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::ContainsHtml => "contains_html",
+            Self::CreditMissing => "credit_missing",
+            Self::EmptyField => "empty_field",
+            Self::ExplanationSuspiciouslyShort => "explanation_suspiciously_short",
+            Self::LeadingWhitespace => "leading_whitespace",
+            Self::MultiWhitespace => "multi_whitespace",
+            Self::NoMedia => "no_media",
+            Self::NonAbsoluteLink => "non_absolute_link",
+            Self::TitleMultiline => "title_multiline",
+            Self::TitleSuspiciouslyLong => "title_suspiciously_long",
+            Self::TrailingWhitespace => "trailing_whitespace",
+            Self::UnknownMediaKind => "unknown_media_kind",
+        };
+        f.write_str(name)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QualityIssue {
+    pub warning: QualityWarning,
+    pub field: &'static str,
+}
+
+impl fmt::Display for QualityIssue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.field, self.warning)
+    }
+}
+
+pub fn quality_control(entry: &ApodEntry) -> Vec<QualityIssue> {
+    let mut issues = Vec::new();
+
+    check_string(&mut issues, "title", &entry.title);
+    if entry.title.lines().count() > 1 {
+        push(&mut issues, QualityWarning::TitleMultiline, "title");
+    }
+    if entry.title.chars().count() > MAX_TITLE_CHARS {
+        push(&mut issues, QualityWarning::TitleSuspiciouslyLong, "title");
+    }
+
+    check_string(&mut issues, "explanation", &entry.explanation_text);
+    if !entry.explanation_text.is_empty()
+        && entry.explanation_text.chars().count() < MIN_EXPLANATION_CHARS
+    {
+        push(
+            &mut issues,
+            QualityWarning::ExplanationSuspiciouslyShort,
+            "explanation",
+        );
+    }
+    if has_relative_link(&entry.explanation_html) {
+        push(&mut issues, QualityWarning::NonAbsoluteLink, "explanation");
+    }
+
+    match &entry.credit_text {
+        None => push(&mut issues, QualityWarning::CreditMissing, "credit"),
+        Some(credit) => check_string(&mut issues, "credit", credit),
+    }
+
+    match entry.media.kind {
+        MediaKind::None => push(&mut issues, QualityWarning::NoMedia, "media"),
+        MediaKind::Other => push(&mut issues, QualityWarning::UnknownMediaKind, "media"),
+        _ => {}
+    }
+
+    issues
+}
+
+fn check_string(issues: &mut Vec<QualityIssue>, field: &'static str, value: &str) {
+    if value.is_empty() {
+        push(issues, QualityWarning::EmptyField, field);
+        return;
+    }
+    if value.starts_with(char::is_whitespace) {
+        push(issues, QualityWarning::LeadingWhitespace, field);
+    }
+    if value.ends_with(char::is_whitespace) {
+        push(issues, QualityWarning::TrailingWhitespace, field);
+    }
+    if has_double_whitespace(value) {
+        push(issues, QualityWarning::MultiWhitespace, field);
+    }
+    if LOOKS_LIKE_TAG.is_match(value) {
+        push(issues, QualityWarning::ContainsHtml, field);
+    }
+}
+
+fn has_double_whitespace(value: &str) -> bool {
+    value
+        .chars()
+        .zip(value.chars().skip(1))
+        .any(|(a, b)| a.is_whitespace() && b.is_whitespace())
+}
+
+fn push(issues: &mut Vec<QualityIssue>, warning: QualityWarning, field: &'static str) {
+    issues.push(QualityIssue { warning, field });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::date::ApodDate;
+    use crate::media::{Media, MediaKind};
+
+    fn entry() -> ApodEntry {
+        ApodEntry {
+            date: ApodDate::START,
+            title: "A Fine Title".into(),
+            title_raw: None,
+            explanation_html: "Some prose that is comfortably long enough to look like a real \
+                               APOD explanation."
+                .into(),
+            explanation_text: "Some prose that is comfortably long enough to look like a real \
+                               APOD explanation."
+                .into(),
+            credit_html: Some("Someone".into()),
+            credit_text: Some("Someone".into()),
+            has_copyright: false,
+            tomorrow_teaser: None,
+            keywords: Vec::new(),
+            media: Media::new(MediaKind::ImageJpg, Some("https://x/y.jpg".into()), None),
+            extra_media: Vec::new(),
+            source_url: ApodDate::START.source_url(),
+        }
+    }
+
+    fn warnings(entry: &ApodEntry) -> Vec<QualityWarning> {
+        quality_control(entry)
+            .into_iter()
+            .map(|i| i.warning)
+            .collect()
+    }
+
+    #[test]
+    fn a_clean_entry_has_no_warnings() {
+        assert!(quality_control(&entry()).is_empty());
+    }
+
+    #[test]
+    fn flags_a_truncated_explanation() {
+        let mut entry = entry();
+        entry.explanation_text = "Too short.".into();
+        assert!(warnings(&entry).contains(&QualityWarning::ExplanationSuspiciouslyShort));
+    }
+
+    #[test]
+    fn flags_surviving_markup_but_not_legitimate_angle_brackets() {
+        let mut entry = entry();
+        entry.title = "5 < 7 and 8 > 2".into();
+        assert!(!warnings(&entry).contains(&QualityWarning::ContainsHtml));
+
+        entry.title = "Broken <br> title".into();
+        assert!(warnings(&entry).contains(&QualityWarning::ContainsHtml));
+    }
+
+    #[test]
+    fn flags_a_relative_link_that_escaped_absolutisation() {
+        let mut entry = entry();
+        entry.explanation_html = r#"See <a href="ap240304.html">this</a>."#.into();
+        assert!(warnings(&entry).contains(&QualityWarning::NonAbsoluteLink));
+    }
+
+    #[test]
+    fn flags_missing_credit_and_media() {
+        let mut entry = entry();
+        entry.credit_text = None;
+        entry.media = Media::new(MediaKind::None, None, None);
+
+        let found = warnings(&entry);
+        assert!(found.contains(&QualityWarning::CreditMissing));
+        assert!(found.contains(&QualityWarning::NoMedia));
+    }
+}

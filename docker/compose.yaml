@@ -1,0 +1,77 @@
+name: lemon-apod
+
+services:
+  archiver:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: archiver
+    image: lemon-apod-archiver:dev
+    restart: unless-stopped
+    volumes:
+      - ${APOD_DATA:-../data}:/data
+    environment:
+      APOD_BACKFILL_ENABLED: "false"
+      APOD_BACKFILL_DELAY_MIN_SECS: 10
+      APOD_BACKFILL_DELAY_MAX_SECS: 30
+      APOD_USER_AGENT: "lemon-apod/0.1.0 (+https://example.com)"
+      APOD_THUMB_MAX_WIDTH: 480
+      APOD_THUMB_QUALITY: 80
+      APOD_RECHECK_PER_DAY: 0
+      RUST_LOG: info
+    stop_grace_period: 35s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: api
+    image: lemon-apod-api:dev
+    restart: unless-stopped
+    depends_on:
+      archiver:
+        condition: service_started
+    ports:
+      - "${APOD_HOST_PORT:-51995}:51995"
+    volumes:
+      - ${APOD_DATA:-../data}:/data
+    environment:
+      APOD_PUBLIC_URL: ${APOD_PUBLIC_URL:-http://localhost:51995}
+      APOD_RATE_LIMIT_PER_SECOND: 5
+      APOD_RATE_LIMIT_BURST: 30
+      RUST_LOG: info
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:51995/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# On Linux the bind mount keeps the host's ownership and the container runs as uid 10001, so the
+# archiver cannot write to a `data/` owned by your user. Either
+#
+#   sudo chown -R 10001:10001 data
+#
+# or swap the bind mount for a named volume, which Docker initialises with the image's ownership:
+#
+#   volumes: [apod-data:/data]
+#   ...
+#   volumes:
+#     apod-data:
+#
+# Docker Desktop on macOS and Windows papers over this, which is why the bind mount is the
+# default here. It keeps `./data` browsable and shared with the `make` targets.
