@@ -6,6 +6,12 @@ pub enum Response {
     NotFound,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Limit {
+    pub max_bytes: u64,
+    pub timeout: Duration,
+}
+
 enum Attempt {
     Done(Response),
     Retryable(anyhow::Error),
@@ -30,12 +36,20 @@ impl Client {
     }
 
     pub async fn get(&self, url: &str) -> Result<Response> {
+        self.fetch(url, None).await
+    }
+
+    pub async fn get_limited(&self, url: &str, limit: Limit) -> Result<Response> {
+        self.fetch(url, Some(limit)).await
+    }
+
+    async fn fetch(&self, url: &str, limit: Option<Limit>) -> Result<Response> {
         let mut attempt = 0;
 
         loop {
             attempt += 1;
 
-            match self.try_get(url).await {
+            match self.try_get(url, limit).await {
                 Attempt::Done(response) => return Ok(response),
                 Attempt::Fatal(error) => return Err(error),
                 Attempt::Retryable(error) if attempt > self.max_retries => return Err(error),
@@ -48,8 +62,13 @@ impl Client {
         }
     }
 
-    async fn try_get(&self, url: &str) -> Attempt {
-        let response = match self.http.get(url).send().await {
+    async fn try_get(&self, url: &str, limit: Option<Limit>) -> Attempt {
+        let mut request = self.http.get(url);
+        if let Some(limit) = limit {
+            request = request.timeout(limit.timeout);
+        }
+
+        let mut response = match request.send().await {
             Ok(response) => response,
             Err(error) => {
                 return Attempt::Retryable(
@@ -69,11 +88,49 @@ impl Client {
             return Attempt::Fatal(anyhow::anyhow!("{url} returned {status}"));
         }
 
-        match response.bytes().await {
-            Ok(bytes) => Attempt::Done(Response::Body(bytes.to_vec())),
-            Err(error) => Attempt::Retryable(
-                anyhow::Error::new(error).context(format!("reading the body of {url}")),
-            ),
+        let Some(limit) = limit else {
+            return match response.bytes().await {
+                Ok(bytes) => Attempt::Done(Response::Body(bytes.to_vec())),
+                Err(error) => Attempt::Retryable(
+                    anyhow::Error::new(error).context(format!("reading the body of {url}")),
+                ),
+            };
+        };
+
+        if let Some(declared) = response.content_length()
+            && declared > limit.max_bytes
+        {
+            return Attempt::Fatal(too_large(url, declared, limit.max_bytes));
+        }
+
+        let mut body = Vec::new();
+        loop {
+            match response.chunk().await {
+                Ok(None) => return Attempt::Done(Response::Body(body)),
+                Ok(Some(chunk)) => {
+                    if body.len() as u64 + chunk.len() as u64 > limit.max_bytes {
+                        return Attempt::Fatal(too_large(
+                            url,
+                            limit.max_bytes + 1,
+                            limit.max_bytes,
+                        ));
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                Err(error) => {
+                    return Attempt::Retryable(
+                        anyhow::Error::new(error).context(format!("reading the body of {url}")),
+                    );
+                }
+            }
         }
     }
+}
+
+fn too_large(url: &str, size: u64, max: u64) -> anyhow::Error {
+    anyhow::anyhow!(
+        "{url} is {:.0}MB, over the {:.0}MB limit",
+        size as f64 / 1_048_576.0,
+        max as f64 / 1_048_576.0
+    )
 }

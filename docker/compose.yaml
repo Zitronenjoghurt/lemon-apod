@@ -14,7 +14,7 @@ services:
       APOD_BACKFILL_ENABLED: "false"
       APOD_BACKFILL_DELAY_MIN_SECS: 10
       APOD_BACKFILL_DELAY_MAX_SECS: 30
-      APOD_USER_AGENT: "lemon-apod/0.1.0 (+https://example.com)"
+      APOD_USER_AGENT: "lemon-apod/0.2.0 (+https://example.com)"
       APOD_THUMB_MAX_WIDTH: 480
       APOD_THUMB_QUALITY: 80
       APOD_RECHECK_PER_DAY: 0

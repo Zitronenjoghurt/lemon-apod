@@ -47,8 +47,10 @@ pub struct Thumbs {
     pub quality: f32,
     pub delay_min: Duration,
     pub delay_max: Duration,
-    pub youtube_template: String,
+    pub youtube_templates: Vec<String>,
     pub vimeo_oembed_url: String,
+    pub video_max_bytes: u64,
+    pub video_timeout: Duration,
 }
 
 impl Config {
@@ -101,14 +103,18 @@ impl Config {
                 quality: env_or("APOD_THUMB_QUALITY", 80.0)?,
                 delay_min: secs("APOD_THUMB_DELAY_MIN_SECS", 5)?,
                 delay_max: secs("APOD_THUMB_DELAY_MAX_SECS", 15)?,
-                youtube_template: env_or(
-                    "APOD_YOUTUBE_THUMB_TEMPLATE",
-                    "https://i.ytimg.com/vi/{id}/hqdefault.jpg".to_owned(),
+                youtube_templates: comma_separated(
+                    "APOD_YOUTUBE_THUMB_TEMPLATES",
+                    "https://i.ytimg.com/vi/{id}/maxresdefault.jpg,\
+                     https://i.ytimg.com/vi/{id}/mqdefault.jpg,\
+                     https://i.ytimg.com/vi/{id}/hqdefault.jpg",
                 )?,
                 vimeo_oembed_url: env_or(
                     "APOD_VIMEO_OEMBED_URL",
                     "https://vimeo.com/api/oembed.json".to_owned(),
                 )?,
+                video_max_bytes: env_or("APOD_VIDEO_MAX_MB", 64u64)? * 1_048_576,
+                video_timeout: secs("APOD_VIDEO_TIMEOUT_SECS", 300)?,
             },
         })
         .and_then(Self::validated)
@@ -167,6 +173,19 @@ where
 
 fn secs(key: &str, default: u64) -> Result<Duration> {
     Ok(Duration::from_secs(env_or(key, default)?))
+}
+
+fn comma_separated(key: &str, default: &str) -> Result<Vec<String>> {
+    let raw: String = env_or(key, default.to_owned())?;
+    let values: Vec<String> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect();
+
+    anyhow::ensure!(!values.is_empty(), "{key} listed no values");
+    Ok(values)
 }
 
 #[cfg(test)]

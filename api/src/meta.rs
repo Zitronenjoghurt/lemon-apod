@@ -150,9 +150,9 @@ mod tests {
             title_raw: None,
             explanation_html: String::new(),
             explanation_text: "Is this a painting or a photograph? ".repeat(20),
-            credit_html: None,
-            credit_text: None,
+            credits: Vec::new(),
             has_copyright: true,
+            license_url: None,
             tomorrow_teaser: None,
             keywords: Vec::new(),
             media: Media::new(

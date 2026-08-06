@@ -66,7 +66,10 @@ archive.db                     fetch state, NOT derived, do not delete
 apod.db                        parsed entries + search index, derived, safe to delete
 ```
 
-`apod.db` can be deleted and rebuilt with `make reparse` in minutes. `archive.db` records when each
+`apod.db` can be deleted and rebuilt with `make reparse` in minutes, which is also how a schema
+change is applied: there are no migrations, delete it and reparse. A rebuilt index has forgotten
+where the thumbnails are, so follow it with `make thumbs`, which adopts every file already on disk
+and only fetches the ones genuinely missing. `archive.db` records when each
 page was fetched and what it hashed to, which is not recoverable from the filesystem. Losing it
 means re-fetching the whole archive at roughly 20 seconds per page.
 

@@ -11,7 +11,7 @@ const HIGHLIGHT_OPEN: &str = "\u{2}";
 const HIGHLIGHT_CLOSE: &str = "\u{3}";
 
 const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_html, explanation_text, \
-                             credit_html, credit_text, has_copyright, tomorrow_teaser, keywords, \
+                             credits, has_copyright, license_url, tomorrow_teaser, keywords, \
                              media_kind, media_url, media_hd_url, thumb_path, source_url";
 
 const SUMMARY_COLUMNS: &str =
@@ -409,6 +409,7 @@ fn read_summary(row: &Row<'_>) -> rusqlite::Result<ApodSummary> {
 }
 
 fn read_entry(row: &Row<'_>) -> rusqlite::Result<ApodEntry> {
+    let credits: Option<String> = row.get(5)?;
     let keywords: Option<String> = row.get(9)?;
 
     Ok(ApodEntry {
@@ -417,13 +418,11 @@ fn read_entry(row: &Row<'_>) -> rusqlite::Result<ApodEntry> {
         title_raw: row.get(2)?,
         explanation_html: row.get(3)?,
         explanation_text: row.get(4)?,
-        credit_html: row.get(5)?,
-        credit_text: row.get(6)?,
-        has_copyright: row.get(7)?,
+        credits: from_json(credits),
+        has_copyright: row.get(6)?,
+        license_url: row.get(7)?,
         tomorrow_teaser: row.get(8)?,
-        keywords: keywords
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_default(),
+        keywords: from_json(keywords),
         media: media(
             &row.get::<_, String>(10)?,
             row.get(11)?,
@@ -435,6 +434,11 @@ fn read_entry(row: &Row<'_>) -> rusqlite::Result<ApodEntry> {
     })
 }
 
+fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {
+    raw.and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -444,7 +448,8 @@ mod tests {
         CREATE TABLE entries (
           date_id INTEGER PRIMARY KEY, date TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
           title_raw TEXT, explanation_html TEXT NOT NULL, explanation_text TEXT NOT NULL,
-          credit_html TEXT, credit_text TEXT, has_copyright INTEGER NOT NULL DEFAULT 0,
+          credits TEXT, credit_text TEXT, has_copyright INTEGER NOT NULL DEFAULT 0,
+          license_url TEXT,
           tomorrow_teaser TEXT, keywords TEXT, media_kind TEXT NOT NULL, media_url TEXT,
           media_hd_url TEXT, thumb_path TEXT, source_url TEXT NOT NULL,
           parser_version INTEGER NOT NULL, parsed_at INTEGER NOT NULL);

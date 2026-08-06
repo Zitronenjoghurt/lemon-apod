@@ -15,15 +15,21 @@ export interface Media {
   thumb_url?: string | null
 }
 
+export interface Credit {
+  role: string
+  html: string
+  text: string
+}
+
 export interface ApodEntry {
   date: string
   title: string
   title_raw?: string
   explanation_html: string
   explanation_text: string
-  credit_html?: string
-  credit_text?: string
+  credits?: Credit[]
   has_copyright: boolean
+  license_url?: string
   tomorrow_teaser?: string
   keywords?: string[]
   media: Media

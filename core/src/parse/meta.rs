@@ -40,7 +40,7 @@ pub fn keywords(doc: &Html) -> Vec<String> {
 }
 
 pub fn tomorrow_teaser(doc: &Html) -> Option<String> {
-    let container = super::find_container(doc, &TOMORROW)?;
+    let container = super::find_container(doc, |text| TOMORROW.is_match(text))?;
     let text = container.text().collect::<String>();
     let found = TOMORROW.find(&text)?;
 

@@ -15,11 +15,18 @@ const MONTHS = Array.from({ length: 12 }, (_, index) =>
 const route = useRoute()
 const latest = useLatestDate()
 
-const year = computed(() => (route.params.year ? Number(route.params.year) : null))
+const newestYear = computed(() => (latest.value ? yearOf(latest.value) : null))
+
+// No year in the URL lands on the newest one with every month shown, which is what someone
+// opening the archive is nearly always after. Until the latest date arrives there is nothing
+// to default to, and the grid shows its skeletons.
+const year = computed(() =>
+  route.params.year ? Number(route.params.year) : (newestYear.value ?? null),
+)
 const month = computed(() => (route.params.month ? Number(route.params.month) : null))
 
 const years = computed(() => {
-  const newest = latest.value ? yearOf(latest.value) : new Date().getUTCFullYear()
+  const newest = newestYear.value ?? new Date().getUTCFullYear()
   return Array.from({ length: newest - FIRST_YEAR + 1 }, (_, index) => newest - index)
 })
 
@@ -86,12 +93,11 @@ watch(
       </nav>
     </header>
 
-    <p v-if="!year" class="muted empty">Pick a year to browse.</p>
-    <p v-else-if="error" class="muted">{{ error }}</p>
+    <p v-if="error" class="muted">{{ error }}</p>
     <EntryGrid
       v-else
       :entries="page?.items"
-      :loading="loading"
+      :loading="loading || !year"
       empty="Nothing archived for this period yet."
     />
 

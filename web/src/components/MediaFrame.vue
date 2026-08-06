@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { isImage, type Media } from '@/api/types'
 
 const props = withDefaults(
@@ -11,9 +11,40 @@ const props = withDefaults(
   { linkFullResolution: true },
 )
 
+const SLOW_AFTER_MS = 6000
+
 const playing = ref(false)
 const loaded = ref(false)
 const failed = ref(false)
+const slow = ref(false)
+let slowTimer: ReturnType<typeof setTimeout> | undefined
+
+function stopSlowTimer() {
+  clearTimeout(slowTimer)
+  slowTimer = undefined
+}
+
+watch(
+  () => props.media.url,
+  () => {
+    playing.value = false
+    loaded.value = false
+    failed.value = false
+    slow.value = false
+
+    stopSlowTimer()
+    if (isImage(props.media.kind) && props.media.url) {
+      slowTimer = setTimeout(() => (slow.value = true), SLOW_AFTER_MS)
+    }
+  },
+  { immediate: true },
+)
+
+watch([loaded, failed], ([done, broken]) => {
+  if (done || broken) stopSlowTimer()
+})
+
+onBeforeUnmount(stopSlowTimer)
 
 const videoId = computed(() => {
   const path = (props.media.url ?? '').split(/[?#]/)[0] ?? ''
@@ -62,15 +93,25 @@ const fullResolution = computed(() => {
           class="placeholder"
         />
         <img
+          :key="media.url ?? ''"
           :src="media.url"
           :alt="title"
-          loading="lazy"
+          fetchpriority="high"
           decoding="async"
           class="full"
           :class="{ ready: loaded }"
           @load="loaded = true"
           @error="failed = true"
         />
+        <div v-if="!loaded" class="loading" role="status">
+          <span class="badge-loading">
+            <span class="spinner" aria-hidden="true" />
+            <span class="text">
+              Loading full image from NASA
+              <span v-if="slow" class="sub">This one is large, still downloading</span>
+            </span>
+          </span>
+        </div>
       </component>
       <figcaption v-if="fullResolution && linkFullResolution" class="hint muted">
         <i class="pi pi-search-plus" aria-hidden="true" /> Open full resolution
@@ -160,6 +201,74 @@ const fullResolution = computed(() => {
   opacity: 1;
 }
 
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.75rem;
+  pointer-events: none;
+  animation: fade-in 0.2s ease 0.4s both;
+}
+
+.badge-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(100%, 20rem);
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.7rem;
+  background: rgb(8 10 20 / 0.68);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 0.3);
+  color: #fff;
+  text-align: left;
+  text-wrap: balance;
+}
+
+.text {
+  font-size: clamp(0.85rem, 2.8vw, 0.95rem);
+  line-height: 1.3;
+}
+
+.sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.9em;
+  color: rgb(255 255 255 / 0.72);
+}
+
+.spinner {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 0.3);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
 .zoomable {
   cursor: zoom-in;
 }
@@ -176,6 +285,10 @@ const fullResolution = computed(() => {
   padding: 0;
   cursor: pointer;
   border: 1px solid var(--border);
+}
+
+.facade img {
+  object-fit: cover;
 }
 
 .facade .play {

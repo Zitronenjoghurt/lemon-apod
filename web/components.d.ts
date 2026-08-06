@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ConfirmDialog: typeof import('./src/components/ConfirmDialog.vue')['default']
     EntryCard: typeof import('./src/components/EntryCard.vue')['default']
     EntryDetail: typeof import('./src/components/EntryDetail.vue')['default']
     EntryGrid: typeof import('./src/components/EntryGrid.vue')['default']

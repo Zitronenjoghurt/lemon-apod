@@ -2,7 +2,6 @@ use crate::APOD_BASE_URL;
 use crate::date::ApodDate;
 use crate::decode;
 use crate::entry::ApodEntry;
-use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
 use url::Url;
@@ -32,7 +31,7 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
 
     let title = title::parse(&doc).ok_or(ParseError::TitleNotFound)?;
     let explanation = explanation::parse(&doc, &base).ok_or(ParseError::ExplanationNotFound)?;
-    let credit = credit::parse(&doc, &base);
+    let credits = credit::parse(&doc, &base);
     let (media, extra_media) = media::parse(&doc, &base);
 
     Ok(ApodEntry {
@@ -41,9 +40,9 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
         title_raw: title::raw_title(&doc),
         explanation_html: explanation.html,
         explanation_text: explanation.text,
-        credit_html: credit.as_ref().map(|c| c.fragment.html.clone()),
-        credit_text: credit.as_ref().map(|c| c.fragment.text.clone()),
-        has_copyright: credit.as_ref().is_some_and(|c| c.has_copyright),
+        has_copyright: credits.as_ref().is_some_and(|c| c.has_copyright),
+        license_url: credits.as_ref().and_then(|c| c.license_url.clone()),
+        credits: credits.map(|c| c.segments).unwrap_or_default(),
         tomorrow_teaser: meta::tomorrow_teaser(&doc),
         keywords: meta::keywords(&doc),
         media,
@@ -61,11 +60,13 @@ static CONTAINERS: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("p, td, div, center, body").expect("static selector is valid")
 });
 
-fn find_container<'a>(doc: &'a Html, marker: &Regex) -> Option<ElementRef<'a>> {
+/// The tightest element whose text satisfies `matches`. Tightest, because APOD's older pages
+/// wrap the whole entry in one table cell and the smallest match is the least surrounding noise.
+fn find_container<'a>(doc: &'a Html, matches: impl Fn(&str) -> bool) -> Option<ElementRef<'a>> {
     doc.select(&CONTAINERS)
         .filter_map(|el| {
             let text = el.text().collect::<String>();
-            marker.is_match(&text).then_some((text.len(), el))
+            matches(&text).then_some((text.len(), el))
         })
         .min_by_key(|(len, _)| *len)
         .map(|(_, el)| el)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EntryGrid from '@/components/EntryGrid.vue'
 import { api } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
@@ -9,6 +10,12 @@ import { useFavorites } from '@/composables/useFavorites'
 const { favorites, count, clear } = useFavorites()
 const entries = ref<ApodSummary[]>([])
 const loading = ref(false)
+const confirming = ref(false)
+
+function confirmClear() {
+  clear()
+  confirming.value = false
+}
 
 async function load() {
   const dates = favorites.value
@@ -45,8 +52,17 @@ watch(favorites, load, { immediate: true })
   <div class="stack">
     <header class="row justify">
       <h1>Favorites</h1>
-      <button v-if="count" type="button" class="chip" @click="clear">Clear all</button>
+      <button v-if="count" type="button" class="chip" @click="confirming = true">Clear all</button>
     </header>
+
+    <ConfirmDialog
+      :open="confirming"
+      title="Clear all favorites?"
+      :message="`This removes all ${count} saved entries from this browser. There is no undo.`"
+      confirm-label="Clear all"
+      @confirm="confirmClear"
+      @cancel="confirming = false"
+    />
 
     <p class="muted note">
       Saved in this browser only. There are no accounts, and nothing is sent to the server.

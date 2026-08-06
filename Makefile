@@ -64,3 +64,6 @@ logs: ## Follow both services' logs
 
 ps: ## Container and health status
 	$(COMPOSE) ps
+
+shell:
+	$(COMPOSE) exec -it archiver /bin/bash

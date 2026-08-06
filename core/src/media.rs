@@ -87,7 +87,11 @@ impl FromStr for MediaKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThumbSource {
+    /// An image to download and scale.
     Direct(String),
+    /// A video file to download and take a frame from.
+    Frame(String),
+    /// A provider video id, whose thumbnail has to be looked up first.
     YouTube(String),
     Vimeo(String),
     None,
@@ -151,6 +155,12 @@ impl Media {
                 Some(id) => ThumbSource::Vimeo(id.to_owned()),
                 None => ThumbSource::None,
             },
+            // Nothing on the page stands in for a self-hosted video: APOD sets no poster
+            // attribute, so the only thumbnail available is one decoded from the file itself.
+            MediaKind::VideoMp4 => match self.url.as_deref() {
+                Some(url) => ThumbSource::Frame(url.to_owned()),
+                None => ThumbSource::None,
+            },
             _ => ThumbSource::None,
         }
     }
@@ -198,6 +208,19 @@ mod tests {
             None,
         );
         assert_eq!(vimeo.video_id(), Some("12345678"));
+    }
+
+    #[test]
+    fn a_self_hosted_video_is_thumbnailed_from_its_own_frames() {
+        let media = Media::new(
+            MediaKind::VideoMp4,
+            Some("https://apod.nasa.gov/apod/image/2607/clip.mp4".into()),
+            None,
+        );
+        assert_eq!(
+            media.thumb_source(),
+            ThumbSource::Frame("https://apod.nasa.gov/apod/image/2607/clip.mp4".into())
+        );
     }
 
     #[test]

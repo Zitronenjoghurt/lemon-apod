@@ -23,6 +23,7 @@ fn has_relative_link(html: &str) -> bool {
 pub enum QualityWarning {
     ContainsHtml,
     CreditMissing,
+    CreditRoleSuspicious,
     EmptyField,
     ExplanationSuspiciouslyShort,
     LeadingWhitespace,
@@ -40,6 +41,7 @@ impl fmt::Display for QualityWarning {
         let name = match self {
             Self::ContainsHtml => "contains_html",
             Self::CreditMissing => "credit_missing",
+            Self::CreditRoleSuspicious => "credit_role_suspicious",
             Self::EmptyField => "empty_field",
             Self::ExplanationSuspiciouslyShort => "explanation_suspiciously_short",
             Self::LeadingWhitespace => "leading_whitespace",
@@ -92,9 +94,18 @@ pub fn quality_control(entry: &ApodEntry) -> Vec<QualityIssue> {
         push(&mut issues, QualityWarning::NonAbsoluteLink, "explanation");
     }
 
-    match &entry.credit_text {
-        None => push(&mut issues, QualityWarning::CreditMissing, "credit"),
-        Some(credit) => check_string(&mut issues, "credit", credit),
+    if entry.credits.is_empty() {
+        push(&mut issues, QualityWarning::CreditMissing, "credit");
+    }
+    for credit in &entry.credits {
+        check_string(&mut issues, "credit", &credit.text);
+        if has_relative_link(&credit.html) {
+            push(&mut issues, QualityWarning::NonAbsoluteLink, "credit");
+        }
+        // A role that ran on past its colon means the label vocabulary missed a word.
+        if credit.role.split_whitespace().count() > 4 {
+            push(&mut issues, QualityWarning::CreditRoleSuspicious, "credit");
+        }
     }
 
     match entry.media.kind {
@@ -140,6 +151,7 @@ fn push(issues: &mut Vec<QualityIssue>, warning: QualityWarning, field: &'static
 mod tests {
     use super::*;
     use crate::date::ApodDate;
+    use crate::entry::Credit;
     use crate::media::{Media, MediaKind};
 
     fn entry() -> ApodEntry {
@@ -153,9 +165,13 @@ mod tests {
             explanation_text: "Some prose that is comfortably long enough to look like a real \
                                APOD explanation."
                 .into(),
-            credit_html: Some("Someone".into()),
-            credit_text: Some("Someone".into()),
+            credits: vec![Credit {
+                role: "Image Credit".into(),
+                html: "Someone".into(),
+                text: "Someone".into(),
+            }],
             has_copyright: false,
+            license_url: None,
             tomorrow_teaser: None,
             keywords: Vec::new(),
             media: Media::new(MediaKind::ImageJpg, Some("https://x/y.jpg".into()), None),
@@ -203,11 +219,18 @@ mod tests {
     #[test]
     fn flags_missing_credit_and_media() {
         let mut entry = entry();
-        entry.credit_text = None;
+        entry.credits.clear();
         entry.media = Media::new(MediaKind::None, None, None);
 
         let found = warnings(&entry);
         assert!(found.contains(&QualityWarning::CreditMissing));
         assert!(found.contains(&QualityWarning::NoMedia));
+    }
+
+    #[test]
+    fn flags_a_role_that_swallowed_the_name_after_it() {
+        let mut entry = entry();
+        entry.credits[0].role = "Image Credit and Processing and Text and Music and More".into();
+        assert!(warnings(&entry).contains(&QualityWarning::CreditRoleSuspicious));
     }
 }

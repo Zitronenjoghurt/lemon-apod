@@ -8,6 +8,7 @@ mod reparse;
 mod report;
 mod shutdown;
 mod thumbs;
+mod video;
 mod workers;
 
 use anyhow::Result;
@@ -214,17 +215,25 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
     };
 
     println!("generating up to {} thumbnails...", targets.len());
-    let (mut written, mut skipped, mut failed) = (0, 0, 0);
+    let (mut written, mut adopted, mut skipped, mut failed) = (0, 0, 0, 0);
+    let mut pace = false;
 
-    for (index_position, (date, media)) in targets.iter().enumerate() {
-        if index_position > 0 {
+    for (date, media) in targets {
+        if pace {
             tokio::time::sleep(workers::jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
         }
 
-        match thumbs::generate(&cfg, &client, &mut index, *date, media).await? {
+        let outcome = thumbs::generate(&cfg, &client, &mut index, *date, media, force).await?;
+        pace = outcome.fetched();
+
+        match outcome {
             thumbs::Generated::Written => {
                 written += 1;
                 tracing::info!(%date, "thumbnail written");
+            }
+            thumbs::Generated::Adopted => {
+                adopted += 1;
+                tracing::debug!(%date, "thumbnail already on disk");
             }
             thumbs::Generated::NotApplicable => skipped += 1,
             thumbs::Generated::Failed(reason) => {
@@ -234,6 +243,6 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
         }
     }
 
-    println!("written {written}, skipped {skipped}, failed {failed}");
+    println!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}");
     Ok(())
 }

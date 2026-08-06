@@ -19,7 +19,7 @@ const STOPS: &[&str] = &[
 ];
 
 pub fn parse(doc: &Html, base: &Url) -> Option<Fragment> {
-    let container = super::find_container(doc, &MARKER)?;
+    let container = super::find_container(doc, |text| MARKER.is_match(text))?;
     let fragment = html::sanitize(
         container,
         base,

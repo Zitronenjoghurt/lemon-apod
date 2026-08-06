@@ -31,8 +31,12 @@ fn main() {
             Ok(entry) => {
                 println!("  title      {}", entry.title);
                 println!("  title_raw  {:?}", entry.title_raw);
-                println!("  credit     {:?}", entry.credit_text);
+                for credit in &entry.credits {
+                    println!("  credit     {:<28} {}", credit.role, credit.text);
+                    println!("             {:<28} {}", "", credit.html);
+                }
                 println!("  copyright  {}", entry.has_copyright);
+                println!("  license    {:?}", entry.license_url);
                 println!("  media      {} {:?}", entry.media.kind, entry.media.url);
                 println!("  media hd   {:?}", entry.media.hd_url);
                 println!("  extra      {}", entry.extra_media.len());

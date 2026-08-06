@@ -1,9 +1,31 @@
 use regex::Regex;
 use scraper::{ElementRef, Node};
+use std::ops::Range;
+use std::rc::Rc;
 use url::Url;
 
 const ALLOWED_TAGS: &[&str] = &["a", "b", "i", "em", "strong", "sup", "sub"];
 const SKIPPED_TAGS: &[&str] = &["script", "style", "noscript", "iframe", "head"];
+
+const BLOCK_TAGS: &[&str] = &[
+    "p",
+    "div",
+    "td",
+    "tr",
+    "table",
+    "center",
+    "li",
+    "ul",
+    "ol",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "blockquote",
+    "hr",
+];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Fragment {
@@ -23,26 +45,11 @@ pub struct Options<'a> {
     pub stop_at: &'a [&'a str],
 }
 
-pub fn sanitize(el: ElementRef, base: &Url, opts: &Options<'_>) -> Option<Fragment> {
-    let mut walker = Walker {
-        out: Fragment::default(),
-        base,
-        start_after: opts.start_after,
-        emitting: opts.start_after.is_none(),
-        stop_at: opts.stop_at,
-        stopped: false,
-        pending_space: false,
-    };
-    walker.children(el);
-
-    if !walker.emitting {
-        return None;
-    }
-
-    let mut out = walker.out;
-    out.html.truncate(out.html.trim_end().len());
-    out.text.truncate(out.text.trim_end().len());
-    Some(out)
+/// Extract an element's inline content as sanitized HTML plus the same content as plain text.
+pub fn sanitize(el: ElementRef<'_>, base: &Url, opts: &Options<'_>) -> Option<Fragment> {
+    let flat = flatten(el, base);
+    let window = flat.window(opts)?;
+    Some(flat.slice(window))
 }
 
 pub fn resolve_url(base: &Url, href: &str) -> Option<String> {
@@ -55,22 +62,156 @@ pub fn resolve_url(base: &Url, href: &str) -> Option<String> {
     matches!(joined.scheme(), "http" | "https" | "mailto").then(|| joined.into())
 }
 
-struct Walker<'a> {
-    out: Fragment,
-    base: &'a Url,
-    start_after: Option<&'a Regex>,
-    emitting: bool,
-    stop_at: &'a [&'a str],
-    stopped: bool,
-    pending_space: bool,
+/// An element flattened into whitespace-normalised text plus enough structure to rebuild
+/// well-formed inline HTML for any range of that text.
+///
+/// Two passes rather than one streaming pass is what lets a marker span element boundaries.
+/// APOD writes its credit label as `Image Credit & <a href="...">Copyright</a>:`, and no match
+/// against a single text node can ever see that whole.
+pub struct Flat {
+    text: String,
+    pieces: Vec<Piece>,
 }
 
-impl Walker<'_> {
-    fn children(&mut self, el: ElementRef) {
-        for child in el.children() {
-            if self.stopped {
-                break;
+/// One run of text, carrying the inline tags that were open around it.
+struct Piece {
+    /// Byte range within [`Flat::text`]. Always on character boundaries.
+    range: Range<usize>,
+    stack: Vec<Rc<Tag>>,
+    /// A `<br>` stood immediately before this piece.
+    break_before: bool,
+}
+
+struct Tag {
+    open: String,
+    close: String,
+}
+
+pub fn flatten(el: ElementRef<'_>, base: &Url) -> Flat {
+    let mut builder = Builder {
+        base,
+        text: String::new(),
+        pieces: Vec::new(),
+        stack: Vec::new(),
+        pending_space: false,
+        pending_break: false,
+    };
+    builder.children(el);
+
+    Flat {
+        text: builder.text,
+        pieces: builder.pieces,
+    }
+}
+
+impl Flat {
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    /// The range [`Options`] selects: everything after `start_after`, up to the first `stop_at`.
+    pub fn window(&self, opts: &Options<'_>) -> Option<Range<usize>> {
+        let start = match opts.start_after {
+            Some(marker) => marker.find(&self.text)?.end(),
+            None => 0,
+        };
+        Some(start..self.stop(start, opts.stop_at))
+    }
+
+    /// Where the first `stop_at` needle appears at or after `from`, or the end of the text.
+    ///
+    /// The needles are lowercase ASCII, and ASCII case folding never changes a string's length,
+    /// so an index into the folded copy is also an index into the original.
+    pub fn stop(&self, from: usize, stop_at: &[&str]) -> usize {
+        if stop_at.is_empty() {
+            return self.text.len();
+        }
+
+        let haystack = self.text[from..].to_ascii_lowercase();
+        stop_at
+            .iter()
+            .filter_map(|needle| haystack.find(needle))
+            .min()
+            .map_or(self.text.len(), |hit| from + hit)
+    }
+
+    /// Rebuild a range of the text as a [`Fragment`], trimmed to whole words at both ends.
+    pub fn slice(&self, range: Range<usize>) -> Fragment {
+        let range = self.trim(range);
+
+        let mut out = Fragment::default();
+        let mut open: Vec<&Rc<Tag>> = Vec::new();
+        let mut previous_end: Option<usize> = None;
+
+        for piece in &self.pieces {
+            let start = piece.range.start.max(range.start);
+            let end = piece.range.end.min(range.end);
+            if start >= end {
+                continue;
             }
+
+            // Close, then separate, then open: a separator that lands between two different
+            // tag runs belongs to neither of them.
+            let common = common_prefix(&open, &piece.stack);
+            for tag in open.drain(common..).rev() {
+                out.html.push_str(&tag.close);
+            }
+
+            if let Some(previous) = previous_end {
+                if piece.break_before {
+                    out.html.push_str("<br>");
+                }
+                if previous < start {
+                    out.html.push(' ');
+                    out.text.push(' ');
+                }
+            }
+
+            for tag in &piece.stack[common..] {
+                out.html.push_str(&tag.open);
+                open.push(tag);
+            }
+
+            let slice = &self.text[start..end];
+            out.html.push_str(&escape_text(slice));
+            out.text.push_str(slice);
+            previous_end = Some(end);
+        }
+
+        for tag in open.iter().rev() {
+            out.html.push_str(&tag.close);
+        }
+        out
+    }
+
+    /// Shrink a range to the first and last non-whitespace byte inside it.
+    fn trim(&self, range: Range<usize>) -> Range<usize> {
+        let slice = &self.text[range.clone()];
+        let start = range.start + (slice.len() - slice.trim_start().len());
+        let end = range.end - (slice.len() - slice.trim_end().len());
+        start..end.max(start)
+    }
+}
+
+fn common_prefix(open: &[&Rc<Tag>], stack: &[Rc<Tag>]) -> usize {
+    open.iter()
+        .zip(stack)
+        .take_while(|(a, b)| Rc::ptr_eq(**a, b))
+        .count()
+}
+
+struct Builder<'a> {
+    base: &'a Url,
+    text: String,
+    pieces: Vec<Piece>,
+    stack: Vec<Rc<Tag>>,
+    pending_space: bool,
+    pending_break: bool,
+}
+
+impl Builder<'_> {
+    fn children(&mut self, el: ElementRef<'_>) {
+        for child in el.children() {
             match child.value() {
                 Node::Text(text) => self.text(text),
                 Node::Element(_) => {
@@ -83,7 +224,7 @@ impl Walker<'_> {
         }
     }
 
-    fn element(&mut self, el: ElementRef) {
+    fn element(&mut self, el: ElementRef<'_>) {
         let name = el.value().name().to_ascii_lowercase();
 
         if SKIPPED_TAGS.contains(&name.as_str()) {
@@ -91,48 +232,26 @@ impl Walker<'_> {
         }
 
         if name == "br" {
-            if self.emitting {
-                self.out.html.push_str("<br>");
-            }
+            self.pending_break = true;
             self.pending_space = true;
             return;
         }
 
-        if matches!(
-            name.as_str(),
-            "p" | "div"
-                | "td"
-                | "tr"
-                | "table"
-                | "center"
-                | "li"
-                | "ul"
-                | "ol"
-                | "h1"
-                | "h2"
-                | "h3"
-                | "h4"
-                | "h5"
-                | "h6"
-                | "blockquote"
-                | "hr"
-        ) {
+        if BLOCK_TAGS.contains(&name.as_str()) {
             self.pending_space = true;
         }
 
-        let tag = self.emitting.then(|| self.open_tag(&name, el)).flatten();
-
+        let tag = self.tag(&name, el);
         if let Some(tag) = &tag {
-            self.flush_space();
-            self.out.html.push_str(&tag.open);
+            self.stack.push(Rc::clone(tag));
         }
         self.children(el);
-        if let Some(tag) = &tag {
-            self.out.html.push_str(&tag.close);
+        if tag.is_some() {
+            self.stack.pop();
         }
     }
 
-    fn open_tag(&self, name: &str, el: ElementRef) -> Option<Tag> {
+    fn tag(&self, name: &str, el: ElementRef<'_>) -> Option<Rc<Tag>> {
         if !ALLOWED_TAGS.contains(&name) {
             return None;
         }
@@ -140,83 +259,49 @@ impl Walker<'_> {
         if name == "a" {
             let href = el.value().attr("href")?;
             let resolved = resolve_url(self.base, href)?;
-            return Some(Tag {
+            return Some(Rc::new(Tag {
                 open: format!(r#"<a href="{}">"#, escape_attr(&resolved)),
                 close: "</a>".into(),
-            });
+            }));
         }
 
-        Some(Tag {
+        Some(Rc::new(Tag {
             open: format!("<{name}>"),
             close: format!("</{name}>"),
-        })
+        }))
     }
 
     fn text(&mut self, raw: &str) {
-        let mut slice = raw;
-
-        if !self.emitting {
-            let Some(re) = self.start_after else {
-                return;
-            };
-            let Some(found) = re.find(slice) else {
-                return;
-            };
-            self.emitting = true;
-            slice = &slice[found.end()..];
+        if raw.is_empty() {
+            return;
         }
-
-        if !self.stop_at.is_empty() {
-            let haystack = slice.to_ascii_lowercase();
-            if let Some(cut) = self
-                .stop_at
-                .iter()
-                .filter_map(|needle| haystack.find(needle))
-                .min()
-            {
-                slice = &slice[..cut];
-                self.stopped = true;
-            }
-        }
-
-        self.push_text(slice);
-    }
-
-    fn push_text(&mut self, slice: &str) {
-        if slice.is_empty() {
+        if raw.trim().is_empty() {
+            self.pending_space = true;
             return;
         }
 
-        if slice.starts_with(char::is_whitespace) {
+        if raw.starts_with(char::is_whitespace) {
             self.pending_space = true;
         }
+        if self.pending_space && !self.text.is_empty() {
+            self.text.push(' ');
+        }
+        self.pending_space = raw.ends_with(char::is_whitespace);
 
-        for (index, word) in slice.split_whitespace().enumerate() {
+        let start = self.text.len();
+        for (index, word) in raw.split_whitespace().enumerate() {
             if index > 0 {
-                self.pending_space = true;
+                self.text.push(' ');
             }
-            self.flush_space();
-            self.out.html.push_str(&escape_text(word));
-            self.out.text.push_str(word);
+            self.text.push_str(word);
         }
 
-        if slice.ends_with(char::is_whitespace) {
-            self.pending_space = true;
-        }
+        self.pieces.push(Piece {
+            range: start..self.text.len(),
+            stack: self.stack.clone(),
+            break_before: std::mem::take(&mut self.pending_break),
+        });
     }
-
-    fn flush_space(&mut self) {
-        if self.pending_space && !self.out.text.is_empty() {
-            self.out.html.push(' ');
-            self.out.text.push(' ');
-        }
-        self.pending_space = false;
-    }
-}
-
-struct Tag {
-    open: String,
-    close: String,
 }
 
 fn escape_text(raw: &str) -> String {
@@ -343,6 +428,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(out.text, "one two three four");
+        assert_eq!(out.html, "one two <b>three</b> four");
     }
 
     #[test]
@@ -350,5 +436,76 @@ mod tests {
         let out = run("<p>anti<b>matter</b></p>", &Options::default()).unwrap();
         assert_eq!(out.text, "antimatter");
         assert_eq!(out.html, "anti<b>matter</b>");
+    }
+
+    #[test]
+    fn a_marker_may_span_element_boundaries() {
+        let marker = Regex::new(r"(?i)\bcredit\s*&\s*copyright\s*:\s*").unwrap();
+        let opts = Options {
+            start_after: Some(&marker),
+            stop_at: &[],
+        };
+        let out = run(
+            r#"<center><b>Image Credit &amp;
+               <a href="lib/about_apod.html">Copyright</a>:</b>
+               <a href="https://example.com/">Jane Doe</a></center>"#,
+            &opts,
+        )
+        .unwrap();
+
+        assert_eq!(out.text, "Jane Doe");
+        assert_eq!(out.html, r#"<a href="https://example.com/">Jane Doe</a>"#);
+    }
+
+    #[test]
+    fn a_stop_phrase_may_span_element_boundaries() {
+        let opts = Options {
+            start_after: None,
+            stop_at: &["tomorrow's picture"],
+        };
+        let out = run(
+            "<p>The prose. <b>Tomorrow's</b> picture: something else</p>",
+            &opts,
+        )
+        .unwrap();
+        assert_eq!(out.text, "The prose.");
+    }
+
+    #[test]
+    fn a_link_broken_over_several_text_nodes_stays_one_link() {
+        let out = run(
+            r#"<p><a href="https://example.com/">Jane <b>Q</b> Doe</a></p>"#,
+            &Options::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            out.html,
+            r#"<a href="https://example.com/">Jane <b>Q</b> Doe</a>"#
+        );
+    }
+
+    #[test]
+    fn a_separator_between_two_tag_runs_belongs_to_neither() {
+        let out = run("<p><b>one</b> <i>two</i></p>", &Options::default()).unwrap();
+        assert_eq!(out.html, "<b>one</b> <i>two</i>");
+    }
+
+    #[test]
+    fn line_breaks_survive_as_breaks() {
+        let out = run("<p>one<br>two</p>", &Options::default()).unwrap();
+        assert_eq!(out.text, "one two");
+        assert_eq!(out.html, "one<br> two");
+    }
+
+    #[test]
+    fn any_range_of_the_flattened_text_can_be_sliced_back_out() {
+        let doc = Html::parse_document("<body><p>Alpha <b>beta</b> gamma</p></body>");
+        let body = doc.select(&BODY).next().unwrap();
+        let flat = flatten(body, &base());
+
+        assert_eq!(flat.text(), "Alpha beta gamma");
+        assert_eq!(flat.slice(6..10).text, "beta");
+        assert_eq!(flat.slice(6..10).html, "<b>beta</b>");
+        assert_eq!(flat.slice(0..11).html, "Alpha <b>beta</b>");
     }
 }

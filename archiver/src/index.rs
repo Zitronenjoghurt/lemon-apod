@@ -12,9 +12,10 @@ CREATE TABLE IF NOT EXISTS entries (
   title_raw         TEXT,
   explanation_html  TEXT NOT NULL,
   explanation_text  TEXT NOT NULL,
-  credit_html       TEXT,
+  credits           TEXT,
   credit_text       TEXT,
   has_copyright     INTEGER NOT NULL DEFAULT 0,
+  license_url       TEXT,
   tomorrow_teaser   TEXT,
   keywords          TEXT,
   media_kind        TEXT NOT NULL,
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 "#;
 
 const COLUMNS: &str = "date_id, title, title_raw, explanation_html, explanation_text, \
-                       credit_html, credit_text, has_copyright, tomorrow_teaser, keywords, \
+                       credits, has_copyright, license_url, tomorrow_teaser, keywords, \
                        media_kind, media_url, media_hd_url, thumb_path, source_url";
 
 pub struct IndexStore {
@@ -137,7 +138,8 @@ impl IndexStore {
         let mut stmt = self.conn.prepare(
             "SELECT date_id, media_kind, media_url, media_hd_url FROM entries
              WHERE thumb_path IS NULL
-               AND media_kind IN ('image_jpg', 'image_png', 'image_gif', 'youtube', 'vimeo')
+               AND media_kind IN ('image_jpg', 'image_png', 'image_gif',
+                                 'video_mp4', 'youtube', 'vimeo')
              ORDER BY date_id DESC",
         )?;
         let rows = stmt
@@ -215,19 +217,23 @@ fn write_entry(tx: &Transaction<'_>, entry: &ApodEntry) -> Result<()> {
     let keywords = (!entry.keywords.is_empty())
         .then(|| serde_json::to_string(&entry.keywords))
         .transpose()?;
+    let credits = (!entry.credits.is_empty())
+        .then(|| serde_json::to_string(&entry.credits))
+        .transpose()?;
 
     tx.execute(
         "INSERT INTO entries (date_id, date, title, title_raw, explanation_html, explanation_text,
-                              credit_html, credit_text, has_copyright, tomorrow_teaser, keywords,
-                              media_kind, media_url, media_hd_url, source_url, parser_version,
-                              parsed_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+                              credits, credit_text, has_copyright, license_url, tomorrow_teaser,
+                              keywords, media_kind, media_url, media_hd_url, source_url,
+                              parser_version, parsed_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
          ON CONFLICT(date_id) DO UPDATE SET
            date = excluded.date, title = excluded.title, title_raw = excluded.title_raw,
            explanation_html = excluded.explanation_html,
            explanation_text = excluded.explanation_text,
-           credit_html = excluded.credit_html, credit_text = excluded.credit_text,
-           has_copyright = excluded.has_copyright, tomorrow_teaser = excluded.tomorrow_teaser,
+           credits = excluded.credits, credit_text = excluded.credit_text,
+           has_copyright = excluded.has_copyright, license_url = excluded.license_url,
+           tomorrow_teaser = excluded.tomorrow_teaser,
            keywords = excluded.keywords, media_kind = excluded.media_kind,
            media_url = excluded.media_url, media_hd_url = excluded.media_hd_url,
            source_url = excluded.source_url, parser_version = excluded.parser_version,
@@ -239,9 +245,10 @@ fn write_entry(tx: &Transaction<'_>, entry: &ApodEntry) -> Result<()> {
             entry.title_raw,
             entry.explanation_html,
             entry.explanation_text,
-            entry.credit_html,
-            entry.credit_text,
+            credits,
+            entry.credit_text(),
             entry.has_copyright,
+            entry.license_url,
             entry.tomorrow_teaser,
             keywords,
             entry.media.kind.to_string(),
@@ -275,6 +282,7 @@ fn write_entry(tx: &Transaction<'_>, entry: &ApodEntry) -> Result<()> {
 
 fn read_entry(row: &Row<'_>) -> rusqlite::Result<ApodEntry> {
     let date = ApodDate::from_days(row.get::<_, i64>(0)? as i32);
+    let credits: Option<String> = row.get(5)?;
     let keywords: Option<String> = row.get(9)?;
     let kind = MediaKind::from_str(&row.get::<_, String>(10)?).unwrap_or(MediaKind::None);
 
@@ -287,22 +295,26 @@ fn read_entry(row: &Row<'_>) -> rusqlite::Result<ApodEntry> {
         title_raw: row.get(2)?,
         explanation_html: row.get(3)?,
         explanation_text: row.get(4)?,
-        credit_html: row.get(5)?,
-        credit_text: row.get(6)?,
-        has_copyright: row.get(7)?,
+        credits: from_json(credits),
+        has_copyright: row.get(6)?,
+        license_url: row.get(7)?,
         tomorrow_teaser: row.get(8)?,
-        keywords: keywords
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_default(),
+        keywords: from_json(keywords),
         media,
         extra_media: Vec::new(),
         source_url: row.get(14)?,
     })
 }
 
+fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {
+    raw.and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apod_core::Credit;
 
     fn store() -> IndexStore {
         let conn = Connection::open_in_memory().unwrap();
@@ -318,9 +330,13 @@ mod tests {
             title_raw: Some(format!("APOD: {title}")),
             explanation_html: "The <b>Crab</b> Nebula is a supernova remnant.".into(),
             explanation_text: "The Crab Nebula is a supernova remnant.".into(),
-            credit_html: Some("Jane Doe".into()),
-            credit_text: Some("Jane Doe".into()),
+            credits: vec![Credit {
+                role: "Image Credit & Copyright".into(),
+                html: "Jane Doe".into(),
+                text: "Jane Doe".into(),
+            }],
             has_copyright: true,
+            license_url: None,
             tomorrow_teaser: Some("open water".into()),
             keywords: vec!["nebula".into(), "supernova".into()],
             media: Media::new(
@@ -347,8 +363,31 @@ mod tests {
         assert_eq!(loaded.title, "Crab Nebula");
         assert_eq!(loaded.keywords, vec!["nebula", "supernova"]);
         assert!(loaded.has_copyright);
+        assert_eq!(loaded.credits, original.credits);
         assert_eq!(loaded.extra_media.len(), 1);
         assert_eq!(loaded.extra_media[0].kind, MediaKind::ImagePng);
+    }
+
+    #[test]
+    fn credit_text_indexes_every_role_but_stores_them_apart() {
+        let mut store = store();
+        let mut original = entry("2024-03-05", "Crab Nebula");
+        original.credits.push(Credit {
+            role: "Text".into(),
+            html: "Ada Lovelace".into(),
+            text: "Ada Lovelace".into(),
+        });
+        store.upsert(&original).unwrap();
+
+        let indexed: Option<String> = store
+            .conn
+            .query_row("SELECT credit_text FROM entries", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(indexed.as_deref(), Some("Jane Doe; Ada Lovelace"));
+
+        let loaded = store.get(original.date).unwrap().unwrap();
+        assert_eq!(loaded.credits.len(), 2);
+        assert_eq!(loaded.credits[1].role, "Text");
     }
 
     #[test]

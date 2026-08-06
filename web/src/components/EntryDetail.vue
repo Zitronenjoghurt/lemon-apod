@@ -4,8 +4,10 @@ import { RouterLink, useRouter } from 'vue-router'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
 import { api } from '@/api/client'
-import { isVideo, type ApodEntry, type ApodSummary } from '@/api/types'
+import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
+import { withInternalLinks } from '@/utils/apodLinks'
+import { licenseName, roleLabel } from '@/utils/credits'
 import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay } from '@/utils/date'
 
 const props = defineProps<{ entry: ApodEntry; latest?: string }>()
@@ -15,22 +17,32 @@ const { isFavorite, toggle } = useFavorites()
 const copied = ref(false)
 const alsoOnThisDay = ref<ApodSummary[]>([])
 
-const TEXT_MARKER = /<br\s*\/?>\s*(?:<b>\s*)?Text(?:\s+Credit)?\s*:\s*(?:<\/b>\s*)?/i
+const explanation = computed(() => withInternalLinks(props.entry.explanation_html))
 
-const credit = computed(() => {
-  const html = props.entry.credit_html
-  if (!html) return null
+const credits = computed(() =>
+  (props.entry.credits ?? []).map((credit) => ({
+    label: roleLabel(credit.role),
+    html: withInternalLinks(credit.html),
+  })),
+)
 
-  const match = html.match(TEXT_MARKER)
-  if (!match || match.index === undefined) return { media: html, text: null }
+const license = computed(() =>
+  props.entry.license_url
+    ? { url: props.entry.license_url, name: licenseName(props.entry.license_url) }
+    : null,
+)
 
-  return {
-    media: html.slice(0, match.index).trim() || null,
-    text: html.slice(match.index + match[0].length).trim() || null,
-  }
-})
+function onInternalLink(event: MouseEvent) {
+  if (event.defaultPrevented || event.button !== 0) return
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 
-const mediaCreditLabel = computed(() => (isVideo(props.entry.media.kind) ? 'Video' : 'Image'))
+  const anchor = (event.target as HTMLElement | null)?.closest('a')
+  const href = anchor?.getAttribute('href')
+  if (!href?.startsWith('/')) return
+
+  event.preventDefault()
+  router.push(href)
+}
 
 const previous = computed(() =>
   props.entry.date > FIRST_ENTRY ? previousDay(props.entry.date) : null,
@@ -121,27 +133,33 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </a>
     </div>
 
-    <dl v-if="credit" class="credits muted">
-      <template v-if="credit.media">
-        <dt>{{ mediaCreditLabel }}</dt>
+    <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
+      <template v-for="(credit, index) in credits" :key="credit.label + index">
+        <dt>{{ credit.label }}</dt>
         <dd>
-          <span v-html="credit.media" />
+          <span v-html="credit.html" />
           <span
-            v-if="entry.has_copyright"
+            v-if="index === 0 && entry.has_copyright"
             class="rights"
             title="Credited to a named copyright holder rather than released as public domain by NASA"
           >
             Copyrighted
           </span>
+          <a
+            v-if="index === 0 && license"
+            class="rights"
+            :href="license.url"
+            target="_blank"
+            rel="noopener license"
+            title="Released under this licence rather than as public domain by NASA"
+          >
+            {{ license.name }}
+          </a>
         </dd>
-      </template>
-      <template v-if="credit.text">
-        <dt>Text</dt>
-        <dd v-html="credit.text" />
       </template>
     </dl>
 
-    <div class="prose" v-html="entry.explanation_html" />
+    <div class="prose" v-html="explanation" @click="onInternalLink" />
 
     <ul v-if="entry.keywords?.length" class="row tags">
       <li v-for="keyword in entry.keywords" :key="keyword">
@@ -241,6 +259,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   font-size: 0.72rem;
   white-space: nowrap;
   vertical-align: 0.05em;
+  text-decoration: none;
+}
+
+a.rights:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 .tags {

@@ -206,8 +206,9 @@ async fn thumbnail(cfg: &Config, client: &Client, index: &mut IndexStore, date: 
 
     tokio::time::sleep(jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
 
-    match thumbs::generate(cfg, client, index, date, &media).await {
+    match thumbs::generate(cfg, client, index, date, &media, false).await {
         Ok(thumbs::Generated::Written) => tracing::debug!(%date, "thumbnail written"),
+        Ok(thumbs::Generated::Adopted) => tracing::debug!(%date, "thumbnail already on disk"),
         Ok(thumbs::Generated::NotApplicable) => {}
         Ok(thumbs::Generated::Failed(reason)) => {
             tracing::warn!(%date, %reason, "thumbnail failed");

@@ -14,12 +14,14 @@ pub struct ApodEntry {
     pub explanation_html: String,
     /// The same content as plain text. This is what search indexes.
     pub explanation_text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub credit_html: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub credit_text: Option<String>,
-    /// Whether the credit line claims copyright. Drives the per-entry attribution notice.
+    /// The attribution block, one entry per labelled role, in page order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub credits: Vec<Credit>,
+    /// Whether a credit label claims copyright. Drives the per-entry attribution notice.
     pub has_copyright: bool,
+    /// Where a credit label linked its licence, on the entries released under one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tomorrow_teaser: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -32,9 +34,34 @@ pub struct ApodEntry {
     pub source_url: String,
 }
 
+/// One labelled line of an entry's attribution block, such as `Image Credit & Copyright` or
+/// `Text`. APOD writes these as a single run of prose; keeping them apart is what lets the
+/// frontend label them and lets `has_copyright` mean something precise.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Credit {
+    /// The label as APOD wrote it, minus its colon: `Image Credit & Copyright`, `Music`.
+    pub role: String,
+    /// Sanitized inline HTML, links absolute.
+    pub html: String,
+    /// The same content as plain text.
+    pub text: String,
+}
+
 impl ApodEntry {
     pub fn summary_text(&self, max_chars: usize) -> String {
         truncate_on_word_boundary(&self.explanation_text, max_chars)
+    }
+
+    /// Every credited name as one string. Not part of the API: this is what search indexes,
+    /// where the role labels themselves are noise.
+    pub fn credit_text(&self) -> Option<String> {
+        (!self.credits.is_empty()).then(|| {
+            self.credits
+                .iter()
+                .map(|credit| credit.text.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
     }
 
     pub fn to_summary(&self) -> ApodSummary {
