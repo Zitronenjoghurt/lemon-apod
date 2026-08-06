@@ -3,6 +3,11 @@ name: Build and Push Docker Images
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build, for example v0.2.0
+        required: true
 
 jobs:
   build:
@@ -17,6 +22,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Set image name
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.target }}" >> $GITHUB_ENV
@@ -42,4 +49,4 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
           tags: |
             ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.IMAGE_NAME }}:${{ inputs.tag || github.ref_name }}
