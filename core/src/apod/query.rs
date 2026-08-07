@@ -1,7 +1,12 @@
+pub const MAX_TERMS: usize = 24;
+pub const MAX_PREFIX_TERMS: usize = 4;
+
 pub fn fts_query(raw: &str) -> Option<String> {
+    let mut budget = Budget::new();
     let rendered: Vec<String> = groups(&tokenize(raw))
         .iter()
-        .filter_map(Group::render)
+        .map(|group| group.truncated(&mut budget))
+        .filter_map(|group| group.render())
         .collect();
 
     match rendered.len() {
@@ -27,7 +32,11 @@ struct Term {
 
 impl Term {
     fn render(&self) -> String {
-        let escaped = self.text.replace('"', "");
+        let escaped: String = self
+            .text
+            .chars()
+            .filter(|ch| *ch != '"' && !ch.is_control())
+            .collect();
         let star = if self.prefix { "*" } else { "" };
         format!("\"{escaped}\"{star}")
     }
@@ -39,7 +48,44 @@ struct Group {
     negative: Vec<Term>,
 }
 
+struct Budget {
+    terms: usize,
+    prefixes: usize,
+}
+
+impl Budget {
+    fn new() -> Self {
+        Self {
+            terms: MAX_TERMS,
+            prefixes: MAX_PREFIX_TERMS,
+        }
+    }
+
+    fn spend(&mut self, terms: &[Term]) -> Vec<Term> {
+        terms
+            .iter()
+            .take(self.terms)
+            .map(|term| {
+                self.terms -= 1;
+                let mut term = term.clone();
+                match term.prefix && self.prefixes > 0 {
+                    true => self.prefixes -= 1,
+                    false => term.prefix = false,
+                }
+                term
+            })
+            .collect()
+    }
+}
+
 impl Group {
+    fn truncated(&self, budget: &mut Budget) -> Self {
+        Self {
+            positive: budget.spend(&self.positive),
+            negative: budget.spend(&self.negative),
+        }
+    }
+
     fn render(&self) -> Option<String> {
         if self.positive.is_empty() {
             return None;
@@ -279,6 +325,66 @@ mod tests {
             "an exclusion alone is not a search"
         );
         assert_eq!(fts_query("OR OR"), None);
+    }
+
+    #[test]
+    fn a_nul_byte_cannot_terminate_the_match_expression() {
+        let query = fts_query("\u{0}nebula").expect("the term survives, the NUL does not");
+        assert!(!query.contains('\u{0}'), "{query:?}");
+        assert_eq!(query, r#""nebula"*"#);
+
+        for control in ["a\u{0}b", "a\u{1}b", "a\u{1f}b", "a\u{7f}b"] {
+            let query = fts_query(control).unwrap_or_default();
+            assert!(
+                !query.chars().any(char::is_control),
+                "{control:?} left a control character in {query:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_query_cannot_carry_more_terms_than_the_budget_allows() {
+        let huge = "a* ".repeat(200);
+        let query = fts_query(&huge).expect("something survives");
+        assert_eq!(
+            query.matches("\"a\"").count(),
+            MAX_TERMS,
+            "expected the tail to be dropped: {query}"
+        );
+
+        let spread = format!("{} OR {}", "a* ".repeat(50), "b* ".repeat(50));
+        let query = fts_query(&spread).unwrap();
+        let terms = query.matches("\"a\"").count() + query.matches("\"b\"").count();
+        assert_eq!(terms, MAX_TERMS, "{query}");
+    }
+
+    #[test]
+    fn only_a_few_terms_are_left_open_ended() {
+        let query = fts_query(&"a* ".repeat(200)).unwrap();
+        assert_eq!(
+            query.matches(r#""a"*"#).count(),
+            MAX_PREFIX_TERMS,
+            "the rest must stay whole words: {query}"
+        );
+        assert_eq!(query.matches("\"a\"").count(), MAX_TERMS);
+    }
+
+    #[test]
+    fn the_word_being_typed_is_still_a_prefix() {
+        assert_eq!(fts_query("neb"), Some(r#""neb"*"#.into()));
+        assert_eq!(
+            fts_query("crab neb"),
+            Some(r#""crab" AND "neb"*"#.into()),
+            "the trailing word is what the prefix budget is for"
+        );
+    }
+
+    #[test]
+    fn an_ordinary_query_is_untouched_by_the_budget() {
+        assert_eq!(
+            fts_query("crab nebula"),
+            Some(r#""crab" AND "nebula"*"#.into())
+        );
     }
 
     #[test]

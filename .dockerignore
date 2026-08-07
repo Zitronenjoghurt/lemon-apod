@@ -6,5 +6,4 @@ web/dist/
 .idea/
 data/
 *.md
-!web/README.md
 .DS_Store

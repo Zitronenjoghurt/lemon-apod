@@ -49,6 +49,7 @@ pub struct Thumbs {
     pub delay_max: Duration,
     pub youtube_templates: Vec<String>,
     pub vimeo_oembed_url: String,
+    pub image_max_bytes: u64,
     pub video_max_bytes: u64,
     pub video_timeout: Duration,
 }
@@ -113,6 +114,7 @@ impl Config {
                     "APOD_VIMEO_OEMBED_URL",
                     "https://vimeo.com/api/oembed.json".to_owned(),
                 )?,
+                image_max_bytes: env_or("APOD_IMAGE_MAX_MB", 64u64)? * 1_048_576,
                 video_max_bytes: env_or("APOD_VIDEO_MAX_MB", 64u64)? * 1_048_576,
                 video_timeout: secs("APOD_VIDEO_TIMEOUT_SECS", 300)?,
             },

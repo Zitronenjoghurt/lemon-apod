@@ -5,7 +5,7 @@ license.workspace = true
 edition.workspace = true
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["test-util", "io-util", "net"] }
 
 [dependencies]
 apod-core = { workspace = true, features = ["data-write"] }

@@ -1,20 +1,29 @@
 use crate::api::error::ApiResult;
 use crate::state::ServerState;
 use axum::extract::State;
-use axum::http::{HeaderValue, header};
+use axum::http::{header, HeaderValue};
 use axum::response::{IntoResponse, Response};
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 pub async fn get_robots(State(state): State<ServerState>) -> Response {
     let body = format!(
-        "User-agent: *\nAllow: /\nSitemap: {}/sitemap.xml\n",
+        "User-agent: *\n\
+         Allow: /\n\
+         Disallow: /random\n\
+         Disallow: /api/\n\
+         Sitemap: {}/sitemap.xml\n",
         state.config.public_url
     );
-
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body).into_response()
 }
 
 pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response> {
+    let xml = state.sitemap.get_or_build(|| build(&state)).await?;
+    Ok(response(xml))
+}
+
+async fn build(state: &ServerState) -> ApiResult<String> {
     let dates = state.store.all_dates().await?;
     let base = &state.config.public_url;
 
@@ -34,8 +43,11 @@ pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response
     }
 
     xml.push_str("</urlset>\n");
+    Ok(xml)
+}
 
-    let mut response = xml.into_response();
+fn response(xml: Arc<str>) -> Response {
+    let mut response = xml.to_string().into_response();
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,
@@ -46,7 +58,7 @@ pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response
         HeaderValue::from_static("public, max-age=3600"),
     );
 
-    Ok(response)
+    response
 }
 
 fn push_url(xml: &mut String, location: &str, change_frequency: Option<&str>) {

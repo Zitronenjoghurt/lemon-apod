@@ -50,6 +50,10 @@ pub fn limit(requested: Option<usize>, default: usize, max: usize) -> usize {
     requested.unwrap_or(default).clamp(1, max)
 }
 
+pub fn offset(requested: Option<usize>) -> usize {
+    requested.unwrap_or(0).min(i64::MAX as usize)
+}
+
 pub fn month_day(raw: &str) -> ApiResult<(u32, u32)> {
     raw.split_once('-')
         .and_then(|(month, day)| Some((month.parse::<u32>().ok()?, day.parse::<u32>().ok()?)))
@@ -68,6 +72,13 @@ mod tests {
         assert_eq!(limit(Some(0), 30, 100), 1);
         assert_eq!(limit(Some(5_000), 30, 100), 100);
         assert_eq!(limit(Some(50), 30, 100), 50);
+    }
+
+    #[test]
+    fn keeps_an_offset_on_the_positive_side_of_the_cast() {
+        assert_eq!(offset(None), 0);
+        assert_eq!(offset(Some(60)), 60);
+        assert_eq!(offset(Some(usize::MAX)) as i64, i64::MAX);
     }
 
     #[test]

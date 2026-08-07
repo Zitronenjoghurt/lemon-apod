@@ -43,12 +43,6 @@ ENTRYPOINT ["apod-archiver"]
 CMD ["run"]
 
 FROM runtime AS api
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-USER apod
-
 COPY --from=rust /out/apod-api /usr/local/bin/apod-api
 COPY --from=web /web/dist /app/static
 ENV APOD_STATIC_DIR=/app/static

@@ -56,10 +56,16 @@ pub async fn generate(
     };
 
     let encoded = match fetch {
-        Fetch::Still(candidates) => match download(client, &candidates).await {
-            Err(error) => Err(error),
-            Ok(bytes) => encode(&bytes, cfg.thumbs.max_width, cfg.thumbs.quality),
-        },
+        Fetch::Still(candidates) => {
+            let limit = Limit {
+                max_bytes: cfg.thumbs.image_max_bytes,
+                timeout: cfg.fetch_timeout,
+            };
+            match download(client, &candidates, limit).await {
+                Err(error) => Err(error),
+                Ok(bytes) => encode(&bytes, cfg.thumbs.max_width, cfg.thumbs.quality),
+            }
+        }
         Fetch::Frame(url) => {
             let limit = Limit {
                 max_bytes: cfg.thumbs.video_max_bytes,
@@ -110,11 +116,11 @@ pub fn measured(stored_path: &str, on_disk: &Path) -> Thumb {
     }
 }
 
-async fn download(client: &Client, candidates: &[String]) -> Result<Vec<u8>> {
+async fn download(client: &Client, candidates: &[String], limit: Limit) -> Result<Vec<u8>> {
     let mut last = None;
 
     for url in candidates {
-        match client.get(url).await {
+        match client.get_limited(url, limit).await {
             Ok(Response::Body(bytes)) => return Ok(bytes),
             Ok(Response::NotFound) => last = Some(anyhow::anyhow!("{url} is gone")),
             Err(error) => last = Some(error),

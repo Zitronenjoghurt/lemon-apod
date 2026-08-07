@@ -40,7 +40,7 @@ async fn get_search(
             q,
             &filters,
             params::sort_by_date(query.sort.as_deref())?,
-            query.offset.unwrap_or(0),
+            params::offset(query.offset),
             params::limit(
                 query.limit,
                 state.config.search_default_limit,

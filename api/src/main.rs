@@ -1,26 +1,31 @@
 mod api;
 mod config;
 mod meta;
+mod probe;
 mod shutdown;
 mod state;
 mod web;
 
 use anyhow::{Context, Result};
-use axum::Router;
 use axum::routing::get;
+use axum::Router;
 use config::Config;
 use state::ServerState;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
+use tower_governor::GovernorLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if probe::requested() {
+        return probe::run().await;
+    }
+
     init_logging();
 
     let config = Config::from_env()?;
@@ -56,15 +61,19 @@ fn router(state: &ServerState) -> Router {
         .append_index_html_on_directories(false)
         .fallback(get(web::spa).with_state(state.clone()));
 
-    Router::new()
-        .nest(
-            "/api",
-            api::build().layer(GovernorLayer::new(Arc::new(governor))),
-        )
-        .merge(web::build(state))
+    let metered = Router::new()
+        .nest("/api", api::build())
+        .merge(web::metered())
+        .layer(GovernorLayer::new(Arc::new(governor)));
+
+    let router = Router::new()
+        .merge(metered)
+        .merge(web::unmetered(state))
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
-        .with_state(state.clone())
+        .with_state(state.clone());
+
+    web::with_security_headers(router)
 }
 
 fn init_logging() {

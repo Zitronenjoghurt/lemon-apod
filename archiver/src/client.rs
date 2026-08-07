@@ -134,3 +134,91 @@ fn too_large(url: &str, size: u64, max: u64) -> anyhow::Error {
         max as f64 / 1_048_576.0
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    const LIMIT: Limit = Limit {
+        max_bytes: 64 * 1024,
+        timeout: Duration::from_secs(10),
+    };
+
+    fn client() -> Client {
+        Client::new("apod-test", Duration::from_secs(10), 0).unwrap()
+    }
+
+    async fn rejected(url: &str) -> String {
+        match client().get_limited(url, LIMIT).await {
+            Err(error) => format!("{error:#}"),
+            Ok(_) => panic!("the cap let {url} through"),
+        }
+    }
+
+    async fn serving(head: &'static str, body: Vec<u8>, endless: bool) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let _ = socket.read(&mut [0u8; 2048]).await;
+                    if socket.write_all(head.as_bytes()).await.is_err() {
+                        return;
+                    }
+                    loop {
+                        if socket.write_all(&body).await.is_err() || !endless {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+
+        format!("http://{address}/big.jpg")
+    }
+
+    #[tokio::test]
+    async fn refuses_a_body_that_declares_itself_too_large() {
+        let url = serving(
+            "HTTP/1.1 200 OK\r\nContent-Length: 104857600\r\n\r\n",
+            b"x".repeat(4096),
+            true,
+        )
+        .await;
+
+        assert!(rejected(&url).await.contains("limit"));
+    }
+
+    #[tokio::test]
+    async fn stops_reading_a_chunked_body_that_never_ends() {
+        let chunk = format!("2000\r\n{}\r\n", "x".repeat(8192));
+        let url = serving(
+            "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+            chunk.into_bytes(),
+            true,
+        )
+        .await;
+
+        assert!(rejected(&url).await.contains("limit"));
+    }
+
+    #[tokio::test]
+    async fn a_body_inside_the_cap_still_arrives_whole() {
+        let body = b"x".repeat(1024);
+        let url = serving(
+            "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\n\r\n",
+            body,
+            false,
+        )
+        .await;
+
+        let Response::Body(bytes) = client().get_limited(&url, LIMIT).await.unwrap() else {
+            panic!("expected a body");
+        };
+        assert_eq!(bytes.len(), 1024);
+    }
+}

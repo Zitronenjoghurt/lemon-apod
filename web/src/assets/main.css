@@ -13,7 +13,6 @@
     --text-muted: #5b6178;
     --accent: #4f46e5;
     --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
-    --skeleton: linear-gradient(90deg, #e8ebf3 25%, #f2f4fa 37%, #e8ebf3 63%);
   }
 
   html.app-dark {
@@ -24,7 +23,6 @@
     --text-muted: #969db8;
     --accent: #818cf8;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
-    --skeleton: linear-gradient(90deg, #161a2c 25%, #1e2337 37%, #161a2c 63%);
   }
 
   *,
@@ -124,26 +122,7 @@
     flex-wrap: wrap;
   }
 
-  .skeleton {
-    background: var(--skeleton);
-    background-size: 400% 100%;
-    animation: shimmer 1.4s ease infinite;
-    border-radius: var(--radius);
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0 50%;
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
-    .skeleton {
-      animation: none;
-    }
     * {
       transition-duration: 0.01ms !important;
     }

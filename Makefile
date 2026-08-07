@@ -4,7 +4,7 @@ API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p a
 COMPOSE = docker compose -f docker/compose.yaml
 
 .PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs docker \
-        seed up down logs ps
+        seed up down logs ps shell
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -65,5 +65,5 @@ logs: ## Follow both services' logs
 ps: ## Container and health status
 	$(COMPOSE) ps
 
-shell:
+shell: ## Shell into the running archiver container
 	$(COMPOSE) exec -it archiver /bin/bash

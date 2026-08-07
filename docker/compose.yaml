@@ -14,12 +14,17 @@ services:
       APOD_BACKFILL_ENABLED: "false"
       APOD_BACKFILL_DELAY_MIN_SECS: 10
       APOD_BACKFILL_DELAY_MAX_SECS: 30
-      APOD_USER_AGENT: "lemon-apod/0.3.0 (+https://example.com)"
+      APOD_USER_AGENT: "lemon-apod (+https://example.com)"
       APOD_THUMB_MAX_WIDTH: 480
       APOD_THUMB_QUALITY: 80
       APOD_RECHECK_PER_DAY: 0
       RUST_LOG: info
     stop_grace_period: 35s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     logging:
@@ -48,11 +53,16 @@ services:
       APOD_RATE_LIMIT_BURST: 30
       RUST_LOG: info
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:51995/health"]
+      test: ["CMD", "apod-api", "--health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 60s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     logging:
