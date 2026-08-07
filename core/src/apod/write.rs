@@ -3,7 +3,7 @@ use crate::PARSER_VERSION;
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
-use crate::media::Media;
+use crate::media::{Media, Thumb};
 use sqlx::migrate::Migrator;
 use sqlx::{Row, Sqlite, Transaction};
 use std::path::Path;
@@ -55,13 +55,33 @@ impl ApodWriter {
         self.upsert_all(std::slice::from_ref(entry)).await
     }
 
-    pub async fn set_thumb(&self, date: ApodDate, thumb_path: Option<&str>) -> ApodResult<()> {
-        sqlx::query("UPDATE entries SET thumb_path = ?2 WHERE date_id = ?1")
-            .bind(date.days())
-            .bind(thumb_path)
-            .execute(self.db().writer()?)
-            .await?;
+    pub async fn set_thumb(&self, date: ApodDate, thumb: Option<&Thumb>) -> ApodResult<()> {
+        sqlx::query(
+            "UPDATE entries SET thumb_path = ?2, thumb_width = ?3, thumb_height = ?4
+             WHERE date_id = ?1",
+        )
+        .bind(date.days())
+        .bind(thumb.map(|thumb| thumb.path.as_str()))
+        .bind(thumb.and_then(|thumb| thumb.width).map(i64::from))
+        .bind(thumb.and_then(|thumb| thumb.height).map(i64::from))
+        .execute(self.db().writer()?)
+        .await?;
         Ok(())
+    }
+
+    pub async fn unmeasured_thumbs(&self) -> ApodResult<Vec<(ApodDate, String)>> {
+        let rows: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT date_id, thumb_path FROM entries
+             WHERE thumb_path IS NOT NULL AND thumb_width IS NULL
+             ORDER BY date_id DESC",
+        )
+        .fetch_all(self.db().reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(days, path)| (ApodDate::from_days(days as i32), path))
+            .collect())
     }
 
     pub async fn stale_dates(&self) -> ApodResult<Vec<ApodDate>> {

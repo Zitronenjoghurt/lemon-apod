@@ -1,4 +1,5 @@
 pub mod model;
+pub mod query;
 pub mod read;
 #[cfg(feature = "data-write")]
 pub mod write;
@@ -8,16 +9,17 @@ pub use read::{ApodError, ApodReader, ApodResult, Snippet};
 #[cfg(feature = "data-write")]
 pub use write::ApodWriter;
 
-pub const SCHEMA_VERSION: i64 = 1;
-pub const MIN_SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
+pub const MIN_SCHEMA_VERSION: i64 = 2;
 
 pub(crate) const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_html, \
                                         explanation_text, credits, has_copyright, license_url, \
                                         tomorrow_teaser, keywords, media_kind, media_url, \
-                                        media_hd_url, thumb_path, source_url";
+                                        media_hd_url, thumb_path, thumb_width, thumb_height, \
+                                        source_url";
 
-pub(crate) const SUMMARY_COLUMNS: &str =
-    "date_id, title, has_copyright, media_kind, media_url, media_hd_url, thumb_path";
+pub(crate) const SUMMARY_COLUMNS: &str = "date_id, title, has_copyright, media_kind, media_url, \
+                                          media_hd_url, thumb_path, thumb_width, thumb_height";
 
 #[derive(Debug, thiserror::Error)]
 pub enum SchemaError {

@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { ApodEntry, ApodSummary, MediaKind, Page, SearchResults, Stats } from './types'
+import type { ApodEntry, ApodSummary, KindFilter, Page, SearchResults, Stats } from './types'
 
 export const throttled = ref(false)
 const MAX_RETRY_WAIT_MS = 10_000
@@ -85,7 +85,7 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 export interface ListOptions {
   from?: string
   to?: string
-  kind?: MediaKind
+  kind?: KindFilter
   copyright?: boolean
   cursor?: string
   limit?: number
@@ -112,7 +112,7 @@ export const api = {
   onThisDay: (monthDay: string, signal?: AbortSignal) =>
     request<ApodSummary[]>(`/api/on-this-day/${monthDay}`, signal),
 
-  random: (kind?: MediaKind, signal?: AbortSignal) =>
+  random: (kind?: KindFilter, signal?: AbortSignal) =>
     request<ApodEntry>(`/api/random${query({ kind })}`, signal),
 
   stats: (signal?: AbortSignal) => request<Stats>('/api/stats', signal),

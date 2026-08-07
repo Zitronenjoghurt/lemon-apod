@@ -1,12 +1,12 @@
 use crate::date::ApodDate;
-use crate::media::MediaKind;
+use crate::media::KindFilter;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Default)]
 pub struct Filters {
     pub from: Option<ApodDate>,
     pub to: Option<ApodDate>,
-    pub kind: Option<MediaKind>,
+    pub kind: Option<KindFilter>,
     pub copyright: Option<bool>,
 }
 

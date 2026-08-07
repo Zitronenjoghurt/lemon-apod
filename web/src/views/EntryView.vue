@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import EntryDetail from '@/components/EntryDetail.vue'
@@ -11,6 +11,11 @@ import { formatDate } from '@/utils/date'
 const route = useRoute()
 const latest = useLatestDate()
 const date = computed(() => String(route.params.date ?? ''))
+
+const highlight = computed(() => {
+  const raw = String(route.query.q ?? '').trim()
+  return raw || undefined
+})
 
 const {
   data: entry,
@@ -32,17 +37,22 @@ watch(date, run, { immediate: true })
       Either APOD published nothing that day, or the archiver has not reached it yet. It walks
       backwards from today, so older dates arrive last.
     </p>
-    <RouterLink to="/" class="plain">
-      <Button label="Back to the latest entry" icon="pi pi-arrow-left" outlined tabindex="-1" />
+    <RouterLink class="plain" to="/">
+      <Button icon="pi pi-arrow-left" label="Back to the latest entry" outlined tabindex="-1" />
     </RouterLink>
   </div>
 
   <div v-else-if="error" class="card notice">
     <p>{{ error }}</p>
-    <Button label="Try again" icon="pi pi-refresh" outlined @click="run" />
+    <Button icon="pi pi-refresh" label="Try again" outlined @click="run" />
   </div>
 
-  <EntryDetail v-else-if="entry" :entry="entry" :latest="latest ?? undefined" />
+  <EntryDetail
+    v-else-if="entry"
+    :entry="entry"
+    :highlight="highlight"
+    :latest="latest ?? undefined"
+  />
 </template>
 
 <style scoped>

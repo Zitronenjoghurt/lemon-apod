@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import EntryCard from './EntryCard.vue'
 import type { ApodSummary, SearchHit } from '@/api/types'
 
@@ -8,8 +8,9 @@ withDefaults(
     loading?: boolean
     placeholders?: number
     empty?: string
+    query?: string
   }>(),
-  { entries: () => [], loading: false, placeholders: 8, empty: 'Nothing here.' },
+  { entries: () => [], loading: false, placeholders: 8, empty: 'Nothing here.', query: undefined },
 )
 
 function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
@@ -18,12 +19,12 @@ function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
 </script>
 
 <template>
-  <div v-if="loading && !entries.length" class="grid" aria-busy="true" aria-label="Loading entries">
+  <div v-if="loading && !entries.length" aria-busy="true" aria-label="Loading entries" class="grid">
     <div v-for="index in placeholders" :key="index" class="card skeleton-card">
-      <Skeleton width="100%" height="0" class="thumb" />
+      <Skeleton class="thumb" height="0" width="100%" />
       <div class="lines">
-        <Skeleton width="40%" height="0.8rem" />
-        <Skeleton width="100%" height="0.8rem" />
+        <Skeleton height="0.8rem" width="40%" />
+        <Skeleton height="0.8rem" width="100%" />
       </div>
     </div>
   </div>
@@ -35,6 +36,7 @@ function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
       v-for="entry in entries"
       :key="entry.date"
       :entry="entry"
+      :query="query"
       :snippet="snippetOf(entry)"
     />
   </div>

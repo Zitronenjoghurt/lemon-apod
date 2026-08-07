@@ -1,19 +1,25 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import EntryGrid from '@/components/EntryGrid.vue'
+import ReadFilter from '@/components/ReadFilter.vue'
 import { api } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
+import { useRead } from '@/composables/useRead'
 
 const { favorites, count, clear } = useFavorites()
+const { apply, active: filtered } = useRead()
 const confirm = useConfirm()
 const toast = useToast()
 
 const entries = ref<ApodSummary[]>([])
 const loading = ref(false)
+
+const shown = computed(() => apply(entries.value))
+const hidden = computed(() => entries.value.length - shown.value.length)
 
 function confirmClear() {
   confirm.require({
@@ -91,7 +97,19 @@ watch(favorites, load, { immediate: true })
       <RouterLink to="/">Start from the latest entry</RouterLink>
     </p>
 
-    <EntryGrid v-else :entries="entries" :loading="loading" :placeholders="count" />
+    <template v-else>
+      <ReadFilter :hidden="hidden" />
+      <EntryGrid
+        :entries="shown"
+        :loading="loading"
+        :placeholders="count"
+        :empty="
+          filtered && hidden
+            ? 'Every favorite is filtered out by the read filter.'
+            : 'Nothing here.'
+        "
+      />
+    </template>
   </div>
 </template>
 

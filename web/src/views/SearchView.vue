@@ -1,10 +1,12 @@
-<script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+<script lang="ts" setup>
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EntryGrid from '@/components/EntryGrid.vue'
+import ReadFilter from '@/components/ReadFilter.vue'
 import { api } from '@/api/client'
-import type { MediaKind } from '@/api/types'
+import type { KindFilter } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
+import { useRead } from '@/composables/useRead'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,12 +15,12 @@ const PAGE_SIZE = 30
 const DEBOUNCE_MS = 250
 
 const ANY = 'any' as const
-type KindChoice = MediaKind | typeof ANY
+type KindChoice = KindFilter | typeof ANY
 
 const KINDS: { label: string; value: KindChoice }[] = [
   { label: 'Anything', value: ANY },
-  { label: 'Images', value: 'image_jpg' },
-  { label: 'Video', value: 'video_mp4' },
+  { label: 'Images', value: 'image' },
+  { label: 'Video', value: 'video' },
 ]
 
 const SORTS: { label: string; value: 'relevance' | 'date' }[] = [
@@ -26,10 +28,21 @@ const SORTS: { label: string; value: 'relevance' | 'date' }[] = [
   { label: 'Newest', value: 'date' },
 ]
 
+const SYNTAX: { example: string; means: string }[] = [
+  { example: 'crab nebula', means: 'both words, anywhere in the entry' },
+  { example: '"star cluster"', means: 'the words next to each other, in that order' },
+  { example: 'galaxy -hubble', means: 'galaxy, but not hubble' },
+  { example: 'comet OR asteroid', means: 'either word, rather than both. Write OR in uppercase' },
+  { example: 'neb*', means: 'any word starting with neb' },
+]
+
 const query = ref(String(route.query.q ?? ''))
-const kind = ref<KindChoice>((route.query.kind as MediaKind) ?? ANY)
+const kind = ref<KindChoice>((route.query.kind as KindFilter) ?? ANY)
 const sort = ref<'relevance' | 'date'>(route.query.sort === 'date' ? 'date' : 'relevance')
 const page = ref(Number.parseInt(String(route.query.page ?? '1'), 10) || 1)
+
+const help = useTemplateRef<{ toggle: (event: Event) => void }>('help')
+const { apply, active: filtered } = useRead()
 
 const {
   data: results,
@@ -48,6 +61,9 @@ const {
     signal,
   ),
 )
+
+const shown = computed(() => apply(results.value?.items ?? []))
+const hidden = computed(() => (results.value?.items.length ?? 0) - shown.value.length)
 
 let debounce: ReturnType<typeof setTimeout> | undefined
 
@@ -102,6 +118,16 @@ onMounted(() => {
 })
 
 const hasQuery = computed(() => query.value.trim().length > 0)
+
+const onlyExclusions = computed(
+  () =>
+    hasQuery.value &&
+    results.value?.total === 0 &&
+    query.value
+      .trim()
+      .split(/\s+/)
+      .every((token) => token.startsWith('-') || token === 'OR' || token === 'NOT'),
+)
 </script>
 
 <template>
@@ -110,12 +136,12 @@ const hasQuery = computed(() => query.value.trim().length > 0)
       <InputIcon class="pi pi-search" />
       <InputText
         v-model="query"
-        type="search"
-        placeholder="Search 30 years of explanations, titles and credits…"
         aria-label="Search entries"
         autofocus
         fluid
+        placeholder="Search 30 years of explanations, titles and credits…"
         size="large"
+        type="search"
         @input="search(true)"
       />
     </IconField>
@@ -124,49 +150,84 @@ const hasQuery = computed(() => query.value.trim().length > 0)
       <SelectButton
         :model-value="kind"
         :options="KINDS"
+        aria-labelledby="kind-label"
         option-label="label"
         option-value="value"
         size="small"
-        aria-labelledby="kind-label"
         @update:model-value="selectKind"
       />
       <span id="kind-label" class="sr-only">Media kind</span>
 
-      <SelectButton
-        :model-value="sort"
-        :options="SORTS"
-        option-label="label"
-        option-value="value"
-        size="small"
-        aria-labelledby="sort-label"
-        @update:model-value="selectSort"
-      />
-      <span id="sort-label" class="sr-only">Sort order</span>
+      <div class="row trailing">
+        <SelectButton
+          :model-value="sort"
+          :options="SORTS"
+          aria-labelledby="sort-label"
+          option-label="label"
+          option-value="value"
+          size="small"
+          @update:model-value="selectSort"
+        />
+        <span id="sort-label" class="sr-only">Sort order</span>
+
+        <Button
+          aria-label="Search syntax"
+          icon="pi pi-question-circle"
+          rounded
+          severity="secondary"
+          size="small"
+          text
+          @click="help?.toggle($event)"
+        />
+      </div>
     </div>
 
-    <p v-if="results && hasQuery" class="muted count" aria-live="polite">
-      {{ results.total.toLocaleString() }}
-      {{ results.total === 1 ? 'result' : 'results' }}
-    </p>
+    <Popover ref="help">
+      <dl class="syntax">
+        <template v-for="row in SYNTAX" :key="row.example">
+          <dt>
+            <code>{{ row.example }}</code>
+          </dt>
+          <dd class="muted">{{ row.means }}</dd>
+        </template>
+      </dl>
+    </Popover>
 
-    <Message v-if="error" severity="error" :closable="false">{{ error }}</Message>
+    <div v-if="hasQuery" class="row summary">
+      <p v-if="results" aria-live="polite" class="muted count">
+        {{ results.total.toLocaleString() }}
+        {{ results.total === 1 ? 'result' : 'results' }}
+      </p>
+      <ReadFilter :hidden="hidden" class="read" />
+    </div>
+
+    <Message v-if="error" :closable="false" severity="error">{{ error }}</Message>
 
     <p v-else-if="!hasQuery" class="muted empty">
       Type to search titles, explanations, credits and keywords.
     </p>
 
+    <Message v-else-if="onlyExclusions" :closable="false" severity="secondary">
+      A search made only of exclusions has nothing to match. Add a word to look for.
+    </Message>
+
     <EntryGrid
       v-else
-      :entries="results?.items"
+      :empty="
+        filtered && hidden
+          ? 'Every result on this page is filtered out by the read filter.'
+          : 'No entries matched that search.'
+      "
+      :entries="shown"
       :loading="loading"
-      empty="No entries matched that search."
+      :query="query"
     />
 
     <Paginator
       v-if="results && results.total > PAGE_SIZE"
+      :first="(page - 1) * PAGE_SIZE"
       :rows="PAGE_SIZE"
       :total-records="results.total"
-      :first="(page - 1) * PAGE_SIZE"
       @page="onPage"
     />
   </div>
@@ -184,9 +245,44 @@ const hasQuery = computed(() => query.value.trim().length > 0)
   gap: 0.75rem;
 }
 
+.trailing {
+  gap: 0.35rem;
+}
+
+.summary {
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .count {
   font-size: 0.88rem;
   margin: 0;
+}
+
+.read {
+  margin-left: auto;
+}
+
+.syntax {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 0.9rem;
+  margin: 0;
+  max-width: 22rem;
+  font-size: 0.85rem;
+}
+
+.syntax dt code {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  white-space: nowrap;
+}
+
+.syntax dd {
+  margin: 0;
+  text-wrap: pretty;
 }
 
 .empty {

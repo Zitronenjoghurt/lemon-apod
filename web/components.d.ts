@@ -12,12 +12,14 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Button: typeof import('primevue/button')['default']
+    CalendarMonth: typeof import('./src/components/CalendarMonth.vue')['default']
     ConfirmDialog: typeof import('primevue/confirmdialog')['default']
     Drawer: typeof import('primevue/drawer')['default']
     EntryCard: typeof import('./src/components/EntryCard.vue')['default']
     EntryDetail: typeof import('./src/components/EntryDetail.vue')['default']
     EntryGrid: typeof import('./src/components/EntryGrid.vue')['default']
     EntrySkeleton: typeof import('./src/components/EntrySkeleton.vue')['default']
+    FeedItem: typeof import('./src/components/FeedItem.vue')['default']
     IconField: typeof import('primevue/iconfield')['default']
     Image: typeof import('primevue/image')['default']
     InputIcon: typeof import('primevue/inputicon')['default']
@@ -25,6 +27,8 @@ declare module 'vue' {
     MediaFrame: typeof import('./src/components/MediaFrame.vue')['default']
     Message: typeof import('primevue/message')['default']
     Paginator: typeof import('primevue/paginator')['default']
+    Popover: typeof import('primevue/popover')['default']
+    ReadFilter: typeof import('./src/components/ReadFilter.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Select: typeof import('primevue/select')['default']

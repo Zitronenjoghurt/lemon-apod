@@ -6,6 +6,8 @@ export interface Media {
   url: string | null
   hd_url: string | null
   thumb_url?: string | null
+  thumb_width?: number | null
+  thumb_height?: number | null
 }
 
 export interface Credit {
@@ -62,10 +64,17 @@ export interface Stats {
 export const IMAGE_KINDS: MediaKind[] = ['image_jpg', 'image_png', 'image_gif']
 export const VIDEO_KINDS: MediaKind[] = ['video_mp4', 'youtube', 'vimeo']
 
+export type KindFilter = 'image' | 'video' | MediaKind
+
 export function isImage(kind: MediaKind): boolean {
   return IMAGE_KINDS.includes(kind)
 }
 
 export function isVideo(kind: MediaKind): boolean {
   return VIDEO_KINDS.includes(kind)
+}
+
+export function aspectRatio(media: Media): number | null {
+  const { thumb_width: width, thumb_height: height } = media
+  return width && height ? width / height : null
 }

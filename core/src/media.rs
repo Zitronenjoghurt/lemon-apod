@@ -87,6 +87,93 @@ impl FromStr for MediaKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KindFilter(Vec<MediaKind>);
+
+impl KindFilter {
+    pub const IMAGE: [MediaKind; 3] = [
+        MediaKind::ImageJpg,
+        MediaKind::ImagePng,
+        MediaKind::ImageGif,
+    ];
+    pub const VIDEO: [MediaKind; 3] = [MediaKind::VideoMp4, MediaKind::YouTube, MediaKind::Vimeo];
+
+    pub fn new(kinds: impl IntoIterator<Item = MediaKind>) -> Option<Self> {
+        let mut unique: Vec<MediaKind> = Vec::new();
+        for kind in kinds {
+            if !unique.contains(&kind) {
+                unique.push(kind);
+            }
+        }
+        (!unique.is_empty()).then_some(Self(unique))
+    }
+
+    pub fn kinds(&self) -> &[MediaKind] {
+        &self.0
+    }
+}
+
+impl From<MediaKind> for KindFilter {
+    fn from(kind: MediaKind) -> Self {
+        Self(vec![kind])
+    }
+}
+
+impl FromStr for KindFilter {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut kinds = Vec::new();
+        for part in s.split(',').map(str::trim).filter(|part| !part.is_empty()) {
+            match part {
+                "image" | "images" => kinds.extend_from_slice(&Self::IMAGE),
+                "video" | "videos" => kinds.extend_from_slice(&Self::VIDEO),
+                other => kinds.push(MediaKind::from_str(other)?),
+            }
+        }
+        Self::new(kinds).ok_or(())
+    }
+}
+
+impl fmt::Display for KindFilter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (index, kind) in self.0.iter().enumerate() {
+            if index > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{kind}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Thumb {
+    /// `YYYY/MM/YYYY-MM-DD.webp`, relative to the thumbnail root.
+    pub path: String,
+    /// Null on thumbnails written before the archiver started recording dimensions.
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+impl Thumb {
+    pub fn new(path: impl Into<String>) -> Self {
+        Self {
+            path: path.into(),
+            width: None,
+            height: None,
+        }
+    }
+
+    pub fn sized(path: impl Into<String>, width: u32, height: u32) -> Self {
+        Self {
+            path: path.into(),
+            width: Some(width),
+            height: Some(height),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThumbSource {
     /// An image to download and scale.
     Direct(String),
@@ -113,6 +200,13 @@ pub struct Media {
     /// base, which is how the API turns `thumb_path` into `/thumbs/...` for the frontend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumb_url: Option<String>,
+    /// The thumbnail's pixel size. The thumbnail is the display image scaled down, so this is
+    /// also the display image's aspect ratio, which is what lets a client reserve the right
+    /// height before either has loaded. Null on entries thumbnailed before this was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumb_width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumb_height: Option<u32>,
 }
 
 impl Media {
@@ -123,15 +217,24 @@ impl Media {
             hd_url,
             thumb_path: None,
             thumb_url: None,
+            thumb_width: None,
+            thumb_height: None,
         }
     }
 
-    pub fn set_thumb(&mut self, path: Option<String>, base: Option<&str>) {
+    pub fn set_thumb(&mut self, thumb: Option<Thumb>, base: Option<&str>) {
+        let (path, width, height) = match thumb {
+            Some(thumb) => (Some(thumb.path), thumb.width, thumb.height),
+            None => (None, None, None),
+        };
+
         self.thumb_url = match (&path, base) {
             (Some(path), Some(base)) => Some(format!("{base}{path}")),
             _ => None,
         };
         self.thumb_path = path;
+        self.thumb_width = width;
+        self.thumb_height = height;
     }
 
     pub fn is_empty(&self) -> bool {
@@ -266,6 +369,63 @@ mod tests {
             media.thumb_source(),
             ThumbSource::Frame("https://apod.nasa.gov/apod/image/2607/clip.mp4".into())
         );
+    }
+
+    #[test]
+    fn a_kind_filter_expands_the_groups_the_ui_actually_offers() {
+        let video: KindFilter = "video".parse().unwrap();
+        assert_eq!(video.kinds(), KindFilter::VIDEO);
+        assert!(
+            video.kinds().contains(&MediaKind::YouTube),
+            "the video filter has to reach the embeds, not just the mp4s"
+        );
+
+        let images: KindFilter = "image".parse().unwrap();
+        assert_eq!(images.kinds(), KindFilter::IMAGE);
+    }
+
+    #[test]
+    fn a_kind_filter_also_takes_single_kinds_and_lists() {
+        assert_eq!(
+            "youtube".parse::<KindFilter>().unwrap().kinds(),
+            [MediaKind::YouTube]
+        );
+        assert_eq!(
+            "youtube,vimeo".parse::<KindFilter>().unwrap().kinds(),
+            [MediaKind::YouTube, MediaKind::Vimeo]
+        );
+        assert_eq!(
+            "video,youtube".parse::<KindFilter>().unwrap().kinds(),
+            KindFilter::VIDEO,
+            "a kind already covered by a group should not be repeated"
+        );
+
+        assert!("mystery".parse::<KindFilter>().is_err());
+        assert!("".parse::<KindFilter>().is_err());
+        assert!(",,".parse::<KindFilter>().is_err());
+    }
+
+    #[test]
+    fn a_thumbnail_carries_its_size_when_one_was_recorded() {
+        let mut media = Media::new(MediaKind::ImageJpg, None, None);
+
+        media.set_thumb(Some(Thumb::sized("2024/03/x.webp", 480, 320)), Some("/t/"));
+        assert_eq!(media.thumb_url.as_deref(), Some("/t/2024/03/x.webp"));
+        assert_eq!(
+            (media.thumb_width, media.thumb_height),
+            (Some(480), Some(320))
+        );
+
+        media.set_thumb(Some(Thumb::new("2024/03/x.webp")), Some("/t/"));
+        assert_eq!(
+            (media.thumb_width, media.thumb_height),
+            (None, None),
+            "an unmeasured thumbnail must not keep the previous one's size"
+        );
+
+        media.set_thumb(None, Some("/t/"));
+        assert_eq!(media.thumb_path, None);
+        assert_eq!(media.thumb_url, None);
     }
 
     #[test]

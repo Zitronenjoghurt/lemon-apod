@@ -2,7 +2,7 @@ use crate::client::{Client, Limit, Response};
 use crate::config::Config;
 use crate::video;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodWriter, Media, ThumbSource};
+use apod_core::{ApodDate, ApodWriter, Media, Thumb, ThumbSource};
 use std::path::Path;
 
 pub enum Generated {
@@ -23,6 +23,12 @@ enum Fetch {
     Frame(String),
 }
 
+struct Encoded {
+    webp: Vec<u8>,
+    width: u32,
+    height: u32,
+}
+
 pub async fn generate(
     cfg: &Config,
     client: &Client,
@@ -36,8 +42,11 @@ pub async fn generate(
         source => source,
     };
 
-    if !force && adoptable(&cfg.thumb_path(date)) {
-        index.set_thumb(date, Some(&date.thumb_path())).await?;
+    let on_disk = cfg.thumb_path(date);
+    if !force && adoptable(&on_disk) {
+        index
+            .set_thumb(date, Some(&measured(&date.thumb_path(), &on_disk)))
+            .await?;
         return Ok(Generated::Adopted);
     }
 
@@ -70,9 +79,18 @@ pub async fn generate(
 
     match encoded {
         Err(error) => Ok(Generated::Failed(format!("{error:#}"))),
-        Ok(webp) => {
-            write(&cfg.thumb_path(date), &webp)?;
-            index.set_thumb(date, Some(&date.thumb_path())).await?;
+        Ok(encoded) => {
+            write(&on_disk, &encoded.webp)?;
+            index
+                .set_thumb(
+                    date,
+                    Some(&Thumb::sized(
+                        date.thumb_path(),
+                        encoded.width,
+                        encoded.height,
+                    )),
+                )
+                .await?;
             Ok(Generated::Written)
         }
     }
@@ -80,6 +98,16 @@ pub async fn generate(
 
 fn adoptable(path: &Path) -> bool {
     std::fs::metadata(path).is_ok_and(|meta| meta.is_file() && meta.len() > 0)
+}
+
+pub fn measured(stored_path: &str, on_disk: &Path) -> Thumb {
+    match image::image_dimensions(on_disk) {
+        Ok((width, height)) => Thumb::sized(stored_path, width, height),
+        Err(error) => {
+            tracing::debug!(path = %on_disk.display(), "could not measure the thumbnail: {error}");
+            Thumb::new(stored_path)
+        }
+    }
 }
 
 async fn download(client: &Client, candidates: &[String]) -> Result<Vec<u8>> {
@@ -128,18 +156,18 @@ async fn resolve_source(cfg: &Config, client: &Client, source: ThumbSource) -> R
     }
 }
 
-fn encode(bytes: &[u8], max_width: u32, quality: f32) -> Result<Vec<u8>> {
+fn encode(bytes: &[u8], max_width: u32, quality: f32) -> Result<Encoded> {
     let image = image::load_from_memory(bytes).context("decoding the source image")?;
     scale_and_encode(image, max_width, quality)
 }
 
-fn encode_frame(frame: &video::Frame, max_width: u32, quality: f32) -> Result<Vec<u8>> {
+fn encode_frame(frame: &video::Frame, max_width: u32, quality: f32) -> Result<Encoded> {
     let buffer = image::RgbImage::from_raw(frame.width, frame.height, frame.rgb.clone())
         .context("the decoded frame did not fill its own dimensions")?;
     scale_and_encode(image::DynamicImage::ImageRgb8(buffer), max_width, quality)
 }
 
-fn scale_and_encode(image: image::DynamicImage, max_width: u32, quality: f32) -> Result<Vec<u8>> {
+fn scale_and_encode(image: image::DynamicImage, max_width: u32, quality: f32) -> Result<Encoded> {
     let scaled = if image.width() > max_width {
         let height =
             (image.height() as u64 * max_width as u64 / image.width().max(1) as u64).max(1) as u32;
@@ -148,11 +176,16 @@ fn scale_and_encode(image: image::DynamicImage, max_width: u32, quality: f32) ->
         image
     };
 
+    let (width, height) = (scaled.width(), scaled.height());
     let rgb: image::DynamicImage = scaled.into_rgb8().into();
     let encoder = webp::Encoder::from_image(&rgb)
         .map_err(|error| anyhow::anyhow!("preparing the webp encoder: {error}"))?;
 
-    Ok(encoder.encode(quality).to_vec())
+    Ok(Encoded {
+        webp: encoder.encode(quality).to_vec(),
+        width,
+        height,
+    })
 }
 
 fn write(path: &Path, bytes: &[u8]) -> Result<()> {
@@ -184,7 +217,7 @@ mod tests {
     #[test]
     fn downscales_to_the_configured_width() {
         let encoded = encode(&jpeg(1600, 900), 480, 80.0).unwrap();
-        let decoded = image::load_from_memory(&encoded).unwrap();
+        let decoded = image::load_from_memory(&encoded.webp).unwrap();
 
         assert_eq!(decoded.width(), 480);
         assert_eq!(decoded.height(), 270, "aspect ratio should be preserved");
@@ -193,7 +226,7 @@ mod tests {
     #[test]
     fn leaves_images_smaller_than_the_target_alone() {
         let encoded = encode(&jpeg(320, 240), 480, 80.0).unwrap();
-        let decoded = image::load_from_memory(&encoded).unwrap();
+        let decoded = image::load_from_memory(&encoded.webp).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (320, 240));
     }
 
@@ -201,10 +234,44 @@ mod tests {
     fn produces_a_small_file() {
         let encoded = encode(&jpeg(1600, 900), 480, 80.0).unwrap();
         assert!(
-            encoded.len() < 60_000,
+            encoded.webp.len() < 60_000,
             "thumbnail was {} bytes, expected well under 60KB",
-            encoded.len()
+            encoded.webp.len()
         );
+    }
+
+    #[test]
+    fn reports_the_size_it_actually_wrote() {
+        let encoded = encode(&jpeg(1600, 900), 480, 80.0).unwrap();
+        assert_eq!((encoded.width, encoded.height), (480, 270));
+
+        let decoded = image::load_from_memory(&encoded.webp).unwrap();
+        assert_eq!(
+            (encoded.width, encoded.height),
+            (decoded.width(), decoded.height())
+        );
+    }
+
+    #[test]
+    fn measures_a_thumbnail_already_on_disk() {
+        let dir = std::env::temp_dir().join("apod-measure-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("thumb.webp");
+        let encoded = encode(&jpeg(1600, 900), 480, 80.0).unwrap();
+        std::fs::write(&path, &encoded.webp).unwrap();
+
+        let thumb = measured("2024/03/2024-03-05.webp", &path);
+        assert_eq!(thumb.path, "2024/03/2024-03-05.webp");
+        assert_eq!((thumb.width, thumb.height), (Some(480), Some(270)));
+
+        let broken = dir.join("broken.webp");
+        std::fs::write(&broken, b"not an image").unwrap();
+        let thumb = measured("x.webp", &broken);
+        assert_eq!((thumb.width, thumb.height), (None, None));
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

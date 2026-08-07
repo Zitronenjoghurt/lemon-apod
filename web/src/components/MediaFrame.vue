@@ -1,6 +1,6 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { isImage, type Media } from '@/api/types'
+import { aspectRatio, isImage, type Media } from '@/api/types'
 
 const props = defineProps<{
   media: Media
@@ -71,19 +71,24 @@ const fullResolution = computed(() => {
 })
 
 const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url && !failed.value)
+const ratio = computed(() => aspectRatio(props.media))
+const frameStyle = computed(() => ({
+  ...(props.maxHeight ? { '--media-max': props.maxHeight } : {}),
+  ...(ratio.value ? { '--media-ratio': String(ratio.value) } : {}),
+}))
 </script>
 
 <template>
-  <figure class="media" :style="maxHeight ? { '--media-max': maxHeight } : undefined">
+  <figure :style="frameStyle" class="media">
     <Image
       v-if="showsImage"
-      preview
-      class="shot"
-      :pt="{ toolbar: { class: 'shot-toolbar' } }"
       :alt="title"
+      :pt="{ toolbar: { class: 'shot-toolbar' } }"
+      class="shot"
+      preview
     >
       <template #image>
-        <div class="frame">
+        <div :class="{ guessed: !ratio }" class="frame reserved">
           <img
             v-if="media.thumb_url && !loaded"
             :src="media.thumb_url"
@@ -93,18 +98,18 @@ const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url
           />
           <img
             :key="media.url ?? ''"
-            :src="media.url ?? ''"
             :alt="title"
-            fetchpriority="high"
-            decoding="async"
-            class="full"
             :class="{ ready: loaded }"
-            @load="loaded = true"
+            :src="media.url ?? ''"
+            class="full"
+            decoding="async"
+            fetchpriority="high"
             @error="failed = true"
+            @load="loaded = true"
           />
           <div v-if="!loaded" class="loading" role="status">
             <span class="badge-loading">
-              <span class="spinner" aria-hidden="true" />
+              <span aria-hidden="true" class="spinner" />
               <span class="text">
                 Loading full image from NASA
                 <span v-if="slow" class="sub">This one is large, still downloading</span>
@@ -116,8 +121,8 @@ const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url
 
       <template #original="{ style, previewCallback }">
         <img
-          :src="fullResolution ?? media.url ?? ''"
           :alt="title"
+          :src="fullResolution ?? media.url ?? ''"
           :style="style"
           class="original"
           @click="previewCallback"
@@ -125,17 +130,17 @@ const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url
       </template>
 
       <template #previewicon>
-        <i class="pi pi-search-plus" aria-hidden="true" />
+        <i aria-hidden="true" class="pi pi-search-plus" />
       </template>
     </Image>
 
     <video
       v-else-if="media.kind === 'video_mp4' && media.url"
+      :poster="media.thumb_url ?? undefined"
       class="frame"
       controls
       playsinline
       preload="none"
-      :poster="media.thumb_url ?? undefined"
     >
       <source :src="media.url" type="video/mp4" />
     </video>
@@ -143,27 +148,27 @@ const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url
     <template v-else-if="(media.kind === 'youtube' || media.kind === 'vimeo') && videoId">
       <iframe
         v-if="playing"
-        class="frame embed"
         :src="embedUrl"
         :title="title"
         allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
         allowfullscreen
+        class="frame embed"
       />
-      <button v-else type="button" class="frame facade" @click="playing = true">
-        <img v-if="media.thumb_url" :src="media.thumb_url" :alt="title" loading="lazy" />
-        <span class="play" aria-hidden="true"><i class="pi pi-play" /></span>
+      <button v-else class="frame facade" type="button" @click="playing = true">
+        <img v-if="media.thumb_url" :alt="title" :src="media.thumb_url" loading="lazy" />
+        <span aria-hidden="true" class="play"><i class="pi pi-play" /></span>
         <span class="sr-only">Play video</span>
       </button>
     </template>
 
     <a
       v-else
-      class="frame placeholder-card"
       :href="media.url ?? '#'"
-      target="_blank"
+      class="frame placeholder-card"
       rel="noopener"
+      target="_blank"
     >
-      <i class="pi pi-external-link" aria-hidden="true" />
+      <i aria-hidden="true" class="pi pi-external-link" />
       <span>{{ media.kind === 'none' ? 'No media on this entry' : 'View on apod.nasa.gov' }}</span>
     </a>
   </figure>
@@ -190,6 +195,44 @@ const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url
   overflow: hidden;
   background: color-mix(in srgb, var(--bg-elevated) 30%, var(--bg));
   position: relative;
+}
+
+.frame.reserved {
+  aspect-ratio: var(--media-ratio, 1);
+  height: auto;
+  background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in srgb, var(--text) 7%, transparent) 40%,
+      transparent 60%
+    )
+    color-mix(in srgb, var(--text) 4%, transparent);
+  background-size: 250% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+.frame.reserved:has(.full.ready) {
+  animation: none;
+  background: color-mix(in srgb, var(--bg-elevated) 30%, var(--bg));
+}
+
+.frame.guessed:has(.full.ready) {
+  aspect-ratio: auto;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame.reserved {
+    animation: none;
+  }
 }
 
 video.frame,

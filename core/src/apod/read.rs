@@ -1,9 +1,10 @@
 use super::model::{Filters, KindCount, Order, Page, SearchResults, Stats};
+use super::query::fts_query;
 use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbError};
 use crate::entry::{ApodEntry, ApodSummary, SearchHit};
-use crate::media::{Media, MediaKind};
+use crate::media::{KindFilter, Media, MediaKind, Thumb};
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Arguments, AssertSqlSafe, Row};
 use std::str::FromStr;
@@ -33,7 +34,10 @@ pub type ApodResult<T> = Result<T, ApodError>;
 pub enum Snippet {
     #[default]
     Html,
-    Delimited { open: String, close: String },
+    Delimited {
+        open: String,
+        close: String,
+    },
     Plain,
 }
 
@@ -119,21 +123,22 @@ impl ApodReader {
         }
     }
 
-    pub async fn random(&self, kind: Option<MediaKind>) -> ApodResult<Option<ApodDate>> {
-        let days: Option<i64> =
-            match kind {
-                Some(kind) => sqlx::query_scalar(
-                    "SELECT date_id FROM entries WHERE media_kind = ?1 ORDER BY RANDOM() LIMIT 1",
-                )
-                .bind(kind.to_string())
-                .fetch_optional(self.db.reader())
-                .await?,
-                None => {
-                    sqlx::query_scalar("SELECT date_id FROM entries ORDER BY RANDOM() LIMIT 1")
-                        .fetch_optional(self.db.reader())
-                        .await?
-                }
-            };
+    pub async fn random(&self, kind: Option<&KindFilter>) -> ApodResult<Option<ApodDate>> {
+        let mut sql = String::from("SELECT date_id FROM entries WHERE 1 = 1");
+        let mut params: Vec<Param> = Vec::new();
+        push_filters(
+            &mut sql,
+            &mut params,
+            &Filters {
+                kind: kind.cloned(),
+                ..Filters::default()
+            },
+        );
+        sql.push_str(" ORDER BY RANDOM() LIMIT 1");
+
+        let days: Option<i64> = sqlx::query_scalar_with(AssertSqlSafe(sql), arguments(&params))
+            .fetch_optional(self.db.reader())
+            .await?;
 
         Ok(days.map(|days| ApodDate::from_days(days as i32)))
     }
@@ -224,17 +229,19 @@ impl ApodReader {
             "bm25(entries_fts, 10.0, 1.0, 2.0, 5.0) ASC"
         };
 
+        let columns: Vec<String> = SUMMARY_COLUMNS
+            .split(", ")
+            .map(|column| format!("entries.{column}"))
+            .collect();
+        let snippet_column = columns.len();
+
         let sql = format!(
             "SELECT {columns},
                     snippet(entries_fts, 1, char(2), char(3), '…', {tokens})
              FROM entries_fts JOIN entries ON entries.date_id = entries_fts.rowid
              {where_clause}
              ORDER BY {ordering} LIMIT ? OFFSET ?",
-            columns = SUMMARY_COLUMNS
-                .split(", ")
-                .map(|column| format!("entries.{column}"))
-                .collect::<Vec<_>>()
-                .join(", "),
+            columns = columns.join(", "),
             tokens = snippet_tokens.clamp(1, 64),
         );
 
@@ -250,7 +257,9 @@ impl ApodReader {
             .map(|row| {
                 Ok(SearchHit {
                     entry: self.read_summary(row)?,
-                    snippet: self.snippet.render(&row.try_get::<String, _>(7)?),
+                    snippet: self
+                        .snippet
+                        .render(&row.try_get::<String, _>(snippet_column)?),
                 })
             })
             .collect::<ApodResult<Vec<_>>>()?;
@@ -331,14 +340,14 @@ impl ApodReader {
         kind: &str,
         url: Option<String>,
         hd_url: Option<String>,
-        thumb_path: Option<String>,
+        thumb: Option<Thumb>,
     ) -> Media {
         let mut media = Media::new(
             MediaKind::from_str(kind).unwrap_or(MediaKind::None),
             url,
             hd_url,
         );
-        media.set_thumb(thumb_path, self.thumb_base.as_deref());
+        media.set_thumb(thumb, self.thumb_base.as_deref());
         media
     }
 
@@ -351,7 +360,7 @@ impl ApodReader {
                 &row.try_get::<String, _>(3)?,
                 row.try_get(4)?,
                 row.try_get(5)?,
-                row.try_get(6)?,
+                read_thumb(row, 6)?,
             ),
         })
     }
@@ -372,12 +381,28 @@ impl ApodReader {
                 &row.try_get::<String, _>(10)?,
                 row.try_get(11)?,
                 row.try_get(12)?,
-                row.try_get(13)?,
+                read_thumb(row, 13)?,
             ),
             extra_media: Vec::new(),
-            source_url: row.try_get(14)?,
+            source_url: row.try_get(16)?,
         })
     }
+}
+
+fn read_thumb(row: &SqliteRow, at: usize) -> ApodResult<Option<Thumb>> {
+    let Some(path) = row.try_get::<Option<String>, _>(at)? else {
+        return Ok(None);
+    };
+
+    Ok(Some(Thumb {
+        path,
+        width: row
+            .try_get::<Option<i64>, _>(at + 1)?
+            .map(|size| size as u32),
+        height: row
+            .try_get::<Option<i64>, _>(at + 2)?
+            .map(|size| size as u32),
+    }))
 }
 
 pub(crate) fn to_dates(days: Vec<i64>) -> Vec<ApodDate> {
@@ -432,47 +457,15 @@ fn push_filters(sql: &mut String, params: &mut Vec<Param>, filters: &Filters) {
         sql.push_str(" AND entries.date_id <= ?");
         params.push(Param::Int(to.days().into()));
     }
-    if let Some(kind) = filters.kind {
-        sql.push_str(" AND entries.media_kind = ?");
-        params.push(Param::Text(kind.to_string()));
+    if let Some(kinds) = filters.kind.as_ref().map(KindFilter::kinds) {
+        let placeholders = vec!["?"; kinds.len()].join(", ");
+        sql.push_str(&format!(" AND entries.media_kind IN ({placeholders})"));
+        params.extend(kinds.iter().map(|kind| Param::Text(kind.to_string())));
     }
     if let Some(copyright) = filters.copyright {
         sql.push_str(" AND entries.has_copyright = ?");
         params.push(Param::Int(copyright.into()));
     }
-}
-
-fn fts_query(raw: &str) -> Option<String> {
-    let terms: Vec<String> = raw
-        .split_whitespace()
-        .map(|term| {
-            term.chars()
-                .filter(|c| c.is_alphanumeric() || *c == '\'')
-                .collect::<String>()
-        })
-        .filter(|term| !term.is_empty())
-        .collect();
-
-    if terms.is_empty() {
-        return None;
-    }
-
-    let last = terms.len() - 1;
-    Some(
-        terms
-            .iter()
-            .enumerate()
-            .map(|(index, term)| {
-                let escaped = term.replace('"', "");
-                if index == last {
-                    format!("\"{escaped}\"*")
-                } else {
-                    format!("\"{escaped}\"")
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(" AND "),
-    )
 }
 
 fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {
@@ -483,30 +476,6 @@ fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn builds_a_safe_prefix_query() {
-        assert_eq!(
-            fts_query("crab nebula"),
-            Some(r#""crab" AND "nebula"*"#.into())
-        );
-    }
-
-    #[test]
-    fn neutralises_fts_syntax() {
-        assert_eq!(
-            fts_query(r#"crab" OR "x"#),
-            Some(r#""crab" AND "OR" AND "x"*"#.into())
-        );
-        assert_eq!(fts_query("a*b"), Some(r#""ab"*"#.into()));
-        assert_eq!(fts_query("(nebula)"), Some(r#""nebula"*"#.into()));
-    }
-
-    #[test]
-    fn an_empty_query_matches_nothing() {
-        assert_eq!(fts_query("   "), None);
-        assert_eq!(fts_query("!!! ???"), None);
-    }
 
     #[test]
     fn escapes_snippet_content_before_adding_marks() {

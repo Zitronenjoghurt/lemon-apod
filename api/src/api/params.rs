@@ -1,5 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use apod_core::{ApodDate, Filters, MediaKind, Order};
+use apod_core::{ApodDate, Filters, KindFilter, Order};
 use std::str::FromStr;
 
 pub fn date(raw: &str) -> ApiResult<ApodDate> {
@@ -11,8 +11,8 @@ pub fn optional_date(raw: Option<&str>) -> ApiResult<Option<ApodDate>> {
     raw.map(date).transpose()
 }
 
-pub fn kind(raw: &str) -> ApiResult<MediaKind> {
-    MediaKind::from_str(raw)
+pub fn kind(raw: &str) -> ApiResult<KindFilter> {
+    KindFilter::from_str(raw)
         .map_err(|_| ApiError::bad_request(format!("unknown media kind '{raw}'")))
 }
 
@@ -60,6 +60,7 @@ pub fn month_day(raw: &str) -> ApiResult<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use apod_core::MediaKind;
 
     #[test]
     fn holds_limits_inside_the_configured_ceiling() {
@@ -87,5 +88,18 @@ mod tests {
         assert_eq!(order(Some("asc")).unwrap(), Order::Asc);
         assert!(!sort_by_date(None).unwrap());
         assert_eq!(month_day("03-05").unwrap(), (3, 5));
+    }
+
+    #[test]
+    fn the_video_kind_covers_every_kind_of_video() {
+        let video = kind("video").unwrap();
+        assert_eq!(video.kinds(), KindFilter::VIDEO);
+        assert!(
+            kind("image")
+                .unwrap()
+                .kinds()
+                .contains(&MediaKind::ImageGif)
+        );
+        assert_eq!(kind("youtube,vimeo").unwrap().kinds().len(), 2);
     }
 }

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import { ref } from 'vue'
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { throttled } from '@/api/client'
@@ -11,45 +11,49 @@ const { count } = useFavorites()
 
 const menuOpen = ref(false)
 
-const themeIcon = { auto: 'pi-desktop', dark: 'pi-moon', light: 'pi-sun' }
+const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
 const themeLabel = { auto: 'Match system', dark: 'Dark', light: 'Light' }
 
 const links = [
+  { to: '/feed', label: 'Feed', icon: 'pi pi-bars' },
   { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
   { to: '/search', label: 'Search', icon: 'pi pi-search' },
   { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
   { to: '/random', label: 'Random', icon: 'pi pi-sync' },
 ]
 
+const version = __APP_VERSION__
+
 router.afterEach(() => (menuOpen.value = false))
 </script>
 
 <template>
-  <a href="#main" class="skip">Skip to content</a>
+  <a class="skip" href="#main">Skip to content</a>
 
   <header class="site-header">
     <div class="container bar">
-      <RouterLink to="/" class="brand">
-        <svg class="mark" viewBox="0 0 24 24" aria-hidden="true">
+      <RouterLink class="brand" to="/">
+        <svg aria-hidden="true" class="mark" viewBox="0 0 24 24">
           <ellipse
             cx="12"
             cy="12"
+            fill="none"
             rx="11"
             ry="4.2"
-            transform="rotate(-22 12 12)"
-            fill="none"
             stroke="currentColor"
             stroke-width="1.6"
+            transform="rotate(-22 12 12)"
           />
-          <circle cx="12" cy="12" r="6.2" fill="var(--bg)" />
-          <circle cx="12" cy="12" r="6.2" fill="currentColor" fill-opacity="0.22" />
-          <circle cx="12" cy="12" r="6.2" fill="none" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="12" fill="var(--bg)" r="6.2" />
+          <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2" />
+          <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6" />
         </svg>
         <span>APOD Archive</span>
       </RouterLink>
 
-      <nav class="row nav wide-only" aria-label="Main">
+      <nav aria-label="Main" class="row nav wide-only">
         <RouterLink v-for="link in links" :key="link.to" :to="link.to">
+          <i :class="link.icon" aria-hidden="true" />
           {{ link.label }}
           <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
         </RouterLink>
@@ -58,28 +62,33 @@ router.afterEach(() => (menuOpen.value = false))
       <div class="row trailing">
         <Button
           v-tooltip.bottom="`Theme: ${themeLabel[theme]}`"
-          :icon="`pi ${themeIcon[theme]}`"
+          :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
+          rounded
           severity="secondary"
           text
-          rounded
-          :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
           @click="cycle"
-        />
+        >
+          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true" />
+          <svg v-else aria-hidden="true" class="auto-mark" viewBox="0 0 16 16">
+            <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5" />
+            <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor" />
+          </svg>
+        </Button>
         <Button
+          aria-label="Open menu"
           class="narrow-only"
           icon="pi pi-bars"
+          rounded
           severity="secondary"
           text
-          rounded
-          aria-label="Open menu"
           @click="menuOpen = true"
         />
       </div>
     </div>
   </header>
 
-  <Drawer v-model:visible="menuOpen" position="right" header="Menu">
-    <nav class="menu" aria-label="Main">
+  <Drawer v-model:visible="menuOpen" header="Menu" position="right">
+    <nav aria-label="Main" class="menu">
       <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="menu-link">
         <i :class="link.icon" aria-hidden="true" />
         <span>{{ link.label }}</span>
@@ -90,23 +99,27 @@ router.afterEach(() => (menuOpen.value = false))
 
   <Transition name="fade">
     <div v-if="throttled" class="throttle" role="status">
-      <i class="pi pi-clock" aria-hidden="true" /> Slowing down for a moment…
+      <i aria-hidden="true" class="pi pi-clock" /> Slowing down for a moment…
     </div>
   </Transition>
 
   <main id="main" class="container page">
     <RouterView v-slot="{ Component }">
-      <Transition name="fade" mode="out-in">
-        <component :is="Component" />
+      <Transition mode="out-in" name="fade">
+        <KeepAlive :include="['FeedView']" :max="1">
+          <component :is="Component" />
+        </KeepAlive>
       </Transition>
     </RouterView>
   </main>
 
   <footer class="site-footer">
+    <span class="version muted">v{{ version }}</span>
+
     <div class="container">
       <p class="muted">
         An unofficial archive of NASA's
-        <a href="https://apod.nasa.gov/apod/" target="_blank" rel="noopener">
+        <a href="https://apod.nasa.gov/apod/" rel="noopener" target="_blank">
           Astronomy Picture of the Day</a
         >. Not affiliated with or endorsed by NASA. Pictures and videos load from NASA's own servers
         and belong to the people and institutions credited on each entry; explanations come from the
@@ -175,10 +188,23 @@ router.afterEach(() => (menuOpen.value = false))
 }
 
 .nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   text-decoration: none;
   color: var(--text-muted);
   padding: 0.2rem 0;
   border-bottom: 2px solid transparent;
+}
+
+.nav a i {
+  font-size: 0.82em;
+  opacity: 0.85;
+}
+
+.auto-mark {
+  width: 1rem;
+  height: 1rem;
 }
 
 .nav a:hover {
@@ -262,9 +288,19 @@ router.afterEach(() => (menuOpen.value = false))
 }
 
 .site-footer {
+  position: relative;
   border-top: 1px solid var(--border);
   padding-block: 1.1rem 1.4rem;
   font-size: 0.8rem;
+}
+
+.version {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.5rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .site-footer p {

@@ -1,33 +1,55 @@
-<script setup lang="ts">
+<script lang="ts" setup>
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { isVideo, type ApodSummary } from '@/api/types'
+import { type ApodSummary, isVideo } from '@/api/types'
+import { useRead } from '@/composables/useRead'
 import { formatDate } from '@/utils/date'
 
-defineProps<{ entry: ApodSummary; snippet?: string }>()
+const props = defineProps<{
+  entry: ApodSummary
+  snippet?: string
+  query?: string
+}>()
+
+const { isRead } = useRead()
+
+const read = computed(() => isRead(props.entry.date))
+
+const target = computed(() =>
+  props.query?.trim()
+    ? { path: `/${props.entry.date}`, query: { q: props.query } }
+    : `/${props.entry.date}`,
+)
 </script>
 
 <template>
-  <RouterLink :to="`/${entry.date}`" class="card entry-card">
+  <RouterLink :class="{ read }" :to="target" class="card entry-card">
     <div class="thumb">
       <img
         v-if="entry.media.thumb_url"
-        :src="entry.media.thumb_url"
         :alt="entry.title"
-        loading="lazy"
+        :src="entry.media.thumb_url"
         decoding="async"
-        width="480"
         height="300"
+        loading="lazy"
+        width="480"
       />
       <div v-else class="fallback">
-        <i class="pi pi-image" aria-hidden="true" />
+        <i aria-hidden="true" class="pi pi-image" />
       </div>
-      <span v-if="isVideo(entry.media.kind)" class="badge" aria-label="Video">
-        <i class="pi pi-play" aria-hidden="true" />
+      <span v-if="isVideo(entry.media.kind)" aria-label="Video" class="badge">
+        <i aria-hidden="true" class="pi pi-play" />
       </span>
     </div>
 
     <div class="body">
-      <time :datetime="entry.date" class="muted date">{{ formatDate(entry.date) }}</time>
+      <p class="muted date">
+        <time :datetime="entry.date">{{ formatDate(entry.date) }}</time>
+        <span v-if="read" class="read-mark" title="You have read this one">
+          <i aria-hidden="true" class="pi pi-check" />
+          <span class="sr-only">Read</span>
+        </span>
+      </p>
       <h3 class="title">{{ entry.title }}</h3>
       <p v-if="snippet" class="snippet muted" v-html="snippet" />
     </div>
@@ -90,6 +112,24 @@ defineProps<{ entry: ApodSummary; snippet?: string }>()
   padding-left: 0.15rem;
 }
 
+.read-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.45rem;
+  color: var(--accent);
+  font-size: 0.7em;
+  vertical-align: 0.05em;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .body {
   padding: 0.85rem 1rem 1.1rem;
   display: flex;
@@ -100,6 +140,7 @@ defineProps<{ entry: ApodSummary; snippet?: string }>()
 .date {
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+  margin: 0;
 }
 
 .title {

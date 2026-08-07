@@ -6,6 +6,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+    { path: '/feed', name: 'feed', component: () => import('@/views/FeedView.vue') },
     { path: '/search', name: 'search', component: () => import('@/views/SearchView.vue') },
     { path: '/favorites', name: 'favorites', component: () => import('@/views/FavoritesView.vue') },
     { path: '/random', name: 'random', component: () => import('@/views/RandomView.vue') },
@@ -26,8 +27,8 @@ const router = createRouter({
     },
   ],
   scrollBehavior(to, from, saved) {
+    if (to.name === 'feed') return false
     if (saved) return saved
-    // Paging through search results shouldn't yank you back to the top.
     if (to.name === from.name && to.name === 'search') return {}
     return { top: 0 }
   },

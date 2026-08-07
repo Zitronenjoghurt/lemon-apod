@@ -200,6 +200,11 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
     let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let index = ApodWriter::open(&cfg.index_db).await?;
 
+    let measured = measure_existing(&cfg, &index).await?;
+    if measured > 0 {
+        println!("measured {measured} thumbnails already on disk");
+    }
+
     let targets = if force {
         let dates = index.reader().all_dates().await?;
         index.media_for(&dates).await?
@@ -243,4 +248,19 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
 
     println!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}");
     Ok(())
+}
+async fn measure_existing(cfg: &Config, index: &ApodWriter) -> Result<usize> {
+    let mut done = 0;
+
+    for (date, stored_path) in index.unmeasured_thumbs().await? {
+        let thumb = thumbs::measured(&stored_path, &cfg.thumb_dir.join(&stored_path));
+        if thumb.width.is_none() {
+            continue;
+        }
+
+        index.set_thumb(date, Some(&thumb)).await?;
+        done += 1;
+    }
+
+    Ok(done)
 }

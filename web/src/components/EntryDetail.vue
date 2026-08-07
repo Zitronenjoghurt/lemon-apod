@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+<script lang="ts" setup>
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import MediaFrame from './MediaFrame.vue'
@@ -7,18 +7,41 @@ import EntryGrid from './EntryGrid.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
+import { useRead } from '@/composables/useRead'
 import { withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
 import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay } from '@/utils/date'
+import { highlightHtml, highlightText, HIT_CLASS } from '@/utils/highlight'
+import { queryTerms } from '@/utils/searchQuery'
 
-const props = defineProps<{ entry: ApodEntry; latest?: string }>()
+const props = defineProps<{
+  entry: ApodEntry
+  latest?: string
+  highlight?: string
+}>()
 
 const router = useRouter()
 const toast = useToast()
 const { isFavorite, toggle } = useFavorites()
+const { isRead, markRead, toggleRead } = useRead()
 const alsoOnThisDay = ref<ApodSummary[]>([])
+const prose = ref<HTMLElement>()
 
-const explanation = computed(() => withInternalLinks(props.entry.explanation_html))
+const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
+
+const linked = computed(() => withInternalLinks(props.entry.explanation_html))
+
+const painted = computed(() =>
+  terms.value.length ? highlightHtml(linked.value, terms.value) : { html: linked.value, count: 0 },
+)
+
+const explanation = computed(() => painted.value.html)
+
+const title = computed(() =>
+  terms.value.length ? highlightText(props.entry.title, terms.value).html : null,
+)
+
+const hits = computed(() => painted.value.count)
 
 const credits = computed(() =>
   (props.entry.credits ?? []).map((credit) => ({
@@ -73,6 +96,34 @@ function saveToggle() {
   })
 }
 
+function readToggle() {
+  const nowRead = toggleRead(props.entry.date)
+  toast.add({
+    severity: 'secondary',
+    summary: nowRead ? 'Marked as read' : 'Marked as unread',
+    detail: props.entry.title,
+    life: 1800,
+  })
+}
+
+const at = ref(0)
+
+function jump(step: number) {
+  const marks = [...(prose.value?.querySelectorAll<HTMLElement>(`.${HIT_CLASS}`) ?? [])]
+  if (!marks.length) return
+
+  at.value = (at.value + step + marks.length) % marks.length
+  const mark = marks[at.value]!
+
+  marks.forEach((node) => node.classList.remove('current'))
+  mark.classList.add('current')
+  mark.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+function clearHighlight() {
+  router.replace({ path: `/${props.entry.date}` })
+}
+
 async function copyLink() {
   const url = `${location.origin}/${props.entry.date}`
   try {
@@ -98,6 +149,21 @@ function onKey(event: KeyboardEvent) {
 }
 
 watch(() => props.entry.date, loadOnThisDay, { immediate: true })
+
+watch(
+  () => props.entry.date,
+  (date) => markRead(date),
+  { immediate: true },
+)
+
+watch([() => props.entry.date, hits], async () => {
+  at.value = 0
+  await nextTick()
+  prose.value?.querySelectorAll(`.${HIT_CLASS}.current`).forEach((node) => {
+    node.classList.remove('current')
+  })
+})
+
 onMounted(() => window.addEventListener('keydown', onKey))
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
@@ -107,32 +173,69 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <header class="head">
       <div class="row justify">
         <time :datetime="entry.date" class="muted">{{ formatDate(entry.date) }}</time>
-        <nav class="row nav" aria-label="Adjacent days">
+        <nav aria-label="Adjacent days" class="row nav">
           <RouterLink v-if="previous" v-slot="{ navigate }" :to="`/${previous}`" custom>
             <Button
               v-tooltip.bottom="'Previous day (←)'"
+              aria-label="Previous day"
               icon="pi pi-chevron-left"
-              severity="secondary"
               outlined
               rounded
-              aria-label="Previous day"
+              severity="secondary"
               @click="navigate"
             />
           </RouterLink>
           <RouterLink v-if="next" v-slot="{ navigate }" :to="`/${next}`" custom>
             <Button
               v-tooltip.bottom="'Next day (→)'"
+              aria-label="Next day"
               icon="pi pi-chevron-right"
-              severity="secondary"
               outlined
               rounded
-              aria-label="Next day"
+              severity="secondary"
               @click="navigate"
             />
           </RouterLink>
         </nav>
       </div>
-      <h1 class="title">{{ entry.title }}</h1>
+      <h1 v-if="title" class="title" v-html="title" />
+      <h1 v-else class="title">{{ entry.title }}</h1>
+
+      <div v-if="highlight" class="row hits">
+        <i aria-hidden="true" class="pi pi-search" />
+        <span class="term">{{ highlight }}</span>
+        <span aria-live="polite" class="muted count">
+          {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
+        </span>
+        <span v-if="hits" class="row step">
+          <Button
+            aria-label="Previous match"
+            icon="pi pi-chevron-up"
+            rounded
+            severity="secondary"
+            size="small"
+            text
+            @click="jump(-1)"
+          />
+          <Button
+            aria-label="Next match"
+            icon="pi pi-chevron-down"
+            rounded
+            severity="secondary"
+            size="small"
+            text
+            @click="jump(1)"
+          />
+        </span>
+        <Button
+          class="clear"
+          label="Clear"
+          severity="secondary"
+          size="small"
+          text
+          @click="clearHighlight"
+        />
+      </div>
     </header>
 
     <div class="layout">
@@ -141,31 +244,51 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
         <div class="row actions">
           <Button
-            :label="isFavorite(entry.date) ? 'Saved' : 'Save'"
             :icon="isFavorite(entry.date) ? 'pi pi-star-fill' : 'pi pi-star'"
+            :label="isFavorite(entry.date) ? 'Saved' : 'Save'"
             :severity="isFavorite(entry.date) ? 'primary' : 'secondary'"
             outlined
             size="small"
             @click="saveToggle"
           />
           <Button
-            label="Copy link"
-            icon="pi pi-link"
-            severity="secondary"
+            v-tooltip.bottom="isRead(entry.date) ? 'Mark as unread' : 'Mark as read'"
+            :icon="isRead(entry.date) ? 'pi pi-check-circle' : 'pi pi-circle'"
+            :label="isRead(entry.date) ? 'Read' : 'Unread'"
             outlined
+            severity="secondary"
+            size="small"
+            @click="readToggle"
+          />
+          <Button
+            icon="pi pi-link"
+            label="Copy link"
+            outlined
+            severity="secondary"
             size="small"
             @click="copyLink"
           />
-          <a class="plain" :href="entry.source_url" target="_blank" rel="noopener">
+          <a :href="entry.source_url" class="plain" rel="noopener" target="_blank">
             <Button
-              label="Original"
               icon="pi pi-external-link"
-              severity="secondary"
+              label="Original"
               outlined
+              severity="secondary"
               size="small"
               tabindex="-1"
             />
           </a>
+          <RouterLink v-slot="{ navigate }" custom to="/random">
+            <Button
+              v-tooltip.bottom="'Another random entry'"
+              icon="pi pi-sync"
+              label="Random"
+              outlined
+              severity="secondary"
+              size="small"
+              @click="navigate"
+            />
+          </RouterLink>
         </div>
 
         <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
@@ -182,10 +305,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               </span>
               <a
                 v-if="index === 0 && license"
-                class="rights"
                 :href="license.url"
-                target="_blank"
+                class="rights"
                 rel="noopener license"
+                target="_blank"
                 title="Released under this licence rather than as public domain by NASA"
               >
                 {{ license.name }}
@@ -196,12 +319,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </div>
 
       <div class="text-column">
-        <div class="prose" v-html="explanation" @click="onInternalLink" />
+        <div ref="prose" class="prose" @click="onInternalLink" v-html="explanation" />
 
         <ul v-if="entry.keywords?.length" class="row tags">
           <li v-for="keyword in entry.keywords" :key="keyword">
             <RouterLink :to="{ name: 'search', query: { q: keyword } }" class="plain">
-              <Tag :value="keyword" severity="secondary" rounded class="tag" />
+              <Tag :value="keyword" class="tag" rounded severity="secondary" />
             </RouterLink>
           </li>
         </ul>
@@ -386,5 +509,60 @@ a.rights:hover {
   font-size: 1.15rem;
   font-weight: 600;
   margin-top: 1rem;
+}
+
+.hits {
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  flex-wrap: wrap;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.hits .term {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16rem;
+}
+
+.hits .count {
+  font-size: 0.8rem;
+}
+
+.hits .step {
+  gap: 0;
+}
+
+.hits .clear {
+  margin-left: auto;
+}
+
+@media (max-width: 30rem) {
+  .hits .count {
+    order: 3;
+    width: 100%;
+  }
+}
+</style>
+
+<style>
+/* Applied to markup this component builds with v-html, so it cannot be scoped. */
+.entry .prose .search-hit,
+.entry .title .search-hit {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+  color: inherit;
+  border-radius: 0.2rem;
+  padding: 0 0.1em;
+  scroll-margin-block: 5rem;
+}
+
+.entry .prose .search-hit.current {
+  background: var(--accent);
+  color: var(--bg);
 }
 </style>

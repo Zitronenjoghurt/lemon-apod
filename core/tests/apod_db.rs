@@ -9,7 +9,9 @@
 
 use apod_core::apod::{Filters, Order, SCHEMA_VERSION, Snippet};
 use apod_core::db::DbConfig;
-use apod_core::{ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, Media, MediaKind};
+use apod_core::{
+    ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, KindFilter, Media, MediaKind, Thumb,
+};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -74,14 +76,21 @@ async fn every_read_query_matches_the_migrated_schema() {
     let filters = Filters {
         from: Some(date),
         to: Some(date),
-        kind: Some(MediaKind::ImageJpg),
+        kind: Some(MediaKind::ImageJpg.into()),
         copyright: Some(true),
     };
 
     reader.entry(date).await.unwrap();
     reader.latest().await.unwrap();
     reader.random(None).await.unwrap();
-    reader.random(Some(MediaKind::ImageJpg)).await.unwrap();
+    reader
+        .random(Some(&MediaKind::ImageJpg.into()))
+        .await
+        .unwrap();
+    reader
+        .random(Some(&"video".parse().unwrap()))
+        .await
+        .unwrap();
     reader
         .list(&filters, Some(date), 10, Order::Asc)
         .await
@@ -103,8 +112,12 @@ async fn every_read_query_matches_the_migrated_schema() {
 
     writer.stale_dates().await.unwrap();
     writer.missing_thumbs().await.unwrap();
+    writer.unmeasured_thumbs().await.unwrap();
     writer.media_for(&[date]).await.unwrap();
-    writer.set_thumb(date, Some("x.webp")).await.unwrap();
+    writer
+        .set_thumb(date, Some(&Thumb::sized("x.webp", 480, 320)))
+        .await
+        .unwrap();
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -213,7 +226,10 @@ async fn reparsing_preserves_thumbnails() {
     let mut original = entry("2024-03-05", "Crab Nebula", "A supernova remnant.");
     writer.upsert(&original).await.unwrap();
     writer
-        .set_thumb(original.date, Some("2024/03/2024-03-05.webp"))
+        .set_thumb(
+            original.date,
+            Some(&Thumb::sized("2024/03/2024-03-05.webp", 480, 300)),
+        )
         .await
         .unwrap();
 
@@ -423,7 +439,7 @@ async fn a_thumbnail_is_a_path_until_a_reader_is_told_how_to_serve_it() {
     let (writer, path) = seeded(&[("2024-03-05", "One", "a")]).await;
     let date: ApodDate = "2024-03-05".parse().unwrap();
     writer
-        .set_thumb(date, Some(&date.thumb_path()))
+        .set_thumb(date, Some(&Thumb::new(date.thumb_path())))
         .await
         .unwrap();
 
@@ -433,6 +449,11 @@ async fn a_thumbnail_is_a_path_until_a_reader_is_told_how_to_serve_it() {
         Some("2024/03/2024-03-05.webp")
     );
     assert_eq!(bare.media.thumb_url, None, "no base, no URL");
+    assert_eq!(
+        (bare.media.thumb_width, bare.media.thumb_height),
+        (None, None),
+        "a thumbnail recorded without a size stays unmeasured"
+    );
 
     let serving = ApodReader::open(DbConfig::read_only(&path))
         .await
@@ -459,11 +480,164 @@ async fn tracks_missing_thumbnails() {
     assert_eq!(writer.missing_thumbs().await.unwrap().len(), 2);
 
     writer
-        .set_thumb("2024-03-05".parse().unwrap(), Some("x.webp"))
+        .set_thumb("2024-03-05".parse().unwrap(), Some(&Thumb::new("x.webp")))
         .await
         .unwrap();
     assert_eq!(writer.missing_thumbs().await.unwrap().len(), 1);
     assert_eq!(writer.reader().thumb_count().await.unwrap(), 1);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// The size travels with the thumbnail so the frontend can reserve the right height before
+/// anything has loaded, and the archiver can find the ones it has not measured yet.
+#[tokio::test]
+async fn thumbnail_sizes_round_trip_and_the_unmeasured_ones_are_findable() {
+    let (writer, path) = seeded(&[("2024-03-05", "One", "a"), ("2024-03-06", "Two", "b")]).await;
+    let (measured, unmeasured): (ApodDate, ApodDate) =
+        ("2024-03-05".parse().unwrap(), "2024-03-06".parse().unwrap());
+
+    writer
+        .set_thumb(measured, Some(&Thumb::sized("a.webp", 480, 271)))
+        .await
+        .unwrap();
+    writer
+        .set_thumb(unmeasured, Some(&Thumb::new("b.webp")))
+        .await
+        .unwrap();
+
+    let entry = writer.reader().entry(measured).await.unwrap().unwrap();
+    assert_eq!(
+        (entry.media.thumb_width, entry.media.thumb_height),
+        (Some(480), Some(271))
+    );
+
+    // Summaries carry it too: the grid and the feed reserve space from the same numbers.
+    let page = writer
+        .reader()
+        .list(&Filters::default(), None, 10, Order::Desc)
+        .await
+        .unwrap();
+    let summary = page
+        .items
+        .iter()
+        .find(|item| item.date == measured)
+        .unwrap();
+    assert_eq!(summary.media.thumb_height, Some(271));
+
+    let pending = writer.unmeasured_thumbs().await.unwrap();
+    assert_eq!(pending.len(), 1, "only the one without a size is pending");
+    assert_eq!(pending[0], (unmeasured, "b.webp".to_owned()));
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// The frontend's "Video" filter means every kind of video, not just the self-hosted mp4s.
+#[tokio::test]
+async fn a_kind_filter_selects_a_whole_group_of_kinds() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let kinds = [
+        ("2024-03-05", MediaKind::ImageJpg),
+        ("2024-03-06", MediaKind::VideoMp4),
+        ("2024-03-07", MediaKind::YouTube),
+        ("2024-03-08", MediaKind::Vimeo),
+    ];
+    for (date, kind) in kinds {
+        let mut row = entry(date, "Something", "A moving picture.");
+        row.media = Media::new(kind, Some("https://example.test/x".into()), None);
+        writer.upsert(&row).await.unwrap();
+    }
+
+    let video = Filters {
+        kind: Some("video".parse::<KindFilter>().unwrap()),
+        ..Filters::default()
+    };
+
+    let listed = writer
+        .reader()
+        .list(&video, None, 10, Order::Desc)
+        .await
+        .unwrap();
+    assert_eq!(
+        listed.items.len(),
+        3,
+        "mp4, YouTube and Vimeo are all videos"
+    );
+
+    let found = writer
+        .reader()
+        .search("moving", &video, false, 0, 10, 32)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.total, 3,
+        "search has to filter the same way listing does"
+    );
+
+    let images = Filters {
+        kind: Some("image".parse::<KindFilter>().unwrap()),
+        ..Filters::default()
+    };
+    assert_eq!(
+        writer
+            .reader()
+            .list(&images, None, 10, Order::Desc)
+            .await
+            .unwrap()
+            .items
+            .len(),
+        1
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// The search syntax, exercised against real FTS5 rather than against the string builder. These
+/// are the cases where the old parser was wrong: it AND-ed the words of a quoted phrase instead
+/// of requiring them adjacent, and it had no way to exclude anything.
+#[tokio::test]
+async fn search_syntax_reaches_fts5_intact() {
+    let (writer, path) = seeded(&[
+        ("2024-03-05", "A Young Star Cluster", "Pretty."),
+        (
+            "2024-03-06",
+            "A Star and a Globular Cluster",
+            "Two separate things.",
+        ),
+        ("2024-03-07", "Hubble Sees a Galaxy", "Distant."),
+        ("2024-03-08", "Webb Sees a Galaxy", "Also distant."),
+    ])
+    .await;
+
+    let reader = writer.reader();
+    let count = async |query: &str| {
+        reader
+            .search(query, &Filters::default(), true, 0, 30, 32)
+            .await
+            .unwrap()
+            .total
+    };
+
+    assert_eq!(count("star cluster").await, 2, "bare words match anywhere");
+    assert_eq!(
+        count(r#""star cluster""#).await,
+        1,
+        "a quoted phrase has to be adjacent"
+    );
+    assert_eq!(count("galaxy").await, 2);
+    assert_eq!(count("galaxy -hubble").await, 1, "exclusion");
+    assert_eq!(count("cluster OR galaxy").await, 4, "either");
+    assert_eq!(count("clust*").await, 2, "explicit prefix");
+    assert_eq!(
+        count(r#"" OR entries_fts MATCH ""#).await,
+        0,
+        "input that looks like syntax is matched as text, not run as syntax"
+    );
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());

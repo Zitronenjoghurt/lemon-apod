@@ -1,0 +1,315 @@
+pub fn fts_query(raw: &str) -> Option<String> {
+    let rendered: Vec<String> = groups(&tokenize(raw))
+        .iter()
+        .filter_map(Group::render)
+        .collect();
+
+    match rendered.len() {
+        0 => None,
+        1 => rendered.into_iter().next(),
+        _ => Some(
+            rendered
+                .iter()
+                .map(|group| format!("({group})"))
+                .collect::<Vec<_>>()
+                .join(" OR "),
+        ),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Term {
+    text: String,
+    quoted: bool,
+    prefix: bool,
+    negated: bool,
+}
+
+impl Term {
+    fn render(&self) -> String {
+        let escaped = self.text.replace('"', "");
+        let star = if self.prefix { "*" } else { "" };
+        format!("\"{escaped}\"{star}")
+    }
+}
+
+#[derive(Debug, Default)]
+struct Group {
+    positive: Vec<Term>,
+    negative: Vec<Term>,
+}
+
+impl Group {
+    fn render(&self) -> Option<String> {
+        if self.positive.is_empty() {
+            return None;
+        }
+
+        let positive = join(&self.positive, " AND ");
+        if self.negative.is_empty() {
+            return Some(positive);
+        }
+
+        Some(format!(
+            "({positive}) NOT ({})",
+            join(&self.negative, " OR ")
+        ))
+    }
+}
+
+fn join(terms: &[Term], separator: &str) -> String {
+    terms
+        .iter()
+        .map(Term::render)
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
+fn groups(tokens: &[Token]) -> Vec<Group> {
+    let mut groups = vec![Group::default()];
+
+    for token in tokens {
+        match token {
+            Token::Or => groups.push(Group::default()),
+            Token::Term(term) => {
+                let group = groups.last_mut().expect("there is always a current group");
+                if term.negated {
+                    group.negative.push(term.clone());
+                } else {
+                    group.positive.push(term.clone());
+                }
+            }
+        }
+    }
+
+    groups
+}
+
+#[derive(Debug)]
+enum Token {
+    Term(Term),
+    Or,
+}
+
+fn tokenize(raw: &str) -> Vec<Token> {
+    let chars: Vec<char> = raw.chars().collect();
+    let mut tokens = Vec::new();
+    let mut at = 0;
+    let mut negate_next = false;
+
+    while at < chars.len() {
+        if chars[at].is_whitespace() {
+            at += 1;
+            continue;
+        }
+
+        let mut negated = negate_next;
+        negate_next = false;
+
+        if chars[at] == '-' && chars.get(at + 1).is_some_and(|next| !next.is_whitespace()) {
+            negated = true;
+            at += 1;
+        }
+
+        let quoted = chars[at] == '"';
+        let mut text = String::new();
+
+        if quoted {
+            at += 1;
+            while at < chars.len() && chars[at] != '"' {
+                text.push(chars[at]);
+                at += 1;
+            }
+            at += usize::from(at < chars.len()); // the closing quote, when there was one
+        } else {
+            while at < chars.len() && !chars[at].is_whitespace() {
+                text.push(chars[at]);
+                at += 1;
+            }
+        }
+
+        let mut prefix = false;
+        if quoted {
+            if chars.get(at) == Some(&'*') {
+                prefix = true;
+                at += 1;
+            }
+        } else if text.ends_with('*') {
+            prefix = true;
+            text = text.trim_end_matches('*').to_owned();
+        }
+
+        if !quoted && !negated {
+            match text.as_str() {
+                "OR" => {
+                    tokens.push(Token::Or);
+                    continue;
+                }
+                // The default, spelled out.
+                "AND" => continue,
+                "NOT" => {
+                    negate_next = true;
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
+        if text.chars().any(char::is_alphanumeric) {
+            tokens.push(Token::Term(Term {
+                text,
+                quoted,
+                prefix,
+                negated,
+            }));
+        }
+    }
+
+    apply_trailing_prefix(&mut tokens);
+    tokens
+}
+
+fn apply_trailing_prefix(tokens: &mut [Token]) {
+    if let Some(Token::Term(term)) = tokens.last_mut()
+        && !term.quoted
+        && !term.negated
+    {
+        term.prefix = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ands_bare_words_and_prefixes_the_one_being_typed() {
+        assert_eq!(
+            fts_query("crab nebula"),
+            Some(r#""crab" AND "nebula"*"#.into())
+        );
+        assert_eq!(fts_query("nebula"), Some(r#""nebula"*"#.into()));
+    }
+
+    #[test]
+    fn a_quoted_phrase_stays_one_phrase() {
+        assert_eq!(
+            fts_query(r#""star cluster""#),
+            Some(r#""star cluster""#.into())
+        );
+        assert_eq!(
+            fts_query(r#"young "star cluster""#),
+            Some(r#""young" AND "star cluster""#.into())
+        );
+    }
+
+    #[test]
+    fn a_quoted_phrase_is_never_prefixed_by_accident() {
+        assert_eq!(
+            fts_query(r#"m31 "deep field""#),
+            Some(r#""m31" AND "deep field""#.into())
+        );
+    }
+
+    #[test]
+    fn an_unclosed_quote_still_produces_a_query() {
+        assert_eq!(
+            fts_query(r#""star cluster"#),
+            Some(r#""star cluster""#.into())
+        );
+    }
+
+    #[test]
+    fn excludes_negated_terms() {
+        assert_eq!(
+            fts_query("galaxy -hubble"),
+            Some(r#"("galaxy") NOT ("hubble")"#.into())
+        );
+        assert_eq!(
+            fts_query(r#"galaxy -"deep field" -webb"#),
+            Some(r#"("galaxy") NOT ("deep field" OR "webb")"#.into())
+        );
+        assert_eq!(
+            fts_query("galaxy NOT hubble"),
+            Some(r#"("galaxy") NOT ("hubble")"#.into())
+        );
+    }
+
+    #[test]
+    fn splits_groups_on_or() {
+        assert_eq!(
+            fts_query("comet OR asteroid"),
+            Some(r#"("comet") OR ("asteroid"*)"#.into())
+        );
+        assert_eq!(
+            fts_query("comet tail OR asteroid"),
+            Some(r#"("comet" AND "tail") OR ("asteroid"*)"#.into())
+        );
+        assert_eq!(
+            fts_query("comet -halley OR asteroid"),
+            Some(r#"(("comet") NOT ("halley")) OR ("asteroid"*)"#.into())
+        );
+    }
+
+    #[test]
+    fn or_has_to_be_shouted_so_the_word_stays_searchable() {
+        assert_eq!(
+            fts_query("black or white"),
+            Some(r#""black" AND "or" AND "white"*"#.into())
+        );
+        assert_eq!(fts_query("and"), Some(r#""and"*"#.into()));
+    }
+
+    #[test]
+    fn honours_an_explicit_prefix_star() {
+        assert_eq!(
+            fts_query("neb* cloud"),
+            Some(r#""neb"* AND "cloud"*"#.into())
+        );
+        assert_eq!(fts_query(r#""star clus"*"#), Some(r#""star clus"*"#.into()));
+    }
+
+    #[test]
+    fn a_query_with_nothing_to_match_returns_nothing_rather_than_everything() {
+        assert_eq!(fts_query("   "), None);
+        assert_eq!(fts_query("!!! ???"), None);
+        assert_eq!(
+            fts_query("-hubble"),
+            None,
+            "an exclusion alone is not a search"
+        );
+        assert_eq!(fts_query("OR OR"), None);
+    }
+
+    #[test]
+    fn user_input_never_becomes_fts_syntax() {
+        for raw in [
+            r#"crab" OR "x"#,
+            "a*b",
+            "(nebula)",
+            "NEAR(a b)",
+            r#"" OR entries_fts MATCH ""#,
+            "^title:",
+            "{a b}",
+        ] {
+            let query = fts_query(raw).unwrap_or_default();
+            let outside_literals: String = query.split('"').step_by(2).collect();
+            assert!(
+                outside_literals
+                    .chars()
+                    .all(|c| c.is_whitespace() || "()*".contains(c) || c.is_ascii_uppercase()),
+                "{raw:?} produced {query:?}, which has user text outside a string literal"
+            );
+        }
+    }
+
+    #[test]
+    fn quotes_inside_a_term_are_dropped_rather_than_closing_it_early() {
+        assert_eq!(
+            fts_query(r#"crab" OR "x"#),
+            Some(r#"("crab") OR ("x")"#.into())
+        );
+        assert_eq!(fts_query("a*b"), Some(r#""a*b"*"#.into()));
+        assert_eq!(fts_query("(nebula)"), Some(r#""(nebula)"*"#.into()));
+    }
+}

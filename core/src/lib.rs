@@ -20,7 +20,7 @@ pub use date::ApodDate;
 #[cfg(feature = "data")]
 pub use db::{Access, Db, DbConfig, DbError, DbResult};
 pub use entry::{ApodEntry, ApodSummary, Credit, SearchHit};
-pub use media::{Media, MediaKind, ThumbSource};
+pub use media::{KindFilter, Media, MediaKind, Thumb, ThumbSource};
 pub use parse::{ParseError, parse_page};
 pub use quality::{QualityWarning, quality_control};
 
