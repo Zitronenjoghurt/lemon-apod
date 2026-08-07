@@ -1,5 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use apod_core::{ApodDate, Filters, KindFilter, Order};
+use apod_core::{ApodDate, Filters, KindFilter, Order, ResourceOrder, WordOrder};
 use std::str::FromStr;
 
 pub fn date(raw: &str) -> ApiResult<ApodDate> {
@@ -42,6 +42,27 @@ pub fn sort_by_date(raw: Option<&str>) -> ApiResult<bool> {
     match raw {
         None | Some("relevance") => Ok(false),
         Some("date") => Ok(true),
+        Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
+    }
+}
+
+pub fn resource_order(raw: Option<&str>) -> ApiResult<ResourceOrder> {
+    match raw {
+        None | Some("refs") => Ok(ResourceOrder::Refs),
+        Some("entries") => Ok(ResourceOrder::Entries),
+        Some("first") => Ok(ResourceOrder::First),
+        Some("last") => Ok(ResourceOrder::Last),
+        Some("label") => Ok(ResourceOrder::Label),
+        Some("address") => Ok(ResourceOrder::Address),
+        Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
+    }
+}
+
+pub fn word_order(raw: Option<&str>) -> ApiResult<WordOrder> {
+    match raw {
+        None | Some("total") => Ok(WordOrder::Total),
+        Some("entries") => Ok(WordOrder::Entries),
+        Some("word") => Ok(WordOrder::Alphabetical),
         Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
     }
 }
@@ -89,6 +110,17 @@ mod tests {
         assert!(sort_by_date(Some("vibes")).is_err());
         assert!(month_day("13-01").is_err());
         assert!(month_day("nonsense").is_err());
+        assert!(resource_order(Some("popularity")).is_err());
+        assert!(word_order(Some("length")).is_err());
+    }
+
+    #[test]
+    fn the_catalogues_sort_both_ways_from_either_end() {
+        assert_eq!(resource_order(None).unwrap(), ResourceOrder::Refs);
+        assert_eq!(resource_order(Some("first")).unwrap(), ResourceOrder::First);
+        assert_eq!(word_order(None).unwrap(), WordOrder::Total);
+        assert_eq!(word_order(Some("word")).unwrap(), WordOrder::Alphabetical);
+        assert_eq!(order(Some("asc")).unwrap(), Order::Asc);
     }
 
     #[test]

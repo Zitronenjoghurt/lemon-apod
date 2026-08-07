@@ -14,6 +14,7 @@ declare module 'vue' {
     Button: typeof import('primevue/button')['default']
     CalendarMonth: typeof import('./src/components/CalendarMonth.vue')['default']
     ConfirmDialog: typeof import('primevue/confirmdialog')['default']
+    Dialog: typeof import('primevue/dialog')['default']
     Drawer: typeof import('primevue/drawer')['default']
     EntryCard: typeof import('./src/components/EntryCard.vue')['default']
     EntryDetail: typeof import('./src/components/EntryDetail.vue')['default']
@@ -29,6 +30,7 @@ declare module 'vue' {
     Paginator: typeof import('primevue/paginator')['default']
     Popover: typeof import('primevue/popover')['default']
     ReadFilter: typeof import('./src/components/ReadFilter.vue')['default']
+    RetryNotice: typeof import('./src/components/RetryNotice.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Select: typeof import('primevue/select')['default']
@@ -36,6 +38,8 @@ declare module 'vue' {
     Skeleton: typeof import('primevue/skeleton')['default']
     Tag: typeof import('primevue/tag')['default']
     Toast: typeof import('primevue/toast')['default']
+    WordDetail: typeof import('./src/components/WordDetail.vue')['default']
+    YearChart: typeof import('./src/components/YearChart.vue')['default']
   }
   export interface GlobalDirectives {
     Tooltip: typeof import('primevue/tooltip')['default']

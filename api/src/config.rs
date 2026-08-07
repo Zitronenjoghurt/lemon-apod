@@ -26,6 +26,7 @@ pub struct Config {
     pub cache_latest_secs: u64,
     pub cache_list_secs: u64,
     pub cache_sitemap_secs: u64,
+    pub cache_timeline_secs: u64,
 }
 
 impl Config {
@@ -58,6 +59,7 @@ impl Config {
             cache_latest_secs: env_or("APOD_CACHE_LATEST_SECS", 300)?,
             cache_list_secs: env_or("APOD_CACHE_LIST_SECS", 300)?,
             cache_sitemap_secs: env_or("APOD_CACHE_SITEMAP_SECS", 3_600)?,
+            cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
         })
     }
 }

@@ -13,6 +13,7 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import FeedItem from '@/components/FeedItem.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
+import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useRead } from '@/composables/useRead'
@@ -290,10 +291,7 @@ const endNote = computed(() => {
       </div>
     </header>
 
-    <Message v-if="error" :closable="false" severity="error">
-      {{ error }}
-      <Button label="Try again" size="small" text @click="fill" />
-    </Message>
+    <RetryNotice v-if="error" :busy="loading" :message="error" @retry="fill" />
 
     <FeedItem
       v-for="item in items"

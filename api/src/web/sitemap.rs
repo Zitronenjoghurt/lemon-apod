@@ -1,7 +1,7 @@
 use crate::api::error::ApiResult;
 use crate::state::ServerState;
 use axum::extract::State;
-use axum::http::{header, HeaderValue};
+use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -32,6 +32,8 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
 
     push_url(&mut xml, &format!("{base}/"), Some("daily"));
+    push_url(&mut xml, &format!("{base}/resources"), Some("weekly"));
+    push_url(&mut xml, &format!("{base}/stats"), Some("weekly"));
 
     let years: BTreeSet<String> = dates.iter().map(|date| date.format("%Y")).collect();
     for year in years.iter().rev() {

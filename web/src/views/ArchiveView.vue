@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import CalendarMonth from '@/components/CalendarMonth.vue'
 import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
+import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
 import { useLatestDate } from '@/composables/useLatestDate'
@@ -126,6 +127,11 @@ const shown = computed(() => apply(entries.value))
 const hidden = computed(() => entries.value.length - shown.value.length)
 
 let controller: AbortController | undefined
+let failedAppend = false
+
+function retry() {
+  void load(failedAppend)
+}
 
 async function load(append: boolean) {
   if (!range.value) return
@@ -160,6 +166,7 @@ async function load(append: boolean) {
     cursor.value = page.next_cursor
   } catch (thrown) {
     if (signal.aborted || (thrown instanceof DOMException && thrown.name === 'AbortError')) return
+    failedAppend = append
     error.value = thrown instanceof Error ? thrown.message : 'Something went wrong.'
   } finally {
     if (!signal.aborted) {
@@ -269,28 +276,30 @@ const countLabel = computed(() => {
       </div>
     </header>
 
-    <Message v-if="error" :closable="false" severity="error">{{ error }}</Message>
+    <RetryNotice v-if="error" :busy="loading || loadingMore" :message="error" @retry="retry" />
 
-    <CalendarMonth
-      v-else-if="view === 'calendar' && year && month"
-      :entries="shown"
-      :loading="loading"
-      :month="month"
-      :year="year"
-    />
+    <template v-if="!error || entries.length">
+      <CalendarMonth
+        v-if="view === 'calendar' && year && month"
+        :entries="shown"
+        :loading="loading"
+        :month="month"
+        :year="year"
+      />
 
-    <Skeleton v-else-if="view === 'calendar'" height="22rem" width="100%" />
+      <Skeleton v-else-if="view === 'calendar'" height="22rem" width="100%" />
 
-    <EntryGrid
-      v-else
-      :empty="
-        filtered && hidden
-          ? `Every entry loaded from ${periodLabel} is filtered out. Load more, or switch the filter back to All.`
-          : `Nothing archived for ${periodLabel || 'this period'} yet.`
-      "
-      :entries="shown"
-      :loading="loading || !year"
-    />
+      <EntryGrid
+        v-else
+        :empty="
+          filtered && hidden
+            ? `Every entry loaded from ${periodLabel} is filtered out. Load more, or switch the filter back to All.`
+            : `Nothing archived for ${periodLabel || 'this period'} yet.`
+        "
+        :entries="shown"
+        :loading="loading || !year"
+      />
+    </template>
 
     <div v-if="!loading && entries.length" class="more">
       <p aria-live="polite" class="muted count">{{ countLabel }}</p>

@@ -11,9 +11,10 @@ const props = defineProps<{
   query?: string
 }>()
 
-const { isRead } = useRead()
+const { isRead, dimmed } = useRead()
 
-const read = computed(() => isRead(props.entry.date))
+const unread = computed(() => !isRead(props.entry.date))
+const faded = computed(() => dimmed(props.entry.date))
 
 const target = computed(() =>
   props.query?.trim()
@@ -23,7 +24,7 @@ const target = computed(() =>
 </script>
 
 <template>
-  <RouterLink :class="{ read }" :to="target" class="card entry-card">
+  <RouterLink :class="{ faded }" :to="target" class="card entry-card">
     <div class="thumb">
       <img
         v-if="entry.media.thumb_url"
@@ -44,11 +45,9 @@ const target = computed(() =>
 
     <div class="body">
       <p class="muted date">
+        <span v-if="unread" aria-hidden="true" class="unread-dot" />
         <time :datetime="entry.date">{{ formatDate(entry.date) }}</time>
-        <span v-if="read" class="read-mark" title="You have read this one">
-          <i aria-hidden="true" class="pi pi-check" />
-          <span class="sr-only">Read</span>
-        </span>
+        <span class="sr-only">{{ unread ? 'Unread' : 'Read' }}</span>
       </p>
       <h3 class="title">{{ entry.title }}</h3>
       <p v-if="snippet" class="snippet muted" v-html="snippet" />
@@ -112,14 +111,23 @@ const target = computed(() =>
   padding-left: 0.15rem;
 }
 
-.read-mark {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  margin-left: 0.45rem;
-  color: var(--accent);
-  font-size: 0.7em;
-  vertical-align: 0.05em;
+.unread-dot {
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 0.4rem;
+  vertical-align: 0.08em;
+}
+
+.entry-card.faded {
+  opacity: 0.55;
+}
+
+.entry-card.faded:hover,
+.entry-card.faded:focus-within {
+  opacity: 1;
 }
 
 .sr-only {

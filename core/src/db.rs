@@ -168,6 +168,7 @@ fn write_options(config: &DbConfig) -> SqliteConnectOptions {
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)
         .foreign_keys(true)
+        .pragma("recursive_triggers", "ON")
         .busy_timeout(config.busy_timeout)
 }
 

@@ -1,11 +1,12 @@
-<script setup lang="ts">
+<script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
-import { api } from '@/api/client'
+import RetryNotice from '@/components/RetryNotice.vue'
+import { api, ApiError } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
@@ -17,6 +18,9 @@ const toast = useToast()
 
 const entries = ref<ApodSummary[]>([])
 const loading = ref(false)
+const error = ref<string>()
+
+const loaded = new Map<string, ApodSummary>()
 
 const shown = computed(() => apply(entries.value))
 const hidden = computed(() => entries.value.length - shown.value.length)
@@ -45,25 +49,38 @@ async function load() {
   const dates = favorites.value
   if (!dates.length) {
     entries.value = []
+    error.value = undefined
     return
   }
 
   loading.value = true
-  const loaded: ApodSummary[] = []
+  error.value = undefined
+  let failed = 0
 
   try {
     for (const date of dates) {
+      if (loaded.has(date)) continue
+
       try {
         const entry = await api.entry(date)
-        loaded.push({
+        loaded.set(date, {
           date: entry.date,
           title: entry.title,
           media: entry.media,
           has_copyright: entry.has_copyright,
         })
-      } catch {}
+      } catch (thrown) {
+        if (!(thrown instanceof ApiError && thrown.notFound)) failed += 1
+      }
     }
-    entries.value = loaded
+
+    entries.value = dates
+      .map((date) => loaded.get(date))
+      .filter((entry): entry is ApodSummary => entry !== undefined)
+
+    if (failed) {
+      error.value = `${failed} of ${dates.length} could not be loaded.`
+    }
   } finally {
     loading.value = false
   }
@@ -78,10 +95,10 @@ watch(favorites, load, { immediate: true })
       <h1>Favorites</h1>
       <Button
         v-if="count"
-        label="Clear all"
         icon="pi pi-trash"
-        severity="danger"
+        label="Clear all"
         outlined
+        severity="danger"
         size="small"
         @click="confirmClear"
       />
@@ -92,22 +109,23 @@ watch(favorites, load, { immediate: true })
     </p>
 
     <p v-if="!count" class="muted empty">
-      Nothing saved yet. Open an entry and press <i class="pi pi-star" aria-hidden="true" /> Save.
+      Nothing saved yet. Open an entry and press <i aria-hidden="true" class="pi pi-star" /> Save.
       <br />
       <RouterLink to="/">Start from the latest entry</RouterLink>
     </p>
 
     <template v-else>
       <ReadFilter :hidden="hidden" />
+      <RetryNotice v-if="error" :busy="loading" :message="error" @retry="load" />
       <EntryGrid
-        :entries="shown"
-        :loading="loading"
-        :placeholders="count"
         :empty="
           filtered && hidden
             ? 'Every favorite is filtered out by the read filter.'
             : 'Nothing here.'
         "
+        :entries="shown"
+        :loading="loading"
+        :placeholders="count"
       />
     </template>
   </div>

@@ -7,15 +7,15 @@ mod state;
 mod web;
 
 use anyhow::{Context, Result};
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use config::Config;
 use state::ServerState;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
 use tower_governor::key_extractor::SmartIpKeyExtractor;
-use tower_governor::GovernorLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;

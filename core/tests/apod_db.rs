@@ -1,13 +1,8 @@
-//! End to end coverage for `apod.db` against the real migrations in `core/migrations/`.
-//!
-//! The point of running these against the migrations rather than a schema written out by hand
-//! in the test is that a hand-written copy drifts. The previous one had lost both indexes, two
-//! of the three FTS triggers, the `meta` table and the `entry_media` foreign key, so the API's
-//! tests were passing against a database the archiver never actually produces.
-
 #![cfg(feature = "data-write")]
 
-use apod_core::apod::{Filters, Order, SCHEMA_VERSION, Snippet};
+use apod_core::apod::{
+    Filters, Order, ResourceFilters, ResourceOrder, SCHEMA_VERSION, Snippet, WordFilters, WordOrder,
+};
 use apod_core::db::DbConfig;
 use apod_core::{
     ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, KindFilter, Media, MediaKind, Thumb,
@@ -64,9 +59,6 @@ async fn seeded(rows: &[(&str, &str, &str)]) -> (ApodWriter, PathBuf) {
     (writer, path)
 }
 
-/// The conformance pass: run every read query once against the real schema. It does not
-/// assert on the data, it asserts that the SQL and the migrations still agree. A renamed or
-/// dropped column fails here rather than in production.
 #[tokio::test]
 async fn every_read_query_matches_the_migrated_schema() {
     let (writer, path) = seeded(&[("2024-03-05", "Saturn", "The ringed planet.")]).await;
@@ -110,6 +102,62 @@ async fn every_read_query_matches_the_migrated_schema() {
     reader.count().await.unwrap();
     reader.thumb_count().await.unwrap();
 
+    reader.text_summary().await.unwrap();
+    reader.resource_summary().await.unwrap();
+    reader.timeline().await.unwrap();
+    reader
+        .resources(
+            &ResourceFilters {
+                query: Some("wikipedia".into()),
+                host: Some("en.wikipedia.org".into()),
+                min_refs: Some(1),
+                credited: Some(false),
+            },
+            ResourceOrder::Refs,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    reader
+        .resources(
+            &ResourceFilters::default(),
+            ResourceOrder::Address,
+            Order::Asc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    reader.resource(1, 0, 10).await.unwrap();
+    reader.resource_hosts(10).await.unwrap();
+    reader
+        .words(
+            &WordFilters {
+                query: Some("ring*".into()),
+                min_total: Some(1),
+                max_total: Some(100),
+            },
+            WordOrder::Total,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    reader
+        .words(
+            &WordFilters::default(),
+            WordOrder::Alphabetical,
+            Order::Asc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    reader.word("ringed", 5).await.unwrap();
+
     writer.stale_dates().await.unwrap();
     writer.missing_thumbs().await.unwrap();
     writer.unmeasured_thumbs().await.unwrap();
@@ -131,7 +179,6 @@ async fn migrations_stamp_the_version_readers_check_for() {
         Some(SCHEMA_VERSION)
     );
 
-    // A reader opening the same file must accept it.
     ApodReader::open(DbConfig::read_only(&path)).await.unwrap();
 
     writer.reader().db().close().await;
@@ -141,7 +188,6 @@ async fn migrations_stamp_the_version_readers_check_for() {
 #[tokio::test]
 async fn a_reader_refuses_a_database_that_was_never_migrated() {
     let path = temp_db();
-    // A file with the tables but no migration history: what a hand-rolled copy looks like.
     let db = apod_core::Db::open(DbConfig::read_write(&path))
         .await
         .unwrap();
@@ -201,8 +247,6 @@ async fn credit_text_indexes_every_role_but_stores_them_apart() {
     });
     writer.upsert(&original).await.unwrap();
 
-    // Searching a name from the second credit has to hit, which only works if credit_text
-    // concatenated both roles.
     let hits = writer
         .reader()
         .search("lovelace", &Filters::default(), false, 0, 10, 32)
@@ -247,8 +291,6 @@ async fn reparsing_preserves_thumbnails() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// The `entries_au` trigger. This is one of the two triggers the hand-copied schema had lost,
-/// so nothing was checking it from the read side.
 #[tokio::test]
 async fn updating_an_entry_drops_its_old_text_from_the_index() {
     let path = temp_db();
@@ -342,7 +384,6 @@ async fn search_marks_the_match_in_the_snippet() {
         html.items[0].snippet
     );
 
-    // The same query through a consumer that is not a browser.
     let discord = ApodReader::open(DbConfig::read_only(&path))
         .await
         .unwrap()
@@ -431,9 +472,6 @@ async fn listing_pages_forward_on_a_date_cursor() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// The bug the old split could not catch: whether `thumb_url` held a URL or a path depended on
-/// which crate did the read. Now the path is always the path, and the URL only appears for a
-/// reader that was told what it serves them under.
 #[tokio::test]
 async fn a_thumbnail_is_a_path_until_a_reader_is_told_how_to_serve_it() {
     let (writer, path) = seeded(&[("2024-03-05", "One", "a")]).await;
@@ -490,8 +528,6 @@ async fn tracks_missing_thumbnails() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// The size travels with the thumbnail so the frontend can reserve the right height before
-/// anything has loaded, and the archiver can find the ones it has not measured yet.
 #[tokio::test]
 async fn thumbnail_sizes_round_trip_and_the_unmeasured_ones_are_findable() {
     let (writer, path) = seeded(&[("2024-03-05", "One", "a"), ("2024-03-06", "Two", "b")]).await;
@@ -513,7 +549,6 @@ async fn thumbnail_sizes_round_trip_and_the_unmeasured_ones_are_findable() {
         (Some(480), Some(271))
     );
 
-    // Summaries carry it too: the grid and the feed reserve space from the same numbers.
     let page = writer
         .reader()
         .list(&Filters::default(), None, 10, Order::Desc)
@@ -534,7 +569,6 @@ async fn thumbnail_sizes_round_trip_and_the_unmeasured_ones_are_findable() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// The frontend's "Video" filter means every kind of video, not just the self-hosted mp4s.
 #[tokio::test]
 async fn a_kind_filter_selects_a_whole_group_of_kinds() {
     let path = temp_db();
@@ -597,9 +631,6 @@ async fn a_kind_filter_selects_a_whole_group_of_kinds() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// The search syntax, exercised against real FTS5 rather than against the string builder. These
-/// are the cases where the old parser was wrong: it AND-ed the words of a quoted phrase instead
-/// of requiring them adjacent, and it had no way to exclude anything.
 #[tokio::test]
 async fn search_syntax_reaches_fts5_intact() {
     let (writer, path) = seeded(&[
@@ -643,8 +674,326 @@ async fn search_syntax_reaches_fts5_intact() {
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 
-/// `entry_media` cascades on delete, which the hand-copied schema had dropped the foreign key
-/// for. Enforcement also needs `PRAGMA foreign_keys = ON`, which the Db primitive sets.
+#[tokio::test]
+async fn writing_an_entry_catalogues_its_words_and_its_links() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let mut row = entry(
+        "2024-03-05",
+        "Saturn",
+        "The ringed planet is a ringed planet.",
+    );
+    row.explanation_html = r#"The <a href="https://en.wikipedia.org/wiki/Saturn">ringed</a>
+                              planet, seen <a href="http://example.com/pic">again</a>."#
+        .into();
+    row.credits[0].html = r#"<a href="https://example.com/pic">Jane Doe</a>"#.into();
+    writer.upsert(&row).await.unwrap();
+
+    let reader = writer.reader();
+
+    let ringed = reader.word("ringed", 5).await.unwrap().unwrap();
+    assert_eq!(ringed.word.total, 2, "twice in the one explanation");
+    assert_eq!(ringed.word.entries, 1);
+    assert_eq!(ringed.first.unwrap().to_string(), "2024-03-05");
+    assert_eq!(ringed.by_year[0].year, 2024);
+    assert_eq!(ringed.top_entries[0].count, 2);
+
+    assert!(
+        reader.word("the", 5).await.unwrap().is_some(),
+        "common words are the point of a word catalogue, not noise to drop"
+    );
+
+    let catalogue = reader
+        .resources(
+            &ResourceFilters::default(),
+            ResourceOrder::Refs,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    let urls: Vec<&str> = catalogue.items.iter().map(|r| r.url.as_str()).collect();
+    assert_eq!(
+        urls,
+        vec![
+            "https://example.com/pic",
+            "https://en.wikipedia.org/wiki/Saturn"
+        ],
+        "the example is linked twice, and https wins over the http spelling of it"
+    );
+
+    let by_name = reader
+        .resources(
+            &ResourceFilters::default(),
+            ResourceOrder::Label,
+            Order::Asc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        by_name
+            .items
+            .iter()
+            .map(|r| r.label.as_deref().unwrap_or_default())
+            .collect::<Vec<_>>(),
+        vec!["again", "ringed"],
+        "sorting by name reads the link text, not the address"
+    );
+
+    let example = &catalogue.items[0];
+    assert_eq!(example.refs, 2);
+    assert_eq!(example.key, "example.com/pic", "stored without its scheme");
+    assert_eq!(example.entries, 1, "one entry, however many links in it");
+    assert_eq!(example.credited, 1);
+    assert_eq!(example.host, "example.com");
+    assert_eq!(
+        example.label.as_deref(),
+        Some("again"),
+        "one entry records one wording, the first it used"
+    );
+
+    let summary = reader.text_summary().await.unwrap();
+    assert_eq!(summary.measured, 1);
+    assert_eq!(summary.total_words, 7);
+    assert_eq!(summary.max_words, 7);
+    assert_eq!(summary.longest.unwrap().title, "Saturn");
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn rewriting_an_entry_takes_its_old_words_and_links_out_of_the_totals() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let mut row = entry("2024-03-05", "Saturn", "A ringed planet.");
+    row.explanation_html = r#"<a href="https://example.com/old">old</a>"#.into();
+    row.credits.clear();
+    writer.upsert(&row).await.unwrap();
+
+    row.explanation_text = "A distant galaxy.".into();
+    row.explanation_html = r#"<a href="https://example.com/new">new</a>"#.into();
+    writer.upsert(&row).await.unwrap();
+
+    let reader = writer.reader();
+    assert!(
+        reader.word("ringed", 5).await.unwrap().is_none(),
+        "a word nothing uses any more is gone from the catalogue, not left at zero"
+    );
+    assert_eq!(
+        reader.word("galaxy", 5).await.unwrap().unwrap().word.total,
+        1
+    );
+
+    let catalogue = reader
+        .resources(
+            &ResourceFilters::default(),
+            ResourceOrder::Refs,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(catalogue.total, 1, "the resource it dropped went with it");
+    assert_eq!(catalogue.items[0].url, "https://example.com/new");
+
+    let summary = reader.text_summary().await.unwrap();
+    assert_eq!(summary.total_words, 3, "counted once, not twice");
+    assert_eq!(summary.distinct_words, 3);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn deleting_an_entry_drains_it_from_every_total() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let mut row = entry("2024-03-05", "Saturn", "A ringed planet.");
+    row.explanation_html = r#"<a href="https://example.com/x">x</a>"#.into();
+    writer.upsert(&row).await.unwrap();
+
+    let db = writer.reader().db();
+    sqlx::query("DELETE FROM entries WHERE date_id = ?1")
+        .bind(row.date.days())
+        .execute(db.writer().unwrap())
+        .await
+        .unwrap();
+
+    for table in [
+        "entry_words",
+        "words",
+        "entry_resources",
+        "resources",
+        "entry_stats",
+    ] {
+        let left: i64 =
+            sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT COUNT(*) FROM {table}")))
+                .fetch_one(db.reader())
+                .await
+                .unwrap();
+        assert_eq!(left, 0, "{table} outlived the entry it was derived from");
+    }
+
+    db.close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn one_resource_gathers_references_from_every_entry_that_links_it() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    for (date, anchor) in [
+        ("2024-03-05", "the Crab"),
+        ("2024-03-06", "Crab Nebula"),
+        ("2024-03-07", "Crab Nebula"),
+    ] {
+        let mut row = entry(date, "Crab", "A supernova remnant.");
+        row.explanation_html =
+            format!(r#"<a href="https://en.wikipedia.org/wiki/Crab_Nebula">{anchor}</a>"#);
+        row.credits.clear();
+        writer.upsert(&row).await.unwrap();
+    }
+
+    let reader = writer.reader();
+    let catalogue = reader
+        .resources(
+            &ResourceFilters::default(),
+            ResourceOrder::Refs,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(catalogue.total, 1);
+    let crab = &catalogue.items[0];
+    assert_eq!(crab.refs, 3);
+    assert_eq!(crab.entries, 3);
+    assert_eq!(crab.first.unwrap().to_string(), "2024-03-05");
+    assert_eq!(crab.last.unwrap().to_string(), "2024-03-07");
+    assert_eq!(
+        crab.label.as_deref(),
+        Some("Crab Nebula"),
+        "the wording APOD used most often names it"
+    );
+
+    let found = reader
+        .resources(
+            &ResourceFilters {
+                query: Some("the crab".into()),
+                ..ResourceFilters::default()
+            },
+            ResourceOrder::Refs,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        found.total, 1,
+        "searching reaches every wording, not only the most common one"
+    );
+
+    let refs = reader.resource(crab.id, 0, 10).await.unwrap().unwrap();
+    assert_eq!(refs.total, 3);
+    assert_eq!(refs.items.len(), 3);
+    assert_eq!(refs.items[0].entry.date.to_string(), "2024-03-07");
+    assert_eq!(refs.items[0].anchor, "Crab Nebula");
+
+    let hosts = reader.resource_hosts(10).await.unwrap();
+    assert_eq!(hosts[0].host, "en.wikipedia.org");
+    assert_eq!((hosts[0].resources, hosts[0].refs), (1, 3));
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn the_word_list_reaches_both_ends_of_thirty_years_of_vocabulary() {
+    let (writer, path) = seeded(&[
+        ("2024-03-05", "One", "the ringed planet the planet"),
+        ("2024-03-06", "Two", "the ringed moon"),
+        ("2025-03-05", "Three", "a singular unrepeatable hapax"),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let most = reader
+        .words(&WordFilters::default(), WordOrder::Total, Order::Desc, 0, 3)
+        .await
+        .unwrap();
+    assert_eq!(most.items[0].word, "the");
+    assert_eq!(most.items[0].total, 3);
+    assert_eq!(most.items[0].entries, 2);
+
+    let least = reader
+        .words(
+            &WordFilters::default(),
+            WordOrder::Total,
+            Order::Asc,
+            0,
+            100,
+        )
+        .await
+        .unwrap();
+    assert_eq!(least.items[0].total, 1, "the far end is one query away");
+    assert_eq!(least.total, most.total, "both ends of the same list");
+
+    let prefix = reader
+        .words(
+            &WordFilters {
+                query: Some("ring*".into()),
+                ..WordFilters::default()
+            },
+            WordOrder::Total,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(prefix.items.len(), 1);
+    assert_eq!(prefix.items[0].word, "ringed");
+
+    let substring = reader
+        .words(
+            &WordFilters {
+                query: Some("plan".into()),
+                ..WordFilters::default()
+            },
+            WordOrder::Total,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(substring.items[0].word, "planet");
+
+    let timeline = reader.timeline().await.unwrap();
+    assert_eq!(timeline.years.len(), 2);
+    assert_eq!(timeline.years[0].year, 2024);
+    assert_eq!(timeline.years[0].entries, 2);
+    assert_eq!(
+        timeline.years[1].new_words, 4,
+        "2025 brought four of its own"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
 #[tokio::test]
 async fn deleting_an_entry_takes_its_extra_media_with_it() {
     let path = temp_db();

@@ -7,8 +7,8 @@ export type ReadFilter = 'all' | 'unread' | 'read'
 
 export const READ_FILTERS: { label: string; value: ReadFilter; icon: string }[] = [
   { label: 'All', value: 'all', icon: 'pi pi-list' },
-  { label: 'Unread', value: 'unread', icon: 'pi pi-circle' },
-  { label: 'Read', value: 'read', icon: 'pi pi-check-circle' },
+  { label: 'Unread', value: 'unread', icon: 'pi pi-circle-fill' },
+  { label: 'Read', value: 'read', icon: 'pi pi-check' },
 ]
 
 const dates = ref<Set<string>>(loadDates())
@@ -44,6 +44,9 @@ watch(filter, (next) => {
 })
 
 export function useRead() {
+  const admitted = new Set<string>()
+  let admittedFor = filter.value
+
   function isRead(date: string): boolean {
     return dates.value.has(date)
   }
@@ -68,6 +71,7 @@ export function useRead() {
 
   function clear(): void {
     dates.value.clear()
+    admitted.clear()
     persist()
   }
 
@@ -77,8 +81,21 @@ export function useRead() {
     return true
   }
 
+  function dimmed(date: string): boolean {
+    return filter.value !== 'all' && !matches(date)
+  }
+
   function apply<T extends { date: string }>(entries: T[]): T[] {
-    return filter.value === 'all' ? entries : entries.filter((entry) => matches(entry.date))
+    if (filter.value === 'all') return entries
+
+    if (admittedFor !== filter.value) {
+      admitted.clear()
+      admittedFor = filter.value
+    }
+
+    const kept = entries.filter((entry) => matches(entry.date) || admitted.has(entry.date))
+    for (const entry of kept) admitted.add(entry.date)
+    return kept
   }
 
   return {
@@ -91,6 +108,7 @@ export function useRead() {
     toggleRead,
     clear,
     matches,
+    dimmed,
     apply,
   }
 }

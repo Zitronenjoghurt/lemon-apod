@@ -1,16 +1,22 @@
+pub mod catalogue;
+pub mod insight;
 pub mod model;
 pub mod query;
 pub mod read;
 #[cfg(feature = "data-write")]
 pub mod write;
 
-pub use model::{Filters, KindCount, Order, Page, SearchResults, Stats};
+pub use model::{
+    EntryLength, Filters, HostCount, KindCount, Listing, Order, Page, Resource, ResourceFilters,
+    ResourceOrder, ResourceRef, ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary,
+    Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
+};
 pub use read::{ApodError, ApodReader, ApodResult, Snippet};
 #[cfg(feature = "data-write")]
 pub use write::ApodWriter;
 
-pub const SCHEMA_VERSION: i64 = 2;
-pub const MIN_SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
+pub const MIN_SCHEMA_VERSION: i64 = 3;
 
 pub(crate) const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_html, \
                                         explanation_text, credits, has_copyright, license_url, \

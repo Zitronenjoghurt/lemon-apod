@@ -10,6 +10,13 @@ const router = createRouter({
     { path: '/search', name: 'search', component: () => import('@/views/SearchView.vue') },
     { path: '/favorites', name: 'favorites', component: () => import('@/views/FavoritesView.vue') },
     { path: '/random', name: 'random', component: () => import('@/views/RandomView.vue') },
+    { path: '/stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
+    { path: '/resources', name: 'resources', component: () => import('@/views/ResourcesView.vue') },
+    {
+      path: '/resources/:id(\\d+)',
+      name: 'resource',
+      component: () => import('@/views/ResourceView.vue'),
+    },
     {
       path: '/archive/:year(\\d{4})?/:month(\\d{2})?',
       name: 'archive',
@@ -29,7 +36,10 @@ const router = createRouter({
   scrollBehavior(to, from, saved) {
     if (to.name === 'feed') return false
     if (saved) return saved
-    if (to.name === from.name && to.name === 'search') return {}
+    // Paging or refining in place should not throw the reader back to the top.
+    if (to.name === from.name && ['search', 'resources', 'stats'].includes(String(to.name))) {
+      return {}
+    }
     return { top: 0 }
   },
 })

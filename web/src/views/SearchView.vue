@@ -3,6 +3,7 @@ import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
+import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { KindFilter } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
@@ -201,9 +202,9 @@ const onlyExclusions = computed(
       <ReadFilter :hidden="hidden" class="read" />
     </div>
 
-    <Message v-if="error" :closable="false" severity="error">{{ error }}</Message>
+    <RetryNotice v-if="error" :busy="loading" :message="error" @retry="run" />
 
-    <p v-else-if="!hasQuery" class="muted empty">
+    <p v-if="!hasQuery" class="muted empty">
       Type to search titles, explanations, credits and keywords.
     </p>
 
@@ -212,7 +213,7 @@ const onlyExclusions = computed(
     </Message>
 
     <EntryGrid
-      v-else
+      v-else-if="!error || shown.length"
       :empty="
         filtered && hidden
           ? 'Every result on this page is filtered out by the read filter.'

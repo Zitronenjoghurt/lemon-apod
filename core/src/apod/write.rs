@@ -4,11 +4,14 @@ use crate::date::ApodDate;
 use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
 use crate::media::{Media, Thumb};
+use crate::{resource, text};
 use sqlx::migrate::Migrator;
-use sqlx::{Row, Sqlite, Transaction};
+use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
+use std::collections::HashMap;
 use std::path::Path;
 
 pub static MIGRATIONS: Migrator = sqlx::migrate!("./migrations");
+const ROW_BATCH: usize = 128;
 
 #[derive(Debug, Clone)]
 pub struct ApodWriter {
@@ -213,5 +216,92 @@ async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> Apo
         .await?;
     }
 
+    write_derived(tx, entry).await
+}
+
+async fn write_derived(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> ApodResult<()> {
+    let date_id = entry.date.days();
+
+    sqlx::query("DELETE FROM entry_words WHERE date_id = ?1")
+        .bind(date_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("DELETE FROM entry_resources WHERE date_id = ?1")
+        .bind(date_id)
+        .execute(&mut **tx)
+        .await?;
+
+    let counts = text::word_counts(&entry.explanation_text);
+    for chunk in counts.iter().collect::<Vec<_>>().chunks(ROW_BATCH) {
+        let mut insert = sqlx::query(AssertSqlSafe(format!(
+            "INSERT INTO entry_words (date_id, word, n) VALUES {}",
+            values(3, chunk.len())
+        )));
+        for (word, n) in chunk {
+            insert = insert.bind(date_id).bind(*word).bind(i64::from(**n));
+        }
+        insert.execute(&mut **tx).await?;
+    }
+
+    let links = resource::links(entry);
+    for chunk in links.chunks(ROW_BATCH) {
+        let mut upsert = sqlx::query_as::<_, (i64, String)>(AssertSqlSafe(format!(
+            "INSERT INTO resources (key, scheme, host) VALUES {}
+             ON CONFLICT(key) DO UPDATE SET
+               scheme = CASE WHEN excluded.scheme = 'https' THEN 'https' ELSE scheme END
+             RETURNING id, key",
+            values(3, chunk.len())
+        )));
+        for link in chunk {
+            upsert = upsert.bind(&link.key).bind(&link.scheme).bind(&link.host);
+        }
+        let ids: HashMap<String, i64> = upsert
+            .fetch_all(&mut **tx)
+            .await?
+            .into_iter()
+            .map(|(id, key)| (key, id))
+            .collect();
+
+        let mut insert = sqlx::query(AssertSqlSafe(format!(
+            "INSERT INTO entry_resources (date_id, resource_id, n, anchor, in_credit)
+             VALUES {}",
+            values(5, chunk.len())
+        )));
+        for link in chunk {
+            insert = insert
+                .bind(date_id)
+                .bind(ids.get(&link.key).copied())
+                .bind(i64::from(link.count))
+                .bind(&link.anchor)
+                .bind(link.in_credit);
+        }
+        insert.execute(&mut **tx).await?;
+    }
+
+    let stats = text::stats(&entry.explanation_text, &counts);
+    sqlx::query(
+        "INSERT INTO entry_stats (date_id, word_count, unique_words, char_count, sentences,
+                                  link_count, resource_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(date_id) DO UPDATE SET
+           word_count = excluded.word_count, unique_words = excluded.unique_words,
+           char_count = excluded.char_count, sentences = excluded.sentences,
+           link_count = excluded.link_count, resource_count = excluded.resource_count",
+    )
+    .bind(date_id)
+    .bind(i64::from(stats.words))
+    .bind(i64::from(stats.unique_words))
+    .bind(i64::from(stats.chars))
+    .bind(i64::from(stats.sentences))
+    .bind(links.iter().map(|link| i64::from(link.count)).sum::<i64>())
+    .bind(links.len() as i64)
+    .execute(&mut **tx)
+    .await?;
+
     Ok(())
+}
+
+fn values(columns: usize, rows: usize) -> String {
+    let row = format!("({})", vec!["?"; columns].join(", "));
+    vec![row; rows].join(", ")
 }

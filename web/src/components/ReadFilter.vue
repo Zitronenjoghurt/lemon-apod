@@ -1,11 +1,36 @@
 <script lang="ts" setup>
+import { useConfirm } from 'primevue/useconfirm'
+import { useToast } from 'primevue/usetoast'
 import { READ_FILTERS, useRead } from '@/composables/useRead'
 
-const { filter } = useRead()
+const { filter, count, clear } = useRead()
+const confirm = useConfirm()
+const toast = useToast()
 
 defineProps<{
   hidden?: number
 }>()
+
+function confirmClear() {
+  const marked = count.value
+
+  confirm.require({
+    header: 'Forget what you have read?',
+    message: `This marks all ${marked.toLocaleString()} entries unread again in this browser. There is no undo.`,
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
+    acceptProps: { label: 'Mark all unread', severity: 'danger' },
+    accept: () => {
+      clear()
+      toast.add({
+        severity: 'success',
+        summary: 'Read state cleared',
+        detail: `${marked.toLocaleString()} ${marked === 1 ? 'entry' : 'entries'} marked unread.`,
+        life: 2500,
+      })
+    },
+  })
+}
 </script>
 
 <template>
@@ -26,6 +51,18 @@ defineProps<{
     </SelectButton>
     <span id="read-filter-label" class="sr-only">Filter by read state</span>
 
+    <Button
+      v-if="count"
+      v-tooltip.bottom="`${count.toLocaleString()} read. Mark them all unread again.`"
+      aria-label="Clear read state"
+      icon="pi pi-eraser"
+      rounded
+      severity="secondary"
+      size="small"
+      text
+      @click="confirmClear"
+    />
+
     <span v-if="hidden" aria-live="polite" class="muted hidden-note">
       {{ hidden }} hidden on this page
     </span>
@@ -36,7 +73,7 @@ defineProps<{
 .read-filter {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
 }
 
@@ -46,6 +83,7 @@ defineProps<{
 
 .hidden-note {
   font-size: 0.8rem;
+  margin-left: 0.2rem;
 }
 
 .sr-only {

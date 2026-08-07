@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import MediaFrame from './MediaFrame.vue'
+import RetryNotice from './RetryNotice.vue'
 import { api, ApiError } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
@@ -22,7 +23,7 @@ const DWELL_RATIO = 0.35
 
 const router = useRouter()
 const { isFavorite, toggle } = useFavorites()
-const { isRead, markRead, toggleRead } = useRead()
+const { isRead, dimmed, markRead, toggleRead } = useRead()
 
 const root = useTemplateRef<HTMLElement>('root')
 const entry = ref<ApodEntry | undefined>(props.preloaded)
@@ -43,6 +44,8 @@ const credits = computed(() =>
   })),
 )
 
+const missing = ref(false)
+
 async function load() {
   if (entry.value || loading.value) return
 
@@ -51,9 +54,11 @@ async function load() {
   try {
     entry.value = await api.entry(props.date)
   } catch (thrown) {
-    error.value =
-      thrown instanceof ApiError && thrown.notFound
-        ? 'This entry is no longer in the archive.'
+    missing.value = thrown instanceof ApiError && thrown.notFound
+    error.value = missing.value
+      ? 'This entry is no longer in the archive.'
+      : thrown instanceof ApiError && thrown.rateLimited
+        ? thrown.message
         : 'Could not load this entry.'
   } finally {
     loading.value = false
@@ -111,10 +116,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <article ref="root" :class="{ read: isRead(date) }" class="feed-item card">
+  <article ref="root" :class="{ faded: dimmed(date) }" class="feed-item card">
     <header class="head">
       <RouterLink :to="`/${date}`" class="plain">
-        <time :datetime="date" class="muted date">{{ formatDate(date) }}</time>
+        <time :datetime="date" class="muted date">
+          <span v-if="!isRead(date)" aria-hidden="true" class="unread-dot" />
+          {{ formatDate(date) }}
+        </time>
       </RouterLink>
       <h2 class="title">{{ title || '—' }}</h2>
     </header>
@@ -151,7 +159,9 @@ onBeforeUnmount(() => {
       </RouterLink>
     </div>
 
-    <Message v-if="error" :closable="false" severity="secondary">{{ error }}</Message>
+    <Message v-if="error && missing" :closable="false" severity="secondary">{{ error }}</Message>
+
+    <RetryNotice v-else-if="error" :busy="loading" :message="error" severity="warn" @retry="load" />
 
     <div v-else-if="explanation" class="prose" @click="onInternalLink" v-html="explanation" />
 
@@ -196,8 +206,24 @@ onBeforeUnmount(() => {
   text-wrap: balance;
 }
 
-.feed-item.read .title {
-  color: var(--text-muted);
+.unread-dot {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-right: 0.4rem;
+  vertical-align: 0.08em;
+}
+
+.feed-item.faded {
+  opacity: 0.55;
+  transition: opacity 0.25s ease;
+}
+
+.feed-item.faded:hover,
+.feed-item.faded:focus-within {
+  opacity: 1;
 }
 
 .actions {

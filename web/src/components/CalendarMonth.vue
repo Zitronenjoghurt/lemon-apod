@@ -11,7 +11,7 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const { isRead } = useRead()
+const { isRead, dimmed } = useRead()
 
 const WEEKDAYS = Array.from({ length: 7 }, (_, index) =>
   new Date(Date.UTC(2024, 0, index + 1)).toLocaleDateString(undefined, { weekday: 'short' }),
@@ -45,6 +45,7 @@ const days = computed(() => {
     <template v-for="slot in days" :key="slot.date">
       <RouterLink
         v-if="slot.entry"
+        :class="{ faded: dimmed(slot.date) }"
         :title="slot.entry.title"
         :to="`/${slot.date}`"
         class="cell filled"
@@ -58,10 +59,10 @@ const days = computed(() => {
           loading="lazy"
         />
         <span class="day">{{ slot.day }}</span>
-        <span v-if="isRead(slot.date)" class="read-mark" title="Read">
-          <i aria-hidden="true" class="pi pi-check" />
+        <span v-if="!isRead(slot.date)" aria-hidden="true" class="unread-dot" />
+        <span class="sr-only">
+          {{ slot.entry.title }}, {{ isRead(slot.date) ? 'read' : 'unread' }}
         </span>
-        <span class="sr-only">{{ slot.entry.title }}</span>
       </RouterLink>
 
       <div v-else class="cell empty">
@@ -145,18 +146,24 @@ const days = computed(() => {
   background: rgb(0 0 0 / 0.45);
 }
 
-.read-mark {
+.unread-dot {
   position: absolute;
-  right: 0.2rem;
-  bottom: 0.2rem;
-  width: 0.95rem;
-  height: 0.95rem;
+  right: 0.28rem;
+  bottom: 0.28rem;
+  width: 0.42rem;
+  height: 0.42rem;
   border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 0.5rem;
-  color: #fff;
-  background: color-mix(in srgb, var(--accent) 88%, #000);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px rgb(0 0 0 / 0.35);
+}
+
+.filled.faded {
+  opacity: 0.45;
+}
+
+.filled.faded:hover,
+.filled.faded:focus-visible {
+  opacity: 1;
 }
 
 .sr-only {
@@ -181,10 +188,11 @@ const days = computed(() => {
     left: 0.1rem;
   }
 
-  .read-mark {
-    width: 0.75rem;
-    height: 0.75rem;
-    font-size: 0.42rem;
+  .unread-dot {
+    width: 0.34rem;
+    height: 0.34rem;
+    right: 0.18rem;
+    bottom: 0.18rem;
   }
 }
 </style>

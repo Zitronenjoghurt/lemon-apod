@@ -18,6 +18,8 @@ const links = [
   { to: '/feed', label: 'Feed', icon: 'pi pi-bars' },
   { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
   { to: '/search', label: 'Search', icon: 'pi pi-search' },
+  { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
+  { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
   { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
   { to: '/random', label: 'Random', icon: 'pi pi-sync' },
 ]

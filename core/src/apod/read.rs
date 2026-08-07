@@ -174,7 +174,7 @@ impl ApodReader {
 
         let mut items = rows
             .iter()
-            .map(|row| self.read_summary(row))
+            .map(|row| self.summary(row))
             .collect::<Result<Vec<_>, _>>()?;
 
         let next_cursor = (items.len() > limit).then(|| items.remove(limit).date);
@@ -190,7 +190,7 @@ impl ApodReader {
         .fetch_all(self.db.reader())
         .await?;
 
-        rows.iter().map(|row| self.read_summary(row)).collect()
+        rows.iter().map(|row| self.summary(row)).collect()
     }
 
     pub async fn search(
@@ -256,7 +256,7 @@ impl ApodReader {
             .iter()
             .map(|row| {
                 Ok(SearchHit {
-                    entry: self.read_summary(row)?,
+                    entry: self.summary(row)?,
                     snippet: self
                         .snippet
                         .render(&row.try_get::<String, _>(snippet_column)?),
@@ -284,12 +284,20 @@ impl ApodReader {
         .map(|(kind, count)| KindCount { kind, count })
         .collect();
 
+        let copyright: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM entries WHERE has_copyright = 1")
+                .fetch_one(self.db.reader())
+                .await?;
+
         Ok(Stats {
             entries,
             thumbnails,
             first: first.map(|days| ApodDate::from_days(days as i32)),
             latest: latest.map(|days| ApodDate::from_days(days as i32)),
             by_media_kind,
+            copyright,
+            text: self.text_summary().await?,
+            resources: self.resource_summary().await?,
         })
     }
 
@@ -351,7 +359,7 @@ impl ApodReader {
         media
     }
 
-    fn read_summary(&self, row: &SqliteRow) -> ApodResult<ApodSummary> {
+    pub(super) fn summary(&self, row: &SqliteRow) -> ApodResult<ApodSummary> {
         Ok(ApodSummary {
             date: ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
             title: row.try_get(1)?,
@@ -431,12 +439,12 @@ async fn check_schema(db: &Db, path: &str) -> ApodResult<()> {
 }
 
 #[derive(Debug, Clone)]
-enum Param {
+pub(super) enum Param {
     Int(i64),
     Text(String),
 }
 
-fn arguments(params: &[Param]) -> SqliteArguments {
+pub(super) fn arguments(params: &[Param]) -> SqliteArguments {
     let mut args = SqliteArguments::default();
     for param in params {
         let bound = match param {
