@@ -1,9 +1,8 @@
 use crate::client::{Client, Limit, Response};
 use crate::config::Config;
-use crate::index::IndexStore;
 use crate::video;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, Media, ThumbSource};
+use apod_core::{ApodDate, ApodWriter, Media, ThumbSource};
 use std::path::Path;
 
 pub enum Generated {
@@ -27,7 +26,7 @@ enum Fetch {
 pub async fn generate(
     cfg: &Config,
     client: &Client,
-    index: &mut IndexStore,
+    index: &ApodWriter,
     date: ApodDate,
     media: &Media,
     force: bool,
@@ -38,7 +37,7 @@ pub async fn generate(
     };
 
     if !force && adoptable(&cfg.thumb_path(date)) {
-        index.set_thumb(date, Some(&date.thumb_path()))?;
+        index.set_thumb(date, Some(&date.thumb_path())).await?;
         return Ok(Generated::Adopted);
     }
 
@@ -73,7 +72,7 @@ pub async fn generate(
         Err(error) => Ok(Generated::Failed(format!("{error:#}"))),
         Ok(webp) => {
             write(&cfg.thumb_path(date), &webp)?;
-            index.set_thumb(date, Some(&date.thumb_path()))?;
+            index.set_thumb(date, Some(&date.thumb_path())).await?;
             Ok(Generated::Written)
         }
     }

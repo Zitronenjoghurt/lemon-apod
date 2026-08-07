@@ -11,7 +11,7 @@ async fn get_on_this_day(
     Path(month_day): Path<String>,
 ) -> ApiResult<Response> {
     let (month, day) = params::month_day(&month_day)?;
-    let items = state.store.on_this_day(month, day)?;
+    let items = state.store.on_this_day(month, day).await?;
 
     Ok(response::cached(state.config.cache_list_secs, items))
 }

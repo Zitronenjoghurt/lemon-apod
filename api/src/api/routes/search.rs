@@ -34,18 +34,21 @@ async fn get_search(
         query.copyright,
     )?;
 
-    let results = state.store.search(
-        q,
-        &filters,
-        params::sort_by_date(query.sort.as_deref())?,
-        query.offset.unwrap_or(0),
-        params::limit(
-            query.limit,
-            state.config.search_default_limit,
-            state.config.search_max_limit,
-        ),
-        state.config.search_snippet_tokens,
-    )?;
+    let results = state
+        .store
+        .search(
+            q,
+            &filters,
+            params::sort_by_date(query.sort.as_deref())?,
+            query.offset.unwrap_or(0),
+            params::limit(
+                query.limit,
+                state.config.search_default_limit,
+                state.config.search_max_limit,
+            ),
+            state.config.search_snippet_tokens,
+        )
+        .await?;
 
     Ok(response::cached(state.config.cache_list_secs, results))
 }

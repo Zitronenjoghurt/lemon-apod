@@ -20,6 +20,12 @@ impl ApiError {
     }
 }
 
+impl From<apod_core::ApodError> for ApiError {
+    fn from(error: apod_core::ApodError) -> Self {
+        Self::Internal(error.into())
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {

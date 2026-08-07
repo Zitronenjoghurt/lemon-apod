@@ -10,13 +10,18 @@ touching the network, which is what makes it safe to keep improving the parser f
 See [SPEC.md](SPEC.md) for the full design.
 
 ```
-core/       apod-core     parsing, shared types, date maths
+core/       apod-core     parsing, shared types, date maths, and the apod.db schema
 archiver/   apod-archiver fetch + parse + thumbnails, as a service and a CLI
 api/        apod-api      axum: JSON API, static frontend, Open Graph injection
 web/                      Vue 3 + Vite + TypeScript + PrimeVue
 docker/     Dockerfile    two targets: archiver, api
             compose.yaml  both of them, sharing one ./data
 ```
+
+`apod.db` is shared, so its schema and queries live in `apod-core` behind feature gates rather
+than in whichever binary got there first: `data` for the SQLite plumbing alone, `data-read` for
+`ApodReader`, `data-write` for `ApodWriter`. A new consumer takes `data-read` for `apod.db` and
+`data` for its own database. See [SPEC.md](SPEC.md#5-database) for the details.
 
 ## Running it locally
 
@@ -44,7 +49,7 @@ also the deployment example. The production differences are commented inline.
 make up      # build and start both services on :51995
 ```
 
-That works against an empty `./data`, because the archiver creates the index schema at startup and
+That works against an empty `./data`, because the archiver migrates both databases at startup and
 the API waits for it. Running `make seed` first is optional, and only fetches a few pages so the
 site has something to show immediately. `./data` is a bind mount, so it survives `make down`.
 

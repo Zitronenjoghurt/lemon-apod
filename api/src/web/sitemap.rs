@@ -15,7 +15,7 @@ pub async fn get_robots(State(state): State<ServerState>) -> Response {
 }
 
 pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response> {
-    let dates = state.store.all_dates()?;
+    let dates = state.store.all_dates().await?;
     let base = &state.config.public_url;
 
     let mut xml = String::with_capacity(dates.len() * 96);

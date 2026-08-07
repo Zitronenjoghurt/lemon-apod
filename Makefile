@@ -20,7 +20,7 @@ lint: ## Clippy + eslint + vue-tsc
 	cd web && npm run type-check && npm run lint
 
 test: ## Rust test suite
-	cargo test --workspace
+	cargo test --workspace --all-features
 
 web: ## Build the frontend into web/dist
 	cd web && npm run build

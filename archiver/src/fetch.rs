@@ -1,9 +1,8 @@
 use crate::archive::ArchiveStore;
 use crate::client::{Client, Response};
 use crate::config::Config;
-use crate::index::IndexStore;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, parse};
+use apod_core::{ApodDate, ApodWriter, parse};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
@@ -19,8 +18,8 @@ pub enum Outcome {
 pub async fn fetch_and_store(
     cfg: &Config,
     client: &Client,
-    archive: &mut ArchiveStore,
-    index: &mut IndexStore,
+    archive: &ArchiveStore,
+    index: &ApodWriter,
     date: ApodDate,
 ) -> Result<Outcome> {
     let url = cfg.page_url(date);
@@ -29,37 +28,45 @@ pub async fn fetch_and_store(
     let body = match client.get(&url).await {
         Ok(Response::Body(body)) => body,
         Ok(Response::NotFound) => {
-            archive.record_failure(date, &url, Some(404), "not published", now)?;
+            archive
+                .record_failure(date, &url, Some(404), "not published", now)
+                .await?;
             return Ok(Outcome::Absent);
         }
         Err(error) => {
-            archive.record_failure(date, &url, None, &format!("{error:#}"), now)?;
+            archive
+                .record_failure(date, &url, None, &format!("{error:#}"), now)
+                .await?;
             return Err(error.context(format!("fetching {date}")));
         }
     };
 
     if let Err(reason) = sanity_check(&body, cfg.fetch_min_bytes) {
-        archive.record_failure(date, &url, Some(200), &reason, now)?;
+        archive
+            .record_failure(date, &url, Some(200), &reason, now)
+            .await?;
         tracing::warn!(%date, %reason, "refusing to store the response; the archived copy is untouched");
         return Ok(Outcome::Rejected(reason));
     }
 
     let digest = sha256(&body);
-    let previous = archive.get(date)?;
+    let previous = archive.get(date).await?;
     let existed = previous.as_ref().is_some_and(|record| record.is_success());
 
     if previous.as_ref().and_then(|r| r.sha256.as_deref()) == Some(digest.as_str())
         && cfg.html_path(date).exists()
     {
-        archive.touch(date, now)?;
+        archive.touch(date, now).await?;
         return Ok(Outcome::Unchanged);
     }
 
     write_atomically(&cfg.html_path(date), &body)?;
-    archive.record_success(date, &url, &digest, body.len(), now)?;
+    archive
+        .record_success(date, &url, &digest, body.len(), now)
+        .await?;
 
     match parse::parse_bytes(date, &body) {
-        Ok(entry) => index.upsert(&entry)?,
+        Ok(entry) => index.upsert(&entry).await?,
         Err(error) => tracing::warn!(%date, "stored but could not parse: {error}"),
     }
 

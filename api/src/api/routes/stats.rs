@@ -9,7 +9,7 @@ use axum::routing::get;
 async fn get_stats(State(state): State<ServerState>) -> ApiResult<Response> {
     Ok(response::cached(
         state.config.cache_list_secs,
-        state.store.stats()?,
+        state.store.stats().await?,
     ))
 }
 

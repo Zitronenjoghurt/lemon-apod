@@ -103,6 +103,14 @@ pub struct Media {
     pub kind: MediaKind,
     pub url: Option<String>,
     pub hd_url: Option<String>,
+    /// Where the thumbnail sits under the thumbnail root, as `YYYY/MM/YYYY-MM-DD.webp`.
+    /// Readers always fill this in when there is one. It is the storage path and nothing
+    /// else, so a consumer can serve it, or open it off disk, without having to unpick
+    /// somebody else's URL prefix. Not part of the wire format.
+    #[serde(skip)]
+    pub thumb_path: Option<String>,
+    /// Public URL for the thumbnail. Filled in only when the reader was given a thumbnail
+    /// base, which is how the API turns `thumb_path` into `/thumbs/...` for the frontend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumb_url: Option<String>,
 }
@@ -113,8 +121,17 @@ impl Media {
             kind,
             url,
             hd_url,
+            thumb_path: None,
             thumb_url: None,
         }
+    }
+
+    pub fn set_thumb(&mut self, path: Option<String>, base: Option<&str>) {
+        self.thumb_url = match (&path, base) {
+            (Some(path), Some(base)) => Some(format!("{base}{path}")),
+            _ => None,
+        };
+        self.thumb_path = path;
     }
 
     pub fn is_empty(&self) -> bool {

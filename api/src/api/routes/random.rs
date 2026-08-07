@@ -18,8 +18,8 @@ async fn get_random(
 ) -> ApiResult<Response> {
     let kind = query.kind.as_deref().map(params::kind).transpose()?;
 
-    let date = state.store.random(kind)?.ok_or(ApiError::NotFound)?;
-    let entry = state.store.entry(date)?.ok_or(ApiError::NotFound)?;
+    let date = state.store.random(kind).await?.ok_or(ApiError::NotFound)?;
+    let entry = state.store.entry(date).await?.ok_or(ApiError::NotFound)?;
 
     Ok(response::uncached(entry))
 }

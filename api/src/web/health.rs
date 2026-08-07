@@ -5,10 +5,11 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 pub async fn get_health(State(state): State<ServerState>) -> Response {
-    match state.store.stats() {
+    match state.store.stats().await {
         Ok(stats) => Json(serde_json::json!({
             "status": "ok",
             "entries": stats.entries,
+            "first": stats.first,
             "latest": stats.latest,
         }))
         .into_response(),

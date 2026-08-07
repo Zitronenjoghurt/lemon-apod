@@ -1,9 +1,7 @@
 mod archive;
 mod client;
 mod config;
-mod db;
 mod fetch;
-mod index;
 mod reparse;
 mod report;
 mod shutdown;
@@ -13,11 +11,11 @@ mod workers;
 
 use anyhow::Result;
 use apod_core::ApodDate;
+use apod_core::ApodWriter;
 use archive::ArchiveStore;
 use clap::{Parser, Subcommand};
 use client::Client;
 use config::Config;
-use index::IndexStore;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -96,38 +94,38 @@ async fn main() -> Result<()> {
         Command::Run => workers::run(cfg).await,
         Command::Backfill { limit } => backfill(cfg, limit).await,
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
-        Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to),
+        Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
         Command::Thumbs { force, limit } => thumbs(cfg, force, limit).await,
         Command::Quality {
             date,
             warning,
             limit,
         } => {
-            let index = IndexStore::open(&cfg.index_db)?;
-            report::quality(&index, date, warning.as_deref(), limit)
+            let index = ApodWriter::open(&cfg.index_db).await?;
+            report::quality(index.reader(), date, warning.as_deref(), limit).await
         }
         Command::Status => {
-            let archive = ArchiveStore::open(&cfg.archive_db)?;
-            let index = IndexStore::open(&cfg.index_db)?;
-            report::status(&cfg, &archive, &index)
+            let archive = ArchiveStore::open(&cfg.archive_db).await?;
+            let index = ApodWriter::open(&cfg.index_db).await?;
+            report::status(&cfg, &archive, &index).await
         }
     }
 }
 
 async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
-    let mut archive = ArchiveStore::open(&cfg.archive_db)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
     let today = workers::today_in(cfg.daily.timezone);
 
     let mut done = 0;
     while limit.is_none_or(|limit| done < limit) {
-        let Some(date) = archive.next_target(today)? else {
+        let Some(date) = archive.next_target(today).await? else {
             tracing::info!("archive is complete");
             break;
         };
 
-        workers::step(&cfg, &client, &mut archive, &mut index, date).await;
+        workers::step(&cfg, &client, &archive, &index, date).await;
         done += 1;
 
         if limit.is_none_or(|limit| done < limit) {
@@ -145,10 +143,10 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
 
 async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
     let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
-    let mut archive = ArchiveStore::open(&cfg.archive_db)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
 
-    if !force && let Some(record) = archive.get(date)? {
+    if !force && let Some(record) = archive.get(date).await? {
         if record.is_success() {
             println!("{date} is already archived; pass --force to fetch it again");
             return Ok(());
@@ -159,30 +157,30 @@ async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
         }
     }
 
-    match workers::step(&cfg, &client, &mut archive, &mut index, date).await {
+    match workers::step(&cfg, &client, &archive, &index, date).await {
         Some(outcome) => println!("{date}: {outcome:?}"),
         None => println!("{date}: failed"),
     }
     Ok(())
 }
 
-fn reparse_range(
+async fn reparse_range(
     cfg: Config,
     stale: bool,
     from: Option<ApodDate>,
     to: Option<ApodDate>,
 ) -> Result<()> {
-    let mut index = IndexStore::open(&cfg.index_db)?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
 
     let mut dates = if stale {
-        index.stale_dates()?
+        index.stale_dates().await?
     } else {
         reparse::archived_dates(&cfg.html_dir)?
     };
     dates.retain(|date| from.is_none_or(|from| *date >= from) && to.is_none_or(|to| *date <= to));
 
     println!("reparsing {} entries...", dates.len());
-    let report = reparse::run(&cfg, &mut index, &dates)?;
+    let report = reparse::run(&cfg, &index, &dates).await?;
 
     println!("parsed {}", report.parsed);
     if !report.failed.is_empty() {
@@ -200,13 +198,13 @@ fn reparse_range(
 
 async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
     let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
 
     let targets = if force {
-        let dates = index.all_dates()?;
-        index.media_for(&dates)?
+        let dates = index.reader().all_dates().await?;
+        index.media_for(&dates).await?
     } else {
-        index.missing_thumbs()?
+        index.missing_thumbs().await?
     };
 
     let targets = match limit {
@@ -223,7 +221,7 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
             tokio::time::sleep(workers::jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
         }
 
-        let outcome = thumbs::generate(&cfg, &client, &mut index, *date, media, force).await?;
+        let outcome = thumbs::generate(&cfg, &client, &index, *date, media, force).await?;
         pace = outcome.fetched();
 
         match outcome {

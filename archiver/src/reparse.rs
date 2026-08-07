@@ -1,7 +1,6 @@
 use crate::config::Config;
-use crate::index::IndexStore;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodEntry, parse};
+use apod_core::{ApodDate, ApodEntry, ApodWriter, parse};
 use std::path::Path;
 
 #[derive(Debug, Default)]
@@ -10,7 +9,7 @@ pub struct Report {
     pub failed: Vec<(ApodDate, String)>,
 }
 
-pub fn run(cfg: &Config, index: &mut IndexStore, dates: &[ApodDate]) -> Result<Report> {
+pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result<Report> {
     let mut entries: Vec<ApodEntry> = Vec::with_capacity(dates.len());
     let mut report = Report::default();
 
@@ -35,6 +34,7 @@ pub fn run(cfg: &Config, index: &mut IndexStore, dates: &[ApodDate]) -> Result<R
     report.parsed = entries.len();
     index
         .upsert_all(&entries)
+        .await
         .context("writing the reparsed index")?;
 
     Ok(report)

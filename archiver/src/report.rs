@@ -1,20 +1,19 @@
 use crate::archive::ArchiveStore;
 use crate::config::Config;
-use crate::index::IndexStore;
 use crate::{reparse, workers};
 use anyhow::Result;
-use apod_core::{ApodDate, PARSER_VERSION, quality};
+use apod_core::{ApodDate, ApodReader, ApodWriter, PARSER_VERSION, quality};
 use std::collections::BTreeMap;
 
-pub fn quality(
-    index: &IndexStore,
+pub async fn quality(
+    index: &ApodReader,
     date: Option<ApodDate>,
     warning: Option<&str>,
     limit: usize,
 ) -> Result<()> {
     let dates = match date {
         Some(date) => vec![date],
-        None => index.all_dates()?,
+        None => index.all_dates().await?,
     };
 
     let mut totals: BTreeMap<String, usize> = BTreeMap::new();
@@ -22,7 +21,7 @@ pub fn quality(
     let mut affected = 0;
 
     for date in &dates {
-        let Some(entry) = index.get(*date)? else {
+        let Some(entry) = index.entry(*date).await? else {
             continue;
         };
 
@@ -67,10 +66,10 @@ pub fn quality(
     Ok(())
 }
 
-pub fn status(cfg: &Config, archive: &ArchiveStore, index: &IndexStore) -> Result<()> {
+pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) -> Result<()> {
     let today = workers::today_in(cfg.daily.timezone);
     let publishable = today.iter_desc().count();
-    let counts = archive.counts()?;
+    let counts = archive.counts().await?;
     let on_disk = reparse::archived_dates(&cfg.html_dir)?.len();
 
     println!("today ({})       {today}", cfg.daily.timezone);
@@ -91,18 +90,18 @@ pub fn status(cfg: &Config, archive: &ArchiveStore, index: &IndexStore) -> Resul
     );
     println!(
         "  next target     {}",
-        match archive.next_target(today)? {
+        match archive.next_target(today).await? {
             Some(date) => date.to_string(),
             None => "complete".to_owned(),
         }
     );
     println!();
 
-    let indexed = index.count()?;
-    let stale = index.stale_dates()?.len();
+    let indexed = index.reader().count().await?;
+    let stale = index.stale_dates().await?.len();
     println!("index");
     println!("  entries         {indexed}");
-    println!("  thumbnails      {}", index.thumb_count()?);
+    println!("  thumbnails      {}", index.reader().thumb_count().await?);
     println!("  parser version  {PARSER_VERSION}");
     println!("  stale entries   {stale}");
 

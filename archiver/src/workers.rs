@@ -2,11 +2,10 @@ use crate::archive::ArchiveStore;
 use crate::client::Client;
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
-use crate::index::IndexStore;
 use crate::shutdown::{self, Shutdown};
 use crate::thumbs;
 use anyhow::Result;
-use apod_core::ApodDate;
+use apod_core::{ApodDate, ApodWriter};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rand::RngExt;
@@ -20,10 +19,15 @@ pub async fn run(cfg: Config) -> Result<()> {
     let (stop, shutdown) = Shutdown::channel();
     let mut handles = Vec::new();
 
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
+
     if cfg.backfill.enabled {
         handles.push(tokio::spawn(backfill(
             cfg.clone(),
             client.clone(),
+            archive.clone(),
+            index.clone(),
             shutdown.clone(),
         )));
     } else {
@@ -34,6 +38,8 @@ pub async fn run(cfg: Config) -> Result<()> {
         handles.push(tokio::spawn(daily(
             cfg.clone(),
             client.clone(),
+            archive.clone(),
+            index.clone(),
             shutdown.clone(),
         )));
     } else {
@@ -44,6 +50,8 @@ pub async fn run(cfg: Config) -> Result<()> {
         handles.push(tokio::spawn(recheck(
             cfg.clone(),
             client.clone(),
+            archive.clone(),
+            index.clone(),
             shutdown.clone(),
         )));
     } else {
@@ -67,14 +75,17 @@ pub async fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
-async fn backfill(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<()> {
-    let mut archive = ArchiveStore::open(&cfg.archive_db)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
-
+async fn backfill(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
     while !shutdown.is_triggered() {
         let today = today_in(cfg.daily.timezone);
 
-        let Some(date) = archive.next_target(today)? else {
+        let Some(date) = archive.next_target(today).await? else {
             tracing::info!("archive is complete back to {}", ApodDate::START);
             if !shutdown.sleep(MAX_SLEEP).await {
                 break;
@@ -82,7 +93,7 @@ async fn backfill(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result
             continue;
         };
 
-        step(&cfg, &client, &mut archive, &mut index, date).await;
+        step(&cfg, &client, &archive, &index, date).await;
 
         if !shutdown
             .sleep(jitter(cfg.backfill.delay_min, cfg.backfill.delay_max))
@@ -95,16 +106,20 @@ async fn backfill(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result
     Ok(())
 }
 
-async fn daily(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<()> {
-    let mut archive = ArchiveStore::open(&cfg.archive_db)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
-
+async fn daily(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
     while !shutdown.is_triggered() {
         let now = Utc::now().with_timezone(&cfg.daily.timezone);
         let today = ApodDate::from(now.date_naive());
 
         if archive
-            .get(today)?
+            .get(today)
+            .await?
             .is_some_and(|record| record.is_success())
         {
             if !sleep_until(&mut shutdown, next_window(&cfg, now)).await {
@@ -135,7 +150,7 @@ async fn daily(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<()
             continue;
         }
 
-        let kept_waiting = match step(&cfg, &client, &mut archive, &mut index, today).await {
+        let kept_waiting = match step(&cfg, &client, &archive, &index, today).await {
             Some(Outcome::Stored { .. } | Outcome::Updated { .. }) => {
                 sleep_until(&mut shutdown, next_window(&cfg, now)).await
             }
@@ -150,14 +165,18 @@ async fn daily(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<()
     Ok(())
 }
 
-async fn recheck(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<()> {
-    let mut archive = ArchiveStore::open(&cfg.archive_db)?;
-    let mut index = IndexStore::open(&cfg.index_db)?;
+async fn recheck(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
     let interval = Duration::from_secs(86_400 / u64::from(cfg.recheck_per_day).max(1));
 
     while shutdown.sleep(interval).await {
-        for date in archive.recheck_candidates(1)? {
-            step(&cfg, &client, &mut archive, &mut index, date).await;
+        for date in archive.recheck_candidates(1).await? {
+            step(&cfg, &client, &archive, &index, date).await;
         }
     }
 
@@ -167,8 +186,8 @@ async fn recheck(cfg: Config, client: Client, mut shutdown: Shutdown) -> Result<
 pub async fn step(
     cfg: &Config,
     client: &Client,
-    archive: &mut ArchiveStore,
-    index: &mut IndexStore,
+    archive: &ArchiveStore,
+    index: &ApodWriter,
     date: ApodDate,
 ) -> Option<Outcome> {
     let outcome = match fetch::fetch_and_store(cfg, client, archive, index, date).await {
@@ -194,8 +213,8 @@ pub async fn step(
     Some(outcome)
 }
 
-async fn thumbnail(cfg: &Config, client: &Client, index: &mut IndexStore, date: ApodDate) {
-    let media = match index.get(date) {
+async fn thumbnail(cfg: &Config, client: &Client, index: &ApodWriter, date: ApodDate) {
+    let media = match index.reader().entry(date).await {
         Ok(Some(entry)) => entry.media,
         Ok(None) => return,
         Err(error) => {

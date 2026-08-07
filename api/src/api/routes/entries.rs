@@ -29,16 +29,19 @@ async fn get_entries(
         query.copyright,
     )?;
 
-    let page = state.store.list(
-        &filters,
-        params::optional_date(query.cursor.as_deref())?,
-        params::limit(
-            query.limit,
-            state.config.list_default_limit,
-            state.config.list_max_limit,
-        ),
-        params::order(query.order.as_deref())?,
-    )?;
+    let page = state
+        .store
+        .list(
+            &filters,
+            params::optional_date(query.cursor.as_deref())?,
+            params::limit(
+                query.limit,
+                state.config.list_default_limit,
+                state.config.list_max_limit,
+            ),
+            params::order(query.order.as_deref())?,
+        )
+        .await?;
 
     Ok(response::cached(state.config.cache_list_secs, page))
 }

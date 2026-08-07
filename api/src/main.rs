@@ -3,7 +3,6 @@ mod config;
 mod meta;
 mod shutdown;
 mod state;
-mod store;
 mod web;
 
 use anyhow::{Context, Result};
@@ -26,7 +25,7 @@ async fn main() -> Result<()> {
 
     let config = Config::from_env()?;
     let address = SocketAddr::from((config.bind, config.port));
-    let state = ServerState::new(config)?;
+    let state = ServerState::new(config).await?;
 
     let listener = tokio::net::TcpListener::bind(&address)
         .await
