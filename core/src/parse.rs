@@ -31,7 +31,7 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
 
     let title = title::parse(&doc).ok_or(ParseError::TitleNotFound)?;
     let explanation = explanation::parse(&doc, &base).ok_or(ParseError::ExplanationNotFound)?;
-    let credits = credit::parse(&doc, &base);
+    let credits = credit::parse(&doc, &base, &title);
     let (media, extra_media) = media::parse(&doc, &base);
 
     Ok(ApodEntry {
@@ -62,7 +62,7 @@ static CONTAINERS: LazyLock<Selector> = LazyLock::new(|| {
 
 /// The tightest element whose text satisfies `matches`. Tightest, because APOD's older pages
 /// wrap the whole entry in one table cell and the smallest match is the least surrounding noise.
-fn find_container<'a>(doc: &'a Html, matches: impl Fn(&str) -> bool) -> Option<ElementRef<'a>> {
+fn find_container(doc: &Html, matches: impl Fn(&str) -> bool) -> Option<ElementRef<'_>> {
     doc.select(&CONTAINERS)
         .filter_map(|el| {
             let text = el.text().collect::<String>();

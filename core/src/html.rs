@@ -52,6 +52,10 @@ pub fn sanitize(el: ElementRef<'_>, base: &Url, opts: &Options<'_>) -> Option<Fr
     Some(flat.slice(window))
 }
 
+pub fn collapse(raw: &str) -> String {
+    raw.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 pub fn resolve_url(base: &Url, href: &str) -> Option<String> {
     let href = href.trim();
     if href.is_empty() || href.starts_with('#') {

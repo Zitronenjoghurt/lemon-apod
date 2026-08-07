@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 
 const MIN_EXPLANATION_CHARS: usize = 80;
 const MAX_TITLE_CHARS: usize = 200;
+const MAX_ROLE_WORDS: usize = 4;
 
 static LOOKS_LIKE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<\s*/?[a-zA-Z]").unwrap());
 static HREF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"href="([^"]*)""#).unwrap());
@@ -103,7 +104,7 @@ pub fn quality_control(entry: &ApodEntry) -> Vec<QualityIssue> {
             push(&mut issues, QualityWarning::NonAbsoluteLink, "credit");
         }
         // A role that ran on past its colon means the label vocabulary missed a word.
-        if credit.role.split_whitespace().count() > 4 {
+        if role_words(&credit.role) > MAX_ROLE_WORDS {
             push(&mut issues, QualityWarning::CreditRoleSuspicious, "credit");
         }
     }
@@ -134,6 +135,12 @@ fn check_string(issues: &mut Vec<QualityIssue>, field: &'static str, value: &str
     if LOOKS_LIKE_TAG.is_match(value) {
         push(issues, QualityWarning::ContainsHtml, field);
     }
+}
+
+fn role_words(role: &str) -> usize {
+    role.split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty() && !word.eq_ignore_ascii_case("and"))
+        .count()
 }
 
 fn has_double_whitespace(value: &str) -> bool {
@@ -232,5 +239,32 @@ mod tests {
         let mut entry = entry();
         entry.credits[0].role = "Image Credit and Processing and Text and Music and More".into();
         assert!(warnings(&entry).contains(&QualityWarning::CreditRoleSuspicious));
+    }
+
+    #[test]
+    fn a_long_label_apod_really_writes_is_not_a_runaway() {
+        for role in [
+            "Image and Video Credit & Copyright",
+            "Simulation Video & Text Credit",
+            "Sound Image Credit & Copyright",
+            "Digital Illustration Credit & Copyright",
+        ] {
+            let mut entry = entry();
+            entry.credits[0].role = role.into();
+            assert!(
+                !warnings(&entry).contains(&QualityWarning::CreditRoleSuspicious),
+                "{role} is a label APOD writes, not a parse that ran on"
+            );
+        }
+    }
+
+    #[test]
+    fn an_embed_is_a_classification_not_a_gap() {
+        let mut entry = entry();
+        entry.media = Media::new(MediaKind::Embed, Some("https://x/panorama".into()), None);
+
+        let found = warnings(&entry);
+        assert!(!found.contains(&QualityWarning::UnknownMediaKind));
+        assert!(!found.contains(&QualityWarning::NoMedia));
     }
 }

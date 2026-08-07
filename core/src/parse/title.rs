@@ -1,3 +1,4 @@
+use crate::html::collapse;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::sync::LazyLock;
@@ -72,10 +73,6 @@ fn is_plausible(candidate: &str) -> bool {
 
 fn clean(raw: &str) -> String {
     collapse(&TRAILING_CREDIT.replace(raw, ""))
-}
-
-fn collapse(raw: &str) -> String {
-    raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

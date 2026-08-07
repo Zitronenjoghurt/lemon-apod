@@ -1,5 +1,5 @@
 use crate::entry::Credit;
-use crate::html;
+use crate::html::{self, Flat};
 use regex::Regex;
 use scraper::Html;
 use std::ops::Range;
@@ -14,6 +14,7 @@ use url::Url;
 const ROLE_WORDS: &[&str] = &[
     "acknowledgement",
     "acknowledgment",
+    "additional",
     "animation",
     "audio",
     "capture",
@@ -41,6 +42,7 @@ const ROLE_WORDS: &[&str] = &[
     "photography",
     "processing",
     "production",
+    "science",
     "simulation",
     "sonification",
     "sound",
@@ -55,13 +57,30 @@ const ROLE_WORDS: &[&str] = &[
 /// Words that make a label open the credit block rather than continue it.
 const CREDIT_WORDS: &[&str] = &["credit", "credits", "copyright", "courtesy"];
 
-static LABEL: LazyLock<Regex> = LazyLock::new(|| {
+const UNLABELLED_ROLE: &str = "Credit";
+const MAX_UNLABELLED_CHARS: usize = 300;
+const DASH: &str = r"[-\x{2013}\x{2014}]";
+
+fn role_run() -> String {
     let words = ROLE_WORDS.join("|");
+    format!(r"\b(?:{words})(?:[\s&/,-]+(?:and[\s]+)?(?:{words})\b){{0,4}}")
+}
+
+static LABEL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
-        r"(?i)\b(?:{words})(?:[\s&/,-]+(?:and[\s]+)?(?:{words})\b){{0,3}}\s*:\s*"
+        r"(?i){}(?:\s*\([^)]*\))?(?:\s*:\s*|\s+{DASH}\s+)",
+        role_run()
     ))
     .expect("the role vocabulary builds a valid pattern")
 });
+
+static BARE_LABEL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(r"(?i)^\s*{}\s+", role_run()))
+        .expect("the role vocabulary builds a valid pattern")
+});
+
+static LABEL_NOTE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s*\([^)]*\)$").expect("static pattern is valid"));
 
 static LICENSE_HREF: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -93,6 +112,12 @@ struct Label {
     role: String,
 }
 
+struct Segment {
+    role: String,
+    label: Range<usize>,
+    value: Range<usize>,
+}
+
 impl Label {
     fn is_credit(&self) -> bool {
         let role = self.role.to_ascii_lowercase();
@@ -103,7 +128,11 @@ impl Label {
     }
 }
 
-pub fn parse(doc: &Html, base: &Url) -> Option<Credits> {
+pub fn parse(doc: &Html, base: &Url, title: &str) -> Option<Credits> {
+    labelled(doc, base).or_else(|| after_title(doc, base, title))
+}
+
+fn labelled(doc: &Html, base: &Url) -> Option<Credits> {
     let container = super::find_container(doc, |text| labels(text).iter().any(Label::is_credit))?;
 
     let flat = html::flatten(container, base);
@@ -111,49 +140,94 @@ pub fn parse(doc: &Html, base: &Url) -> Option<Credits> {
     let first = labels.iter().position(Label::is_credit)?;
     let stop = flat.stop(labels[first].range.end, STOPS);
 
-    let mut segments = Vec::new();
+    finish(&flat, split(&labels[first..], stop))
+}
+
+fn after_title(doc: &Html, base: &Url, title: &str) -> Option<Credits> {
+    let container = super::find_container(doc, |text| html::collapse(text).contains(title))?;
+    let flat = html::flatten(container, base);
+
+    let start = flat.text().find(title)? + title.len();
+    let stop = flat.stop(start, STOPS);
+    if stop.saturating_sub(start) > MAX_UNLABELLED_CHARS {
+        return None;
+    }
+
+    let labels: Vec<Label> = labels(flat.text())
+        .into_iter()
+        .filter(|label| (start..stop).contains(&label.range.start))
+        .collect();
+
+    let head = start..labels.first().map_or(stop, |label| label.range.start);
+    let mut segments: Vec<Segment> = unpunctuated(flat.text(), head).into_iter().collect();
+    segments.extend(split(&labels, stop));
+
+    finish(&flat, segments)
+}
+
+fn split(labels: &[Label], stop: usize) -> Vec<Segment> {
+    labels
+        .iter()
+        .enumerate()
+        .take_while(|(_, label)| label.range.start < stop)
+        .map(|(index, label)| Segment {
+            role: label.role.clone(),
+            value: label.range.end
+                ..labels
+                    .get(index + 1)
+                    .map_or(stop, |next| next.range.start)
+                    .min(stop),
+            label: label.range.clone(),
+        })
+        .collect()
+}
+
+fn unpunctuated(text: &str, range: Range<usize>) -> Option<Segment> {
+    let (role, start) = match BARE_LABEL.find(&text[range.clone()]) {
+        Some(found) => (role_name(found.as_str()), range.start + found.end()),
+        None => (UNLABELLED_ROLE.to_owned(), range.start),
+    };
+
+    (start < range.end).then_some(Segment {
+        role,
+        label: start..start,
+        value: start..range.end,
+    })
+}
+
+fn finish(flat: &Flat, segments: Vec<Segment>) -> Option<Credits> {
+    let mut credits = Vec::new();
+    let mut has_copyright = false;
     let mut license_url = None;
 
-    for (index, label) in labels.iter().enumerate().skip(first) {
-        if label.range.start >= stop {
-            break;
+    for segment in segments {
+        has_copyright |= segment.role.to_ascii_lowercase().contains("copyright");
+        if license_url.is_none() && !segment.label.is_empty() {
+            license_url = license_in(&flat.slice(segment.label).html);
         }
 
-        let start = label.range.end;
-        let end = labels
-            .get(index + 1)
-            .map_or(stop, |next| next.range.start)
-            .min(stop);
-        if start >= end {
+        if segment.value.start >= segment.value.end {
             continue;
         }
 
-        let fragment = flat.slice(trim_value(flat.text(), start..end));
+        let fragment = flat.slice(trim_value(flat.text(), segment.value));
         if fragment.is_empty() {
             continue;
         }
 
-        if license_url.is_none() {
-            license_url = license_in(&flat.slice(label.range.clone()).html);
-        }
-
-        segments.push(Credit {
-            role: label.role.clone(),
+        credits.push(Credit {
+            role: segment.role,
             html: fragment.html,
             text: fragment.text,
         });
     }
 
-    if segments.is_empty() {
+    if credits.is_empty() {
         return None;
     }
 
-    let has_copyright = segments
-        .iter()
-        .any(|segment| segment.role.to_ascii_lowercase().contains("copyright"));
-
     Some(Credits {
-        segments,
+        segments: credits,
         has_copyright,
         license_url,
     })
@@ -169,14 +243,11 @@ fn labels(text: &str) -> Vec<Label> {
         .collect()
 }
 
-/// `"Image Credit &\n   Copyright:  "` becomes `"Image Credit & Copyright"`.
 fn role_name(matched: &str) -> String {
-    matched
+    let roles = matched
         .trim()
-        .trim_end_matches(':')
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+        .trim_end_matches([':', '-', '\u{2013}', '\u{2014}']);
+    html::collapse(&LABEL_NOTE.replace(roles.trim_end(), ""))
 }
 
 /// A credited name never ends in the punctuation APOD uses to chain roles together.
@@ -204,8 +275,14 @@ mod tests {
         Url::parse("https://apod.nasa.gov/apod/ap240305.html").unwrap()
     }
 
+    const NO_TITLE: &str = "A Title On No Page Below";
+
     fn parse_body(body: &str) -> Option<Credits> {
-        parse(&Html::parse_document(body), &base())
+        parse_titled(body, NO_TITLE)
+    }
+
+    fn parse_titled(body: &str, title: &str) -> Option<Credits> {
+        parse(&Html::parse_document(body), &base(), title)
     }
 
     fn roles(credits: &Credits) -> Vec<&str> {
@@ -349,5 +426,120 @@ mod tests {
 
         assert_eq!(roles(&credits), ["Video Credit"]);
         assert_eq!(credits.segments[0].text, "IllustrisTNG Project");
+    }
+
+    #[test]
+    fn a_role_set_in_italics_ends_at_its_dash() {
+        let credits = parse_titled(
+            r#"<body><center><b>Young Star Cluster NGC 346</b> <br>
+               <i>Science</i> - <a href="https://www.nasa.gov">NASA</a>, ESA, CSA
+               <br><i>Processing</i> - Alyssa Pagan (STScI)
+               </center> <p> <b>Explanation:</b> prose</body>"#,
+            "Young Star Cluster NGC 346",
+        )
+        .unwrap();
+
+        assert_eq!(roles(&credits), ["Science", "Processing"]);
+        assert_eq!(credits.segments[0].text, "NASA, ESA, CSA");
+        assert_eq!(credits.segments[1].text, "Alyssa Pagan (STScI)");
+    }
+
+    #[test]
+    fn a_label_that_never_got_its_colon_still_reads() {
+        let credits = parse_titled(
+            r#"<body><center><b>Herschel Crater on Mimas</b> <br>
+               <b>Image Credit</b>
+               <a href="http://ciclops.org/">Cassini Imaging Team</a>, JPL, ESA, NASA
+               </center> <p> <b>Explanation:</b> prose</body>"#,
+            "Herschel Crater on Mimas",
+        )
+        .unwrap();
+
+        assert_eq!(roles(&credits), ["Image Credit"]);
+        assert_eq!(
+            credits.segments[0].text,
+            "Cassini Imaging Team, JPL, ESA, NASA"
+        );
+        assert!(
+            credits.segments[0]
+                .html
+                .contains(r#"<a href="http://ciclops.org/">"#)
+        );
+    }
+
+    #[test]
+    fn an_attribution_with_no_label_at_all_is_still_an_attribution() {
+        let credits = parse_titled(
+            r#"<body><center><b>Saturn at Night</b> <br>
+               <a href="https://www.nasa.gov/">NASA</a>, JPL-Caltech,
+               <a href="https://www.spacescience.org/">Space Science Institute</a>
+               </center> <p> <b>Explanation:</b> prose</body>"#,
+            "Saturn at Night",
+        )
+        .unwrap();
+
+        assert_eq!(roles(&credits), [UNLABELLED_ROLE]);
+        assert_eq!(
+            credits.segments[0].text,
+            "NASA, JPL-Caltech, Space Science Institute"
+        );
+        assert!(!credits.has_copyright);
+    }
+
+    #[test]
+    fn prose_under_the_title_is_not_mistaken_for_an_attribution() {
+        let prose = "This kilometer high cliff occurs on the surface of a comet. ".repeat(10);
+        assert!(
+            parse_titled(
+                &format!("<body><center><b>A Cliff</b> <br> {prose}</center></body>"),
+                "A Cliff",
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_label_spelling_out_its_licence_keeps_only_the_roles() {
+        let credits = parse_titled(
+            r#"<body><center><b>A Kilometer High Cliff</b> <br>
+               <b>Image Credit &amp;
+               <a href="https://creativecommons.org/licenses/by-sa/3.0/igo/">Licence
+               (CC BY-SA 3.0 IGO)</a>: </b>
+               <a href="http://www.esa.int/">ESA</a>, Rosetta spacecraft, NAVCAM;
+               <b>Additional Processing:</b> Stuart Atkinson
+               </center> <p> <b>Explanation:</b> prose</body>"#,
+            "A Kilometer High Cliff",
+        )
+        .unwrap();
+
+        assert_eq!(
+            roles(&credits),
+            ["Image Credit & Licence", "Additional Processing"]
+        );
+        assert_eq!(credits.segments[0].text, "ESA, Rosetta spacecraft, NAVCAM");
+        assert_eq!(credits.segments[1].text, "Stuart Atkinson");
+        assert_eq!(
+            credits.license_url.as_deref(),
+            Some("https://creativecommons.org/licenses/by-sa/3.0/igo/")
+        );
+    }
+
+    #[test]
+    fn a_header_label_keeps_its_copyright_when_sub_roles_take_every_name() {
+        let credits = parse_body(
+            r#"<body><center><b>NGC 1365</b> <br>
+               <b>Image Credit &amp;
+               <a href="lib/about_apod.html#srapply">Copyright</a>: </b>
+               <i>Processing</i> - <a href="https://millenniumphoton.com/">J.-B. Auroux</a>,
+               <i>Data</i> - <a href="https://throughlightandtime.com/">Mike Selby</a>
+               </center> <p> <b>Explanation:</b> prose</body>"#,
+        )
+        .unwrap();
+
+        assert_eq!(roles(&credits), ["Processing", "Data"]);
+        assert!(
+            credits.has_copyright,
+            "the header claims the copyright even though it credits nobody directly"
+        );
     }
 }

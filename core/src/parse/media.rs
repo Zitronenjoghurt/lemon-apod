@@ -7,6 +7,8 @@ use url::Url;
 static MEDIA: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img, iframe, video").unwrap());
 static ANCHORS: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
 static SOURCE: LazyLock<Selector> = LazyLock::new(|| Selector::parse("source[src]").unwrap());
+static TWEET: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse(r#"blockquote.twitter-tweet a[href*="/status/"]"#).unwrap());
 
 pub fn parse(doc: &Html, base: &Url) -> (Media, Vec<Media>) {
     let mut found: Vec<Media> = doc
@@ -15,6 +17,10 @@ pub fn parse(doc: &Html, base: &Url) -> (Media, Vec<Media>) {
         .filter_map(|(index, el)| from_element(doc, el, base, index == 0))
         .filter(|media| !media.is_empty())
         .collect();
+
+    if found.is_empty() {
+        found.extend(tweet(doc, base));
+    }
 
     if found.is_empty() {
         return (Media::new(MediaKind::None, None, None), Vec::new());
@@ -33,7 +39,7 @@ fn from_element(doc: &Html, el: ElementRef<'_>, base: &Url, primary: bool) -> Op
         }
         "iframe" => {
             let url = http_url(base, el.value().attr("src")?)?;
-            Some(Media::new(MediaKind::from_url(&url), Some(url), None))
+            Some(Media::new(MediaKind::from_embed_url(&url), Some(url), None))
         }
         "video" => {
             let src = el.value().attr("src").map(str::to_owned).or_else(|| {
@@ -69,6 +75,13 @@ fn hd_link(doc: &Html, img: ElementRef<'_>, base: &Url, primary: bool) -> Option
     doc.select(&ANCHORS)
         .filter_map(|a| http_url(base, a.value().attr("href")?))
         .find(|url| is_image_link(url))
+}
+
+fn tweet(doc: &Html, base: &Url) -> Option<Media> {
+    let href = doc.select(&TWEET).next()?.value().attr("href")?;
+    let url = http_url(base, href)?;
+    let url = url.split('?').next().unwrap_or(&url).to_owned();
+    Some(Media::new(MediaKind::Embed, Some(url), None))
 }
 
 fn is_image_link(url: &str) -> bool {
@@ -188,5 +201,50 @@ mod tests {
         assert_eq!(media.kind, MediaKind::None);
         assert!(media.is_empty());
         assert!(extra.is_empty());
+    }
+
+    #[test]
+    fn an_interactive_embed_is_an_embed_rather_than_an_unknown() {
+        let doc = Html::parse_document(
+            r#"<body><iframe src="https://stefanom.org/spc/game.php"></iframe></body>"#,
+        );
+
+        let (media, _) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::Embed);
+        assert_eq!(
+            media.url.as_deref(),
+            Some("https://stefanom.org/spc/game.php")
+        );
+    }
+
+    #[test]
+    fn a_quoted_tweet_stands_in_for_media_the_archive_never_kept() {
+        let doc = Html::parse_document(
+            r#"<body><blockquote class="twitter-tweet"><p>Mechazilla has caught it!
+               <a href="https://t.co/6R5YatSVJX">pic.twitter.com/6R5YatSVJX</a></p>
+               <a href="https://twitter.com/SpaceX/status/1845442658397049011?ref_src=twsrc%5Etfw"
+               >October 13, 2024</a></blockquote></body>"#,
+        );
+
+        let (media, extra) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::Embed);
+        assert_eq!(
+            media.url.as_deref(),
+            Some("https://twitter.com/SpaceX/status/1845442658397049011")
+        );
+        assert!(extra.is_empty());
+    }
+
+    #[test]
+    fn a_real_image_outranks_a_quoted_tweet() {
+        let doc = Html::parse_document(
+            r#"<body><blockquote class="twitter-tweet">
+               <a href="https://twitter.com/SpaceX/status/1845442658397049011">a tweet</a>
+               </blockquote><img src="image/2410/catch.jpg"></body>"#,
+        );
+
+        let (media, extra) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::ImageJpg);
+        assert!(extra.is_empty(), "the tweet is a fallback, not extra media");
     }
 }

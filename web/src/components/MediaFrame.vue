@@ -70,6 +70,12 @@ const fullResolution = computed(() => {
   return hd && hd !== url ? hd : null
 })
 
+const placeholderLabel = computed(() => {
+  if (props.media.kind === 'none') return 'No media on this entry'
+  if (props.media.kind === 'embed') return 'Open the interactive embed'
+  return 'View on apod.nasa.gov'
+})
+
 const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url && !failed.value)
 const ratio = computed(() => aspectRatio(props.media))
 const frameStyle = computed(() => ({
@@ -169,7 +175,7 @@ const frameStyle = computed(() => ({
       target="_blank"
     >
       <i aria-hidden="true" class="pi pi-external-link" />
-      <span>{{ media.kind === 'none' ? 'No media on this entry' : 'View on apod.nasa.gov' }}</span>
+      <span>{{ placeholderLabel }}</span>
     </a>
   </figure>
 </template>

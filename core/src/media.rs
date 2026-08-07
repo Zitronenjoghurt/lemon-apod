@@ -12,6 +12,7 @@ pub enum MediaKind {
     #[serde(rename = "youtube")]
     YouTube,
     Vimeo,
+    Embed,
     Other,
     #[default]
     None,
@@ -50,6 +51,13 @@ impl MediaKind {
             Self::Other
         }
     }
+
+    pub fn from_embed_url(url: &str) -> Self {
+        match Self::from_url(url) {
+            Self::Other => Self::Embed,
+            kind => kind,
+        }
+    }
 }
 
 impl fmt::Display for MediaKind {
@@ -61,6 +69,7 @@ impl fmt::Display for MediaKind {
             Self::VideoMp4 => "video_mp4",
             Self::YouTube => "youtube",
             Self::Vimeo => "vimeo",
+            Self::Embed => "embed",
             Self::Other => "other",
             Self::None => "none",
         };
@@ -79,6 +88,7 @@ impl FromStr for MediaKind {
             "video_mp4" => Self::VideoMp4,
             "youtube" => Self::YouTube,
             "vimeo" => Self::Vimeo,
+            "embed" => Self::Embed,
             "other" => Self::Other,
             "none" => Self::None,
             _ => return Err(()),
@@ -298,6 +308,7 @@ mod tests {
             MediaKind::VideoMp4,
             MediaKind::YouTube,
             MediaKind::Vimeo,
+            MediaKind::Embed,
             MediaKind::Other,
             MediaKind::None,
         ];
@@ -335,6 +346,20 @@ mod tests {
             MediaKind::from_url("https://example.com/thing"),
             MediaKind::Other
         );
+    }
+
+    #[test]
+    fn an_embedded_url_is_never_merely_unknown() {
+        assert_eq!(
+            MediaKind::from_embed_url("https://stefanom.org/spc/game.php"),
+            MediaKind::Embed
+        );
+        assert_eq!(
+            MediaKind::from_embed_url("https://www.youtube.com/embed/abc123"),
+            MediaKind::YouTube,
+            "an embed the parser does recognise keeps its own kind"
+        );
+        assert!(!MediaKind::Embed.is_image() && !MediaKind::Embed.is_video());
     }
 
     #[test]

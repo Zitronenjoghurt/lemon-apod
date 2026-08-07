@@ -26,4 +26,4 @@ pub use quality::{QualityWarning, quality_control};
 
 pub const APOD_BASE_URL: &str = "https://apod.nasa.gov/apod/";
 
-pub const PARSER_VERSION: u32 = 2;
+pub const PARSER_VERSION: u32 = 3;
