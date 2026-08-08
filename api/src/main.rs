@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod meta;
 mod probe;
+mod schedule;
 mod shutdown;
 mod state;
 mod web;

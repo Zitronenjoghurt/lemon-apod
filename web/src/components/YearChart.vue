@@ -42,7 +42,6 @@ const bars = computed(() =>
       x: index * COLUMN + 1,
       y: Math.min(top, TOP - 0.5),
       height: Math.max(TOP - top, 0.5),
-      column: index * COLUMN,
     }
   }),
 )
@@ -70,6 +69,14 @@ const years = computed(() => ({
 
 const at = ref<number>()
 
+function read(event: PointerEvent) {
+  const width = (event.currentTarget as SVGElement).getBoundingClientRect().width
+  if (!width || !props.points.length) return
+
+  const share = event.offsetX / width
+  at.value = Math.min(props.points.length - 1, Math.max(0, Math.floor(share * props.points.length)))
+}
+
 const reading = computed(() => (at.value === undefined ? undefined : props.points[at.value]))
 
 const marker = computed(() => {
@@ -86,7 +93,7 @@ const marker = computed(() => {
       <span class="name">{{ label }}</span>
       <span :class="{ live: reading }" class="muted range">
         <template v-if="reading">{{ reading.year }}: {{ format(reading.value) }}</template>
-        <template v-else>{{ format(low) }}&ndash;{{ format(high) }}</template>
+        <template v-else>{{ format(low) }} to {{ format(high) }}</template>
       </span>
     </figcaption>
 
@@ -96,7 +103,11 @@ const marker = computed(() => {
       :viewBox="`0 0 ${width} ${TOP}`"
       preserveAspectRatio="none"
       role="img"
+      @pointercancel="at = undefined"
+      @pointerdown="read"
       @pointerleave="at = undefined"
+      @pointermove="read"
+      @pointerup="at = undefined"
     >
       <path
         v-if="kind === 'line'"
@@ -137,17 +148,6 @@ const marker = computed(() => {
           x1="0"
         />
       </template>
-
-      <rect
-        v-for="(bar, index) in bars"
-        :key="`hit-${bar.year}`"
-        :height="TOP"
-        :width="COLUMN"
-        :x="bar.column"
-        class="hit"
-        y="0"
-        @pointerenter="at = index"
-      />
     </svg>
 
     <div class="row axis muted">
@@ -190,6 +190,7 @@ svg {
   width: 100%;
   display: block;
   overflow: visible;
+  touch-action: pan-y;
 }
 
 .bar {
@@ -212,10 +213,6 @@ svg {
   stroke-width: 1;
   stroke-dasharray: 3 3;
   pointer-events: none;
-}
-
-.hit {
-  fill: transparent;
 }
 
 .axis {

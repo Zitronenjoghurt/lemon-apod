@@ -17,6 +17,7 @@ pub struct ServerState {
     pub shell: Arc<Shell>,
     pub sitemap: Cached,
     pub timeline: Cached,
+    pub coverage: Cached,
     pub health: Cached,
 }
 
@@ -32,6 +33,7 @@ impl ServerState {
             shell: Arc::new(Shell::load(&config)?),
             sitemap: Cached::new(Duration::from_secs(config.cache_sitemap_secs)),
             timeline: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
+            coverage: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             health: Cached::new(HEALTH_TTL),
             store,
             config: Arc::new(config),

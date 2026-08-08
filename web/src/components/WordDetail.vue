@@ -52,7 +52,7 @@ const reach = computed(() => use.value?.entries ?? 0)
   >
     <RetryNotice v-if="error" :busy="loading" :message="error" @retry="run" />
 
-    <p v-else-if="notFound" class="muted">Nothing in the archive uses that word.</p>
+    <p v-else-if="notFound" class="muted">Nothing in the archive uses this word.</p>
 
     <div v-else-if="loading && !use" class="stack">
       <Skeleton height="2.5rem" width="100%" />

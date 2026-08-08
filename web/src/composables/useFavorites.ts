@@ -22,6 +22,10 @@ function persist(): void {
   } catch {}
 }
 
+export function hydrateFavorites(): void {
+  dates.value = load()
+}
+
 export function useFavorites() {
   function isFavorite(date: string): boolean {
     return dates.value.includes(date)

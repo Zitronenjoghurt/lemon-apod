@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { ApodSummary } from '@/api/types'
+import { usePreferences } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
 
 const props = defineProps<{
@@ -12,18 +13,24 @@ const props = defineProps<{
 }>()
 
 const { isRead, dimmed } = useRead()
+const { weekStartsOn } = usePreferences()
 
-const WEEKDAYS = Array.from({ length: 7 }, (_, index) =>
-  new Date(Date.UTC(2024, 0, index + 1)).toLocaleDateString(undefined, { weekday: 'short' }),
+const NAMES = Array.from({ length: 7 }, (_, index) =>
+  new Date(Date.UTC(2024, 0, 7 + index)).toLocaleDateString(undefined, { weekday: 'short' }),
+)
+
+const WEEKDAYS = computed(() =>
+  Array.from({ length: 7 }, (_, index) => NAMES[(index + weekStartsOn.value) % 7]),
 )
 
 const byDate = computed(() => new Map(props.entries.map((entry) => [entry.date, entry])))
 
 const padded = computed(() => String(props.month).padStart(2, '0'))
 
-const lead = computed(
-  () => (new Date(Date.UTC(props.year, props.month - 1, 1)).getUTCDay() + 6) % 7,
-)
+const lead = computed(() => {
+  const first = new Date(Date.UTC(props.year, props.month - 1, 1)).getUTCDay()
+  return (first - weekStartsOn.value + 7) % 7
+})
 
 const days = computed(() => {
   const count = new Date(Date.UTC(props.year, props.month, 0)).getUTCDate()

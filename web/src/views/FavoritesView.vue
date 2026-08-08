@@ -105,7 +105,8 @@ watch(favorites, load, { immediate: true })
     </header>
 
     <p class="muted note">
-      Saved in this browser only. There are no accounts, and nothing is sent to the server.
+      Favorites are saved in your browser only. They can be backed up like other site data in the
+      settings.
     </p>
 
     <p v-if="!count" class="muted empty">

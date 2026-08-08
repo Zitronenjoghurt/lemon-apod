@@ -5,7 +5,7 @@ const DATE = '\\d{4}-\\d{2}-\\d{2}'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: () => import('@/views/HomeView.vue') },
+    { path: '/', name: 'status', component: () => import('@/views/StatusView.vue') },
     { path: '/feed', name: 'feed', component: () => import('@/views/FeedView.vue') },
     { path: '/search', name: 'search', component: () => import('@/views/SearchView.vue') },
     { path: '/favorites', name: 'favorites', component: () => import('@/views/FavoritesView.vue') },

@@ -105,6 +105,7 @@ async fn every_read_query_matches_the_migrated_schema() {
     reader.text_summary().await.unwrap();
     reader.resource_summary().await.unwrap();
     reader.timeline().await.unwrap();
+    reader.coverage().await.unwrap();
     reader
         .resources(
             &ResourceFilters {
@@ -1021,5 +1022,32 @@ async fn deleting_an_entry_takes_its_extra_media_with_it() {
     assert_eq!(orphans, 0, "extra media outlived its entry");
 
     db.close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn coverage_counts_each_month_and_leaves_the_empty_ones_out() {
+    let (writer, path) = seeded(&[
+        ("1995-06-16", "First", "the very first one"),
+        ("1995-06-20", "Second", "four days later"),
+        ("1995-08-01", "Third", "a month with a gap before it"),
+        ("2024-03-05", "Saturn", "the ringed planet"),
+    ])
+    .await;
+
+    let months = writer.reader().coverage().await.unwrap().months;
+
+    let counted: Vec<_> = months
+        .iter()
+        .map(|month| (month.year, month.month, month.entries))
+        .collect();
+
+    assert_eq!(
+        counted,
+        vec![(1995, 6, 2), (1995, 8, 1), (2024, 3, 1)],
+        "July 1995 has nothing in it and should not appear at all"
+    );
+
+    writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

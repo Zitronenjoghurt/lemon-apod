@@ -43,6 +43,11 @@ watch(filter, (next) => {
   } catch {}
 })
 
+export function hydrateRead(): void {
+  dates.value = loadDates()
+  filter.value = loadFilter()
+}
+
 export function useRead() {
   const admitted = new Set<string>()
   let admittedFor = filter.value
@@ -73,6 +78,16 @@ export function useRead() {
     dates.value.clear()
     admitted.clear()
     persist()
+  }
+
+  function countIn(prefix?: string): number {
+    if (!prefix) return dates.value.size
+
+    let found = 0
+    for (const date of dates.value) {
+      if (date.startsWith(prefix)) found += 1
+    }
+    return found
   }
 
   function matches(date: string): boolean {
@@ -107,6 +122,7 @@ export function useRead() {
     markUnread,
     toggleRead,
     clear,
+    countIn,
     matches,
     dimmed,
     apply,

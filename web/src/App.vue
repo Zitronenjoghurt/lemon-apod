@@ -1,28 +1,47 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { throttled } from '@/api/client'
-import { useFavorites } from '@/composables/useFavorites'
-import { useTheme } from '@/composables/useTheme'
+import {onMounted, onUnmounted, ref} from 'vue'
+import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router'
+import ExternalLinkNotice from '@/components/ExternalLinkNotice.vue'
+import SettingsDialog from '@/components/SettingsDialog.vue'
+import {throttled} from '@/api/client'
+import {useExternalLinks} from '@/composables/useExternalLinks'
+import {useFavorites} from '@/composables/useFavorites'
+import {useTheme} from '@/composables/useTheme'
 
+const route = useRoute()
 const router = useRouter()
-const { theme, cycle } = useTheme()
-const { count } = useFavorites()
+const {theme, cycle} = useTheme()
+const {count} = useFavorites()
+const {intercept} = useExternalLinks()
 
 const menuOpen = ref(false)
+const settingsOpen = ref(false)
 
-const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
-const themeLabel = { auto: 'Match system', dark: 'Dark', light: 'Light' }
+const compactNav = window.matchMedia('(max-width: 66rem)')
+const compact = ref(compactNav.matches)
+compactNav.addEventListener('change', (event) => (compact.value = event.matches))
+
+onMounted(() => document.addEventListener('click', intercept, true))
+onUnmounted(() => document.removeEventListener('click', intercept, true))
+
+const themeIcon = {dark: 'pi-moon', light: 'pi-sun'}
+const themeLabel = {auto: 'Match system', dark: 'Dark', light: 'Light'}
 
 const links = [
-  { to: '/feed', label: 'Feed', icon: 'pi pi-bars' },
-  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
-  { to: '/search', label: 'Search', icon: 'pi pi-search' },
-  { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
-  { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
-  { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
-  { to: '/random', label: 'Random', icon: 'pi pi-sync' },
+  {to: '/', label: 'Today', icon: 'pi pi-sparkles', exact: true},
+  {to: '/feed', label: 'Feed', icon: 'pi pi-bars'},
+  {to: '/archive', label: 'Archive', icon: 'pi pi-calendar'},
+  {to: '/search', label: 'Search', icon: 'pi pi-search'},
+  {to: '/resources', label: 'Resources', icon: 'pi pi-link'},
+  {to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar'},
+  {to: '/favorites', label: 'Favorites', icon: 'pi pi-star'},
+  {to: '/random', label: 'Random', icon: 'pi pi-sync'},
 ]
+
+function isActive(link: (typeof links)[number]): boolean {
+  if (link.exact) return route.path === link.to
+  return route.path === link.to || route.path.startsWith(`${link.to}/`)
+}
 
 const version = __APP_VERSION__
 
@@ -37,53 +56,70 @@ router.afterEach(() => (menuOpen.value = false))
       <RouterLink class="brand" to="/">
         <svg aria-hidden="true" class="mark" viewBox="0 0 24 24">
           <ellipse
-            cx="12"
-            cy="12"
-            fill="none"
-            rx="11"
-            ry="4.2"
-            stroke="currentColor"
-            stroke-width="1.6"
-            transform="rotate(-22 12 12)"
+              cx="12"
+              cy="12"
+              fill="none"
+              rx="11"
+              ry="4.2"
+              stroke="currentColor"
+              stroke-width="1.6"
+              transform="rotate(-22 12 12)"
           />
-          <circle cx="12" cy="12" fill="var(--bg)" r="6.2" />
-          <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2" />
-          <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="12" fill="var(--bg)" r="6.2"/>
+          <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2"/>
+          <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6"/>
         </svg>
         <span>APOD Archive</span>
       </RouterLink>
 
       <nav aria-label="Main" class="row nav wide-only">
-        <RouterLink v-for="link in links" :key="link.to" :to="link.to">
-          <i :class="link.icon" aria-hidden="true" />
-          {{ link.label }}
+        <RouterLink
+            v-for="link in links"
+            :key="link.to"
+            v-tooltip.bottom="{ value: link.label, disabled: !compact }"
+            :class="{ on: isActive(link) }"
+            :to="link.to"
+            active-class=""
+            exact-active-class=""
+        >
+          <i :class="link.icon" aria-hidden="true"/>
+          <span class="label">{{ link.label }}</span>
           <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
         </RouterLink>
       </nav>
 
       <div class="row trailing">
         <Button
-          v-tooltip.bottom="`Theme: ${themeLabel[theme]}`"
-          :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
-          rounded
-          severity="secondary"
-          text
-          @click="cycle"
+            v-tooltip.bottom="`Theme: ${themeLabel[theme]}`"
+            :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
+            rounded
+            severity="secondary"
+            text
+            @click="cycle"
         >
-          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true" />
+          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true"/>
           <svg v-else aria-hidden="true" class="auto-mark" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5" />
-            <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor" />
+            <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/>
           </svg>
         </Button>
         <Button
-          aria-label="Open menu"
-          class="narrow-only"
-          icon="pi pi-bars"
-          rounded
-          severity="secondary"
-          text
-          @click="menuOpen = true"
+            v-tooltip.bottom="'Settings'"
+            aria-label="Settings"
+            icon="pi pi-cog"
+            rounded
+            severity="secondary"
+            text
+            @click="settingsOpen = true"
+        />
+        <Button
+            aria-label="Open menu"
+            class="narrow-only"
+            icon="pi pi-bars"
+            rounded
+            severity="secondary"
+            text
+            @click="menuOpen = true"
         />
       </div>
     </div>
@@ -91,8 +127,16 @@ router.afterEach(() => (menuOpen.value = false))
 
   <Drawer v-model:visible="menuOpen" header="Menu" position="right">
     <nav aria-label="Main" class="menu">
-      <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="menu-link">
-        <i :class="link.icon" aria-hidden="true" />
+      <RouterLink
+          v-for="link in links"
+          :key="link.to"
+          :class="{ on: isActive(link) }"
+          :to="link.to"
+          active-class=""
+          class="menu-link"
+          exact-active-class=""
+      >
+        <i :class="link.icon" aria-hidden="true"/>
         <span>{{ link.label }}</span>
         <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
       </RouterLink>
@@ -101,7 +145,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   <Transition name="fade">
     <div v-if="throttled" class="throttle" role="status">
-      <i aria-hidden="true" class="pi pi-clock" /> Slowing down for a moment…
+      <i aria-hidden="true" class="pi pi-clock"/> Slowing down for a moment…
     </div>
   </Transition>
 
@@ -109,7 +153,7 @@ router.afterEach(() => (menuOpen.value = false))
     <RouterView v-slot="{ Component }">
       <Transition mode="out-in" name="fade">
         <KeepAlive :include="['FeedView']" :max="1">
-          <component :is="Component" />
+          <component :is="Component"/>
         </KeepAlive>
       </Transition>
     </RouterView>
@@ -123,15 +167,17 @@ router.afterEach(() => (menuOpen.value = false))
         An unofficial archive of NASA's
         <a href="https://apod.nasa.gov/apod/" rel="noopener" target="_blank">
           Astronomy Picture of the Day</a
-        >. Not affiliated with or endorsed by NASA. Pictures and videos load from NASA's own servers
-        and belong to the people and institutions credited on each entry; explanations come from the
-        original APOD pages, which every entry links to.
+        >. Not affiliated with or endorsed by NASA. The text and media of all APOD entries originate
+        from NASA and belong to the credited people and institutions.
       </p>
     </div>
   </footer>
 
-  <Toast position="bottom-center" />
-  <ConfirmDialog />
+  <SettingsDialog v-model:visible="settingsOpen"/>
+  <ExternalLinkNotice/>
+
+  <Toast position="bottom-center"/>
+  <ConfirmDialog/>
 </template>
 
 <style scoped>
@@ -162,7 +208,7 @@ router.afterEach(() => (menuOpen.value = false))
   display: flex;
   align-items: center;
   gap: 1rem;
-  min-height: 3.75rem;
+  min-height: var(--header-h);
 }
 
 .brand {
@@ -187,6 +233,7 @@ router.afterEach(() => (menuOpen.value = false))
 .nav {
   gap: 1rem;
   font-size: 0.94rem;
+  flex-wrap: nowrap;
 }
 
 .nav a {
@@ -197,11 +244,40 @@ router.afterEach(() => (menuOpen.value = false))
   color: var(--text-muted);
   padding: 0.2rem 0;
   border-bottom: 2px solid transparent;
+  white-space: nowrap;
 }
 
 .nav a i {
   font-size: 0.82em;
   opacity: 0.85;
+}
+
+@media (max-width: 66rem) {
+  .nav {
+    gap: 0.25rem;
+  }
+
+  .nav a {
+    padding: 0.2rem 0.45rem;
+  }
+
+  .nav a i {
+    font-size: 1rem;
+  }
+
+  .nav .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .nav .count {
+    margin-left: 0.15rem;
+    font-size: 0.65rem;
+    padding: 0 0.3rem;
+  }
 }
 
 .auto-mark {
@@ -213,7 +289,7 @@ router.afterEach(() => (menuOpen.value = false))
   color: var(--text);
 }
 
-.nav a.router-link-active {
+.nav a.on {
   color: var(--text);
   border-bottom-color: var(--accent);
 }
@@ -253,7 +329,7 @@ router.afterEach(() => (menuOpen.value = false))
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.menu-link.router-link-active {
+.menu-link.on {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
@@ -312,16 +388,6 @@ router.afterEach(() => (menuOpen.value = false))
   line-height: 1.5;
   text-align: center;
   text-wrap: pretty;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 
 .narrow-only {

@@ -100,6 +100,20 @@ pub struct Timeline {
     pub years: Vec<YearStats>,
 }
 
+/// How many entries the archive holds for each calendar month it covers. Months with nothing in
+/// them are absent rather than zero, so the length of this is also the count of months reached.
+#[derive(Debug, Serialize)]
+pub struct Coverage {
+    pub months: Vec<MonthCount>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MonthCount {
+    pub year: i32,
+    pub month: u32,
+    pub entries: i64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct YearStats {
     pub year: i32,

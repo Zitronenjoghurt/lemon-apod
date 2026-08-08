@@ -124,7 +124,7 @@ onBeforeUnmount(() => {
           {{ formatDate(date) }}
         </time>
       </RouterLink>
-      <h2 class="title">{{ title || '—' }}</h2>
+      <h2 class="title">{{ title || 'Untitled' }}</h2>
     </header>
 
     <MediaFrame v-if="media" :media="media" :title="title" max-height="min(70vh, 44rem)" />

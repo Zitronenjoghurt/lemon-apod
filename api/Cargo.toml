@@ -9,6 +9,8 @@ apod-core = { workspace = true, features = ["data-read"] }
 
 anyhow = { workspace = true }
 axum = { version = "0.8.9", features = ["macros"] }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net"] }

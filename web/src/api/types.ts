@@ -130,6 +130,31 @@ export interface Timeline {
   years: YearStats[]
 }
 
+export interface PublishSchedule {
+  timezone: string
+  abbreviation: string
+  hour: number
+  minute: number
+  today: string
+  next_at: string
+}
+
+export interface Status {
+  latest: ApodSummary | null
+  entries: number
+  publish: PublishSchedule
+}
+
+export interface MonthCount {
+  year: number
+  month: number
+  entries: number
+}
+
+export interface Coverage {
+  months: MonthCount[]
+}
+
 export interface Resource {
   id: number
   url: string

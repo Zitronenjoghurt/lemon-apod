@@ -5,7 +5,7 @@ import EntryDetail from '@/components/EntryDetail.vue'
 import EntrySkeleton from '@/components/EntrySkeleton.vue'
 import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
-import { useLatestDate } from '@/composables/useLatestDate'
+import { useLatestDate } from '@/composables/useStatus'
 import { formatDate } from '@/utils/date'
 
 const route = useRoute()

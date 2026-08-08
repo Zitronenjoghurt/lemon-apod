@@ -4,10 +4,14 @@ import { useRoute, useRouter } from 'vue-router'
 import CalendarMonth from '@/components/CalendarMonth.vue'
 import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
+import ReadProgress from '@/components/ReadProgress.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
-import { useLatestDate } from '@/composables/useLatestDate'
+import { useArrowKeys } from '@/composables/useArrowKeys'
+import { useCoverage } from '@/composables/useCoverage'
+import { usePreferences } from '@/composables/usePreferences'
+import { useLatestDate } from '@/composables/useStatus'
 import { useRead } from '@/composables/useRead'
 import { FIRST_ENTRY, month as monthOf, year as yearOf } from '@/utils/date'
 
@@ -31,7 +35,9 @@ const route = useRoute()
 const router = useRouter()
 
 const latest = useLatestDate()
-const { apply, active: filtered } = useRead()
+const { apply, active: filtered, countIn } = useRead()
+const { archiveView } = usePreferences()
+const coverage = useCoverage()
 
 const newestYear = computed(() => (latest.value ? yearOf(latest.value) : null))
 
@@ -39,7 +45,12 @@ const year = computed(() =>
   route.params.year ? Number(route.params.year) : (newestYear.value ?? null),
 )
 const month = computed(() => (route.params.month ? Number(route.params.month) : null))
-const view = computed<View>(() => (route.query.view === 'calendar' ? 'calendar' : 'grid'))
+
+const view = computed<View>(() => {
+  if (route.query.view === 'calendar') return 'calendar'
+  if (route.query.view === 'grid') return 'grid'
+  return archiveView.value
+})
 
 const years = computed(() => {
   const newest = newestYear.value ?? new Date().getUTCFullYear()
@@ -67,9 +78,8 @@ function go(nextYear: number, nextMonth: number | null, replace = false) {
   const path = nextMonth
     ? `/archive/${nextYear}/${String(nextMonth).padStart(2, '0')}`
     : `/archive/${nextYear}`
-
-  const target = { path, query: view.value === 'calendar' ? { view: 'calendar' } : {} }
-  void (replace ? router.replace(target) : router.push(target))
+  const query = route.query.view ? { view: String(route.query.view) } : {}
+  void (replace ? router.replace({ path, query }) : router.push({ path, query }))
 }
 
 function goToYear(value: number | null) {
@@ -81,10 +91,9 @@ function goToMonth(value: number | null) {
 }
 
 function selectView(value: View | null) {
-  router.replace({
-    path: route.path,
-    query: value === 'calendar' ? { view: 'calendar' } : {},
-  })
+  if (!value) return
+  archiveView.value = value
+  if (route.query.view) void router.replace({ path: route.path, query: {} })
 }
 
 const AT_FIRST = FIRST_YEAR * 12 + FIRST_MONTH
@@ -93,15 +102,10 @@ const atLatest = computed(() =>
   latest.value ? yearOf(latest.value) * 12 + monthOf(latest.value) : Number.POSITIVE_INFINITY,
 )
 
-function stepped(delta: number): { year: number; month: number | null } | null {
-  if (!year.value) return null
+type Period = { year: number; month: number | null }
 
-  if (!month.value) {
-    const next = year.value + delta
-    return next >= FIRST_YEAR && next <= (newestYear.value ?? next)
-      ? { year: next, month: null }
-      : null
-  }
+function steppedMonth(delta: number): Period | null {
+  if (!year.value || !month.value) return null
 
   const at = year.value * 12 + month.value + delta
   if (at < AT_FIRST || at > atLatest.value) return null
@@ -109,13 +113,34 @@ function stepped(delta: number): { year: number; month: number | null } | null {
   return { year: Math.floor((at - 1) / 12), month: ((at - 1) % 12) + 1 }
 }
 
-const previous = computed(() => stepped(-1))
-const next = computed(() => stepped(1))
+function steppedYear(delta: number): Period | null {
+  if (!year.value) return null
 
-function step(delta: number) {
-  const target = stepped(delta)
+  const target = year.value + delta
+  if (target < FIRST_YEAR || target > (newestYear.value ?? target)) return null
+  if (!month.value) return { year: target, month: null }
+
+  const at = Math.min(Math.max(target * 12 + month.value, AT_FIRST), atLatest.value)
+  if (Math.floor((at - 1) / 12) !== target) return null
+
+  return { year: target, month: ((at - 1) % 12) + 1 }
+}
+
+const previousMonth = computed(() => steppedMonth(-1))
+const nextMonth = computed(() => steppedMonth(1))
+const previousYear = computed(() => steppedYear(-1))
+const nextYear = computed(() => steppedYear(1))
+
+function goTo(target: Period | null) {
   if (target) go(target.year, target.month)
 }
+
+useArrowKeys({
+  left: () => goTo(month.value ? previousMonth.value : previousYear.value),
+  right: () => goTo(month.value ? nextMonth.value : nextYear.value),
+  shiftLeft: () => goTo(previousYear.value),
+  shiftRight: () => goTo(nextYear.value),
+})
 
 const entries = ref<ApodSummary[]>([])
 const cursor = ref<string | undefined>()
@@ -193,11 +218,23 @@ const periodLabel = computed(() => {
   return name ? `${name} ${year.value}` : String(year.value)
 })
 
-function labelFor(target: { year: number; month: number | null } | null): string {
+function labelFor(target: Period | null): string {
   if (!target) return ''
   const name = MONTHS.find((entry) => entry.value === target.month)?.label
   return name ? `${name} ${target.year}` : String(target.year)
 }
+
+const periodPrefix = computed(() => {
+  if (!year.value) return null
+  return month.value ? `${year.value}-${String(month.value).padStart(2, '0')}` : String(year.value)
+})
+
+const periodRead = computed(() => (periodPrefix.value ? countIn(periodPrefix.value) : 0))
+
+const periodTotal = computed(() => {
+  if (!year.value) return undefined
+  return month.value ? coverage.forMonth(year.value, month.value) : coverage.forYear(year.value)
+})
 
 const countLabel = computed(() => {
   const loaded = entries.value.length
@@ -232,48 +269,76 @@ const countLabel = computed(() => {
       </div>
 
       <div class="row pickers">
-        <Button
-          v-tooltip.bottom="previous ? labelFor(previous) : undefined"
-          :aria-label="`Earlier: ${labelFor(previous) || 'nothing before this'}`"
-          :disabled="!previous"
-          icon="pi pi-chevron-left"
-          outlined
-          severity="secondary"
-          @click="step(-1)"
-        />
+        <div class="row stepper">
+          <Button
+            v-tooltip.bottom="previousYear ? labelFor(previousYear) : undefined"
+            :aria-label="`Earlier year: ${labelFor(previousYear) || 'nothing before this'}`"
+            :disabled="!previousYear"
+            icon="pi pi-chevron-left"
+            outlined
+            severity="secondary"
+            @click="goTo(previousYear)"
+          />
+          <Select
+            :model-value="year"
+            :options="years"
+            aria-label="Year"
+            class="year"
+            placeholder="Year"
+            @update:model-value="goToYear"
+          />
+          <Button
+            v-tooltip.bottom="nextYear ? labelFor(nextYear) : undefined"
+            :aria-label="`Later year: ${labelFor(nextYear) || 'nothing after this'}`"
+            :disabled="!nextYear"
+            icon="pi pi-chevron-right"
+            outlined
+            severity="secondary"
+            @click="goTo(nextYear)"
+          />
+        </div>
 
-        <Select
-          :model-value="year"
-          :options="years"
-          aria-label="Year"
-          class="year"
-          placeholder="Year"
-          @update:model-value="goToYear"
-        />
-        <Select
-          :model-value="month"
-          :options="months"
-          :show-clear="view === 'grid'"
-          aria-label="Month"
-          class="month"
-          option-label="label"
-          option-value="value"
-          placeholder="All months"
-          @update:model-value="goToMonth"
-        />
-
-        <Button
-          v-tooltip.bottom="next ? labelFor(next) : undefined"
-          :aria-label="`Later: ${labelFor(next) || 'nothing after this'}`"
-          :disabled="!next"
-          icon="pi pi-chevron-right"
-          outlined
-          severity="secondary"
-          @click="step(1)"
-        />
+        <div class="row stepper">
+          <Button
+            v-tooltip.bottom="previousMonth ? labelFor(previousMonth) : undefined"
+            :aria-label="`Earlier month: ${labelFor(previousMonth) || 'nothing before this'}`"
+            :disabled="!previousMonth"
+            icon="pi pi-chevron-left"
+            outlined
+            severity="secondary"
+            @click="goTo(previousMonth)"
+          />
+          <Select
+            :model-value="month"
+            :options="months"
+            :show-clear="view === 'grid'"
+            aria-label="Month"
+            class="month"
+            option-label="label"
+            option-value="value"
+            placeholder="All months"
+            @update:model-value="goToMonth"
+          />
+          <Button
+            v-tooltip.bottom="nextMonth ? labelFor(nextMonth) : undefined"
+            :aria-label="`Later month: ${labelFor(nextMonth) || 'nothing after this'}`"
+            :disabled="!nextMonth"
+            icon="pi pi-chevron-right"
+            outlined
+            severity="secondary"
+            @click="goTo(nextMonth)"
+          />
+        </div>
 
         <ReadFilter class="read" />
       </div>
+
+      <ReadProgress
+        v-if="periodTotal"
+        :label="periodLabel"
+        :read="periodRead"
+        :total="periodTotal"
+      />
     </header>
 
     <RetryNotice v-if="error" :busy="loading || loadingMore" :message="error" @retry="retry" />
@@ -336,16 +401,23 @@ h1 {
 }
 
 .pickers {
-  gap: 0.6rem;
+  gap: 0.6rem 0.9rem;
   flex-wrap: wrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.stepper {
+  gap: 0.35rem;
+  flex-wrap: nowrap;
 }
 
 .year {
-  min-width: 8rem;
+  min-width: 7rem;
 }
 
 .month {
-  min-width: 10rem;
+  min-width: 9.5rem;
 }
 
 .read {
@@ -373,7 +445,17 @@ h1 {
   clip-path: inset(50%);
 }
 
-@media (max-width: 46rem) {
+@media (max-width: 52rem) {
+  .stepper {
+    flex: 1 1 14rem;
+  }
+
+  .year,
+  .month {
+    flex: 1;
+    min-width: 0;
+  }
+
   .read {
     margin-left: 0;
     width: 100%;
@@ -383,12 +465,6 @@ h1 {
 @media (max-width: 30rem) {
   .view-label {
     display: none;
-  }
-
-  .year,
-  .month {
-    flex: 1;
-    min-width: 0;
   }
 }
 </style>

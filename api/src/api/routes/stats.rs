@@ -25,8 +25,21 @@ async fn get_timeline(State(state): State<ServerState>) -> ApiResult<Response> {
     Ok(response::cached_json(state.config.cache_list_secs, &body))
 }
 
+async fn get_coverage(State(state): State<ServerState>) -> ApiResult<Response> {
+    let body = state
+        .coverage
+        .get_or_build(|| async {
+            let coverage = state.store.coverage().await?;
+            serde_json::to_string(&coverage).map_err(|error| ApiError::Internal(error.into()))
+        })
+        .await?;
+
+    Ok(response::cached_json(state.config.cache_list_secs, &body))
+}
+
 pub fn router() -> Router<ServerState> {
     Router::new()
         .route("/", get(get_stats))
         .route("/timeline", get(get_timeline))
+        .route("/coverage", get(get_coverage))
 }

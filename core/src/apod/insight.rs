@@ -1,12 +1,13 @@
 use super::catalogue::{contains, days, escape_like};
 use super::model::{
-    EntryLength, Listing, Order, ResourceSummary, TextSummary, Timeline, Word, WordEntry,
-    WordFilters, WordOrder, WordUse, YearCount, YearStats,
+    Coverage, EntryLength, Listing, MonthCount, Order, ResourceSummary, TextSummary, Timeline,
+    Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
 };
 use super::read::{ApodReader, ApodResult, Param, arguments};
 use sqlx::{AssertSqlSafe, Row};
 
 const YEAR: &str = "CAST(substr(entries.date, 1, 4) AS INTEGER)";
+const MONTH: &str = "CAST(substr(entries.date, 6, 2) AS INTEGER)";
 
 impl ApodReader {
     pub async fn text_summary(&self) -> ApodResult<TextSummary> {
@@ -135,6 +136,26 @@ impl ApodReader {
             .collect::<ApodResult<Vec<_>>>()?;
 
         Ok(Timeline { years })
+    }
+
+    pub async fn coverage(&self) -> ApodResult<Coverage> {
+        let rows = sqlx::query_as::<_, (i32, i32, i64)>(AssertSqlSafe(format!(
+            "SELECT {YEAR} AS year, {MONTH} AS month, COUNT(*)
+             FROM entries GROUP BY year, month ORDER BY year, month"
+        )))
+        .fetch_all(self.db().reader())
+        .await?;
+
+        Ok(Coverage {
+            months: rows
+                .into_iter()
+                .map(|(year, month, entries)| MonthCount {
+                    year,
+                    month: month.unsigned_abs(),
+                    entries,
+                })
+                .collect(),
+        })
     }
 
     pub async fn words(

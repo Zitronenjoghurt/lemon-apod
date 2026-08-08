@@ -111,7 +111,7 @@ function span(first?: string, last?: string): string {
   if (!first || !last) return ''
   const from = yearOf(first)
   const to = yearOf(last)
-  return from === to ? String(from) : `${from}–${to}`
+  return from === to ? String(from) : `${from} to ${to}`
 }
 </script>
 
@@ -119,11 +119,6 @@ function span(first?: string, last?: string): string {
   <div class="stack">
     <header class="stack head">
       <h1>Resources</h1>
-      <p class="muted note">
-        Everything thirty years of explanations and credits point at, counted. APOD's own pages are
-        left out, since those are cross-references rather than sources, and so are links that name a
-        picture or a recording.
-      </p>
     </header>
 
     <div class="row controls">

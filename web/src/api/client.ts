@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type {
   ApodEntry,
   ApodSummary,
+  Coverage,
   HostCount,
   KindFilter,
   Listing,
@@ -12,6 +13,7 @@ import type {
   SearchResults,
   SortOrder,
   Stats,
+  Status,
   Timeline,
   Word,
   WordSort,
@@ -182,9 +184,13 @@ export const api = {
   random: (kind?: KindFilter, signal?: AbortSignal) =>
     request<ApodEntry>(`/api/random${query({ kind })}`, signal),
 
+  status: (signal?: AbortSignal) => request<Status>('/api/status', signal),
+
   stats: (signal?: AbortSignal) => request<Stats>('/api/stats', signal),
 
   timeline: (signal?: AbortSignal) => request<Timeline>('/api/stats/timeline', signal),
+
+  coverage: (signal?: AbortSignal) => request<Coverage>('/api/stats/coverage', signal),
 
   resources: (options: ResourceOptions = {}, signal?: AbortSignal) =>
     request<Listing<Resource>>(`/api/resources${query({ ...options })}`, signal),

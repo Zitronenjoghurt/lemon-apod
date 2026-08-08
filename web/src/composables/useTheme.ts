@@ -24,6 +24,10 @@ watchEffect(() => {
   apply()
 })
 
+export function hydrateTheme(): void {
+  theme.value = stored()
+}
+
 export function useTheme() {
   function cycle(): void {
     theme.value = theme.value === 'auto' ? 'dark' : theme.value === 'dark' ? 'light' : 'auto'

@@ -1,27 +1,26 @@
-<script setup lang="ts">
-import { RouterLink } from 'vue-router'
+<script lang="ts" setup>
+import {RouterLink} from 'vue-router'
 
 const links = [
-  { to: '/', label: 'Latest entry', icon: 'pi pi-image' },
-  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
-  { to: '/random', label: 'Something random', icon: 'pi pi-sync' },
+  {to: '/', label: 'Latest entry', icon: 'pi pi-image'},
+  {to: '/archive', label: 'Archive', icon: 'pi pi-calendar'},
+  {to: '/random', label: 'Something random', icon: 'pi pi-sync'},
 ]
 </script>
 
 <template>
   <div class="card notice">
-    <p class="mark" aria-hidden="true">✦</p>
     <h1>Nothing out here</h1>
-    <p class="muted">That page doesn't exist. Entries live at <code>/YYYY-MM-DD</code>.</p>
+    <p class="muted">The page you were trying to open does not exist.</p>
     <div class="row links">
       <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="plain">
         <Button
-          :label="link.label"
-          :icon="link.icon"
-          severity="secondary"
-          outlined
-          size="small"
-          tabindex="-1"
+            :icon="link.icon"
+            :label="link.label"
+            outlined
+            severity="secondary"
+            size="small"
+            tabindex="-1"
         />
       </RouterLink>
     </div>
@@ -36,12 +35,6 @@ const links = [
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-}
-
-.mark {
-  font-size: 2rem;
-  color: var(--accent);
-  margin: 0;
 }
 
 h1 {

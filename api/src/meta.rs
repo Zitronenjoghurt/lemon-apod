@@ -87,10 +87,10 @@ impl Shell {
 fn default_tags(public_url: &str) -> String {
     format!(
         r#"<title>APOD Archive</title>
-<meta name="description" content="Every NASA Astronomy Picture of the Day since 1995, searchable.">
+<meta name="description" content="An archive of every NASA Astronomy Picture of the Day since 1995.">
 <meta property="og:type" content="website">
 <meta property="og:title" content="APOD Archive">
-<meta property="og:description" content="Every NASA Astronomy Picture of the Day since 1995, searchable.">
+<meta property="og:description" content="An archive of every NASA Astronomy Picture of the Day since 1995.">
 <meta property="og:url" content="{url}">
 <meta property="og:site_name" content="APOD Archive">
 <meta name="twitter:card" content="summary">

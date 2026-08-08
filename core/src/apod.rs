@@ -7,9 +7,10 @@ pub mod read;
 pub mod write;
 
 pub use model::{
-    EntryLength, Filters, HostCount, KindCount, Listing, Order, Page, Resource, ResourceFilters,
-    ResourceOrder, ResourceRef, ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary,
-    Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
+    Coverage, EntryLength, Filters, HostCount, KindCount, Listing, MonthCount, Order, Page,
+    Resource, ResourceFilters, ResourceOrder, ResourceRef, ResourceRefs, ResourceSummary,
+    SearchResults, Stats, TextSummary, Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse,
+    YearCount, YearStats,
 };
 pub use read::{ApodError, ApodReader, ApodResult, Snippet};
 #[cfg(feature = "data-write")]

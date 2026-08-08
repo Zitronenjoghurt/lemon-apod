@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono_tz::Tz;
 use std::net::IpAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -12,6 +13,8 @@ pub struct Config {
     pub bind: IpAddr,
     pub port: u16,
     pub public_url: String,
+
+    pub publish: Publish,
 
     pub list_default_limit: usize,
     pub list_max_limit: usize,
@@ -27,6 +30,28 @@ pub struct Config {
     pub cache_list_secs: u64,
     pub cache_sitemap_secs: u64,
     pub cache_timeline_secs: u64,
+    pub cache_status_secs: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Publish {
+    pub timezone: Tz,
+    pub hour: u32,
+    pub minute: u32,
+}
+
+impl Publish {
+    fn validate(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.hour < 24,
+            "APOD_PUBLISH_HOUR must be an hour of the day, 0 to 23"
+        );
+        anyhow::ensure!(
+            self.minute < 60,
+            "APOD_PUBLISH_MINUTE must be a minute of the hour, 0 to 59"
+        );
+        Ok(())
+    }
 }
 
 impl Config {
@@ -46,6 +71,12 @@ impl Config {
             )
             .map(|url: String| url.trim_end_matches('/').to_owned())?,
 
+            publish: Publish {
+                timezone: env_or("APOD_PUBLISH_TZ", Tz::America__New_York)?,
+                hour: env_or("APOD_PUBLISH_HOUR", 0)?,
+                minute: env_or("APOD_PUBLISH_MINUTE", 0)?,
+            },
+
             list_default_limit: env_or("APOD_LIST_DEFAULT_LIMIT", 30)?,
             list_max_limit: env_or("APOD_LIST_MAX_LIMIT", 100)?,
             search_default_limit: env_or("APOD_SEARCH_DEFAULT_LIMIT", 30)?,
@@ -60,7 +91,14 @@ impl Config {
             cache_list_secs: env_or("APOD_CACHE_LIST_SECS", 300)?,
             cache_sitemap_secs: env_or("APOD_CACHE_SITEMAP_SECS", 3_600)?,
             cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
+            cache_status_secs: env_or("APOD_CACHE_STATUS_SECS", 60)?,
         })
+        .and_then(Self::validated)
+    }
+
+    fn validated(self) -> Result<Self> {
+        self.publish.validate()?;
+        Ok(self)
     }
 }
 

@@ -1,11 +1,12 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
+import { useArrowKeys } from '@/composables/useArrowKeys'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
 import { withInternalLinks } from '@/utils/apodLinks'
@@ -139,14 +140,10 @@ async function copyLink() {
   }
 }
 
-function onKey(event: KeyboardEvent) {
-  if (event.metaKey || event.ctrlKey || event.altKey) return
-  const target = event.target as HTMLElement | null
-  if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return
-
-  if (event.key === 'ArrowLeft' && previous.value) router.push(`/${previous.value}`)
-  if (event.key === 'ArrowRight' && next.value) router.push(`/${next.value}`)
-}
+useArrowKeys({
+  left: () => previous.value && void router.push(`/${previous.value}`),
+  right: () => next.value && void router.push(`/${next.value}`),
+})
 
 watch(() => props.entry.date, loadOnThisDay, { immediate: true })
 
@@ -163,9 +160,6 @@ watch([() => props.entry.date, hits], async () => {
     node.classList.remove('current')
   })
 })
-
-onMounted(() => window.addEventListener('keydown', onKey))
-onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -200,43 +194,43 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       </div>
       <h1 v-if="title" class="title" v-html="title" />
       <h1 v-else class="title">{{ entry.title }}</h1>
+    </header>
 
-      <div v-if="highlight" class="row hits">
-        <i aria-hidden="true" class="pi pi-search" />
-        <span class="term">{{ highlight }}</span>
-        <span aria-live="polite" class="muted count">
-          {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
-        </span>
-        <span v-if="hits" class="row step">
-          <Button
-            aria-label="Previous match"
-            icon="pi pi-chevron-up"
-            rounded
-            severity="secondary"
-            size="small"
-            text
-            @click="jump(-1)"
-          />
-          <Button
-            aria-label="Next match"
-            icon="pi pi-chevron-down"
-            rounded
-            severity="secondary"
-            size="small"
-            text
-            @click="jump(1)"
-          />
-        </span>
+    <div v-if="highlight" class="row hits">
+      <i aria-hidden="true" class="pi pi-search" />
+      <span class="term">{{ highlight }}</span>
+      <span aria-live="polite" class="muted count">
+        {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
+      </span>
+      <span v-if="hits" class="row step">
         <Button
-          class="clear"
-          label="Clear"
+          aria-label="Previous match"
+          icon="pi pi-chevron-up"
+          rounded
           severity="secondary"
           size="small"
           text
-          @click="clearHighlight"
+          @click="jump(-1)"
         />
-      </div>
-    </header>
+        <Button
+          aria-label="Next match"
+          icon="pi pi-chevron-down"
+          rounded
+          severity="secondary"
+          size="small"
+          text
+          @click="jump(1)"
+        />
+      </span>
+      <Button
+        class="clear"
+        label="Clear"
+        severity="secondary"
+        size="small"
+        text
+        @click="clearHighlight"
+      />
+    </div>
 
     <div class="layout">
       <div class="media-column">
@@ -384,7 +378,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
   .media-column {
     position: sticky;
-    top: 4.75rem;
+    top: calc(var(--header-h) + 1rem);
   }
 }
 
@@ -512,6 +506,9 @@ a.rights:hover {
 }
 
 .hits {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 4;
   gap: 0.5rem;
   font-size: 0.85rem;
   flex-wrap: wrap;
@@ -520,6 +517,8 @@ a.rights:hover {
   border-radius: 999px;
   align-self: flex-start;
   max-width: 100%;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .hits .term {
@@ -543,6 +542,12 @@ a.rights:hover {
 }
 
 @media (max-width: 30rem) {
+  .hits {
+    align-self: stretch;
+    border-radius: var(--radius);
+    padding: 0.45rem 0.6rem;
+  }
+
   .hits .count {
     order: 3;
     width: 100%;
@@ -551,7 +556,6 @@ a.rights:hover {
 </style>
 
 <style>
-/* Applied to markup this component builds with v-html, so it cannot be scoped. */
 .entry .prose .search-hit,
 .entry .title .search-hit {
   background: color-mix(in srgb, var(--accent) 32%, transparent);

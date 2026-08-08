@@ -8,6 +8,7 @@ mod random;
 mod resources;
 mod search;
 mod stats;
+mod status;
 mod words;
 
 pub fn build_routes() -> Router<ServerState> {
@@ -17,6 +18,7 @@ pub fn build_routes() -> Router<ServerState> {
         .nest("/search", search::router())
         .nest("/on-this-day", on_this_day::router())
         .nest("/random", random::router())
+        .nest("/status", status::router())
         .nest("/stats", stats::router())
         .nest("/resources", resources::router())
         .nest("/words", words::router())

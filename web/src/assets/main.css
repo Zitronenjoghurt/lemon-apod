@@ -5,6 +5,7 @@
     --page-max: 68rem;
     --radius: 0.85rem;
     --gap: 1.25rem;
+    --header-h: 3.75rem;
 
     --bg: #f6f7fb;
     --bg-elevated: #ffffff;
@@ -103,6 +104,14 @@
     color: var(--text-muted);
   }
 
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
   .grid {
     display: grid;
     gap: var(--gap);
@@ -147,4 +156,16 @@
     border-radius: 3px;
     padding: 0 0.15em;
   }
+}
+
+.p-button,
+.p-selectbutton,
+.p-select,
+.p-paginator,
+.entry-card,
+.calendar,
+.year-chart {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
