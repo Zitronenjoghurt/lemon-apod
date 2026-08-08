@@ -2,6 +2,7 @@ use crate::archive::ArchiveStore;
 use crate::client::Client;
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
+use crate::pictures;
 use crate::shutdown::{self, Shutdown};
 use crate::thumbs;
 use anyhow::Result;
@@ -92,16 +93,24 @@ async fn backfill(
     index: ApodWriter,
     mut shutdown: Shutdown,
 ) -> Result<()> {
+    let mut caught_up = false;
+
     while !shutdown.is_triggered() {
         let today = today_in(cfg.daily.timezone);
 
         let Some(date) = archive.next_target(today).await? else {
             tracing::info!("archive is complete back to {}", ApodDate::START);
+            if !caught_up {
+                caught_up = true;
+                regroup(&index).await;
+            }
             if !shutdown.sleep(MAX_SLEEP).await {
                 break;
             }
             continue;
         };
+
+        caught_up = false;
 
         step(&cfg, &client, &archive, &index, date).await;
 
@@ -162,6 +171,7 @@ async fn daily(
 
         let kept_waiting = match step(&cfg, &client, &archive, &index, today).await {
             Some(Outcome::Stored { .. } | Outcome::Updated { .. }) => {
+                regroup(&index).await;
                 sleep_until(&mut shutdown, next_window(&cfg, now)).await
             }
             _ => shutdown.sleep(cfg.daily.interval).await,
@@ -238,11 +248,29 @@ async fn thumbnail(cfg: &Config, client: &Client, index: &ApodWriter, date: Apod
     match thumbs::generate(cfg, client, index, date, &media, false).await {
         Ok(thumbs::Generated::Written) => tracing::debug!(%date, "thumbnail written"),
         Ok(thumbs::Generated::Adopted) => tracing::debug!(%date, "thumbnail already on disk"),
-        Ok(thumbs::Generated::NotApplicable) => {}
+        Ok(thumbs::Generated::NotApplicable) => return,
         Ok(thumbs::Generated::Failed(reason)) => {
             tracing::warn!(%date, %reason, "thumbnail failed");
+            return;
         }
-        Err(error) => tracing::warn!(%date, "thumbnail failed: {error:#}"),
+        Err(error) => {
+            tracing::warn!(%date, "thumbnail failed: {error:#}");
+            return;
+        }
+    }
+
+    if let Err(error) = pictures::store(cfg, index, date).await {
+        tracing::warn!(%date, "could not hash the thumbnail: {error:#}");
+    }
+}
+
+async fn regroup(index: &ApodWriter) {
+    match index.regroup_pictures().await {
+        Ok(groups) => tracing::info!(
+            pictures = groups.len(),
+            "grouped the pictures that have run more than once"
+        ),
+        Err(error) => tracing::warn!("could not group pictures: {error:#}"),
     }
 }
 

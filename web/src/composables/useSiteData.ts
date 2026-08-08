@@ -1,5 +1,6 @@
 import { EXTERNAL_WARNING_KEY, hydrateExternalLinks } from './useExternalLinks'
 import { hydrateFavorites } from './useFavorites'
+import { gameKey, GAMES, hydrateGames } from './useGames'
 import { ARCHIVE_VIEW_KEY, hydratePreferences, WEEK_START_KEY } from './usePreferences'
 import { hydrateRead } from './useRead'
 import { hydrateTheme } from './useTheme'
@@ -7,7 +8,7 @@ import { hydrateTheme } from './useTheme'
 const APP = 'lemon-apod'
 const FORMAT = 1
 
-type Shape = 'dates' | 'scalar'
+type Shape = 'dates' | 'scalar' | 'results'
 
 interface Field {
   key: string
@@ -29,6 +30,12 @@ const FIELDS: Field[] = [
     label: 'link warning',
     hydrate: hydrateExternalLinks,
   },
+  ...GAMES.map((game) => ({
+    key: gameKey(game.slug),
+    shape: 'results' as Shape,
+    label: `${game.name} results`,
+    hydrate: hydrateGames,
+  })),
 ]
 
 export type ImportMode = 'merge' | 'replace'
@@ -52,6 +59,23 @@ function readDates(raw: string | null): string[] {
   try {
     const parsed: unknown = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function readResults(raw: string | null): { id: string; at: string }[] {
+  if (!raw) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (value): value is { id: string; at: string } =>
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as { id?: unknown }).id === 'string' &&
+        typeof (value as { at?: unknown }).at === 'string',
+    )
   } catch {
     return []
   }
@@ -149,6 +173,26 @@ export function useSiteData() {
       if (field.shape === 'dates') {
         const existing = mode === 'merge' ? readDates(localStorage.getItem(field.key)) : []
         const merged = [...new Set([...existing, ...readDates(incoming)])].sort()
+
+        localStorage.setItem(field.key, JSON.stringify(merged))
+        const added = merged.length - existing.length
+        total += merged.length
+        changes.push(
+          mode === 'merge'
+            ? `${added.toLocaleString()} new ${field.label}`
+            : `${merged.length.toLocaleString()} ${field.label}`,
+        )
+      } else if (field.shape === 'results') {
+        const existing = mode === 'merge' ? readResults(localStorage.getItem(field.key)) : []
+        const merged = [...existing]
+        const known = new Set(existing.map((result) => result.id))
+        for (const result of readResults(incoming)) {
+          if (!known.has(result.id)) {
+            known.add(result.id)
+            merged.push(result)
+          }
+        }
+        merged.sort((one, other) => other.at.localeCompare(one.at))
 
         localStorage.setItem(field.key, JSON.stringify(merged))
         const added = merged.length - existing.length

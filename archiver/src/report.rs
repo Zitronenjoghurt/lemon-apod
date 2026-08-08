@@ -99,11 +99,25 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
 
     let indexed = index.reader().count().await?;
     let stale = index.stale_dates().await?.len();
+    let thumbnails = index.reader().thumb_count().await?;
+    let pictures = index.reader().picture_summary().await?;
     println!("index");
     println!("  entries         {indexed}");
-    println!("  thumbnails      {}", index.reader().thumb_count().await?);
+    println!("  thumbnails      {thumbnails}");
+    println!("  hashed          {}", pictures.hashed);
+    println!(
+        "  reruns          {} pictures across {} entries",
+        pictures.pictures, pictures.entries
+    );
     println!("  parser version  {PARSER_VERSION}");
     println!("  stale entries   {stale}");
+
+    if pictures.hashed < thumbnails {
+        println!(
+            "\n{} thumbnails have not been hashed. Run `apod-archiver pictures`",
+            thumbnails - pictures.hashed
+        );
+    }
 
     if indexed < counts.stored {
         println!(

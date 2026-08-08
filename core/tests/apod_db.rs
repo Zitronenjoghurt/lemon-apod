@@ -104,6 +104,14 @@ async fn every_read_query_matches_the_migrated_schema() {
 
     reader.text_summary().await.unwrap();
     reader.resource_summary().await.unwrap();
+    reader.picture_summary().await.unwrap();
+    reader.picture_dates(date).await.unwrap();
+    reader.picture_pool(None).await.unwrap();
+    reader.picture_pool(Some(date)).await.unwrap();
+    reader.text_pool(None).await.unwrap();
+    reader.text_pool(Some(date)).await.unwrap();
+    reader.summaries(&[date]).await.unwrap();
+    reader.given_words().await.unwrap();
     reader.timeline().await.unwrap();
     reader.coverage().await.unwrap();
     reader
@@ -162,11 +170,15 @@ async fn every_read_query_matches_the_migrated_schema() {
     writer.stale_dates().await.unwrap();
     writer.missing_thumbs().await.unwrap();
     writer.unmeasured_thumbs().await.unwrap();
+    writer.unhashed_thumbs().await.unwrap();
     writer.media_for(&[date]).await.unwrap();
     writer
         .set_thumb(date, Some(&Thumb::sized("x.webp", 480, 320)))
         .await
         .unwrap();
+    writer.set_phash(date, Some(&[0; 32])).await.unwrap();
+    writer.fingerprints().await.unwrap();
+    writer.regroup_pictures().await.unwrap();
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -1022,6 +1034,173 @@ async fn deleting_an_entry_takes_its_extra_media_with_it() {
     assert_eq!(orphans, 0, "extra media outlived its entry");
 
     db.close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_rerun_picture_is_findable_from_any_of_its_dates() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let runs = [
+        ("2019-09-20", "image/1909/saturn.jpg", [1u8; 32]),
+        ("2021-09-11", "image/2109/saturn.jpg", [1u8; 32]),
+        ("2022-11-26", "image/2211/saturn.jpg", [1u8; 32]),
+        ("2023-01-01", "image/2301/orion.jpg", [9u8; 32]),
+    ];
+    for (date, url, phash) in runs {
+        let mut row = entry(date, "Saturn at Night", "The ringed planet.");
+        row.media = Media::new(MediaKind::ImageJpg, Some(url.to_owned()), None);
+        writer.upsert(&row).await.unwrap();
+        writer
+            .set_thumb(
+                row.date,
+                Some(&Thumb::sized(row.date.thumb_path(), 480, 320)),
+            )
+            .await
+            .unwrap();
+        writer.set_phash(row.date, Some(&phash)).await.unwrap();
+    }
+
+    let groups = writer.regroup_pictures().await.unwrap();
+    assert_eq!(groups.len(), 1, "one picture ran three times, one ran once");
+    assert_eq!(groups[0].id().to_string(), "2019-09-20");
+
+    let reader = writer.reader();
+    for date in ["2019-09-20", "2021-09-11", "2022-11-26"] {
+        let dates = reader
+            .picture_dates(date.parse().unwrap())
+            .await
+            .unwrap()
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            dates,
+            vec!["2019-09-20", "2021-09-11", "2022-11-26"],
+            "every date of a rerun has to reach the other two, {date} did not"
+        );
+    }
+
+    let alone: ApodDate = "2023-01-01".parse().unwrap();
+    assert_eq!(
+        reader.picture_dates(alone).await.unwrap(),
+        vec![alone],
+        "a picture that ran once answers with its own date"
+    );
+
+    let summary = reader.picture_summary().await.unwrap();
+    assert_eq!((summary.pictures, summary.entries), (1, 3));
+    assert_eq!(summary.hashed, 4);
+    assert_eq!(summary.most_shown_times, 3);
+    assert_eq!(summary.most_shown.unwrap().to_string(), "2019-09-20");
+
+    let mut earlier = entry("2018-01-01", "Saturn at Night", "The ringed planet.");
+    earlier.media = Media::new(
+        MediaKind::ImageJpg,
+        Some("image/1801/saturn.jpg".to_owned()),
+        None,
+    );
+    writer.upsert(&earlier).await.unwrap();
+    writer
+        .set_phash(earlier.date, Some(&[1u8; 32]))
+        .await
+        .unwrap();
+
+    let groups = writer.regroup_pictures().await.unwrap();
+    assert_eq!(groups[0].dates.len(), 4);
+    assert_eq!(groups[0].id().to_string(), "2018-01-01");
+    assert_eq!(
+        reader.picture_dates(alone).await.unwrap(),
+        vec![alone],
+        "the entry that was never a rerun is still not one"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn only_pictures_worth_playing_reach_a_game() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let rows = [
+        ("2020-01-01", MediaKind::ImageJpg, true),
+        ("2020-01-02", MediaKind::ImageJpg, false),
+        ("2020-01-03", MediaKind::YouTube, true),
+        ("2020-01-04", MediaKind::ImagePng, true),
+    ];
+    for (date, kind, thumbed) in rows {
+        let mut row = entry(date, "Something", "A picture of something.");
+        row.media = Media::new(kind, Some(format!("https://example.test/{date}")), None);
+        writer.upsert(&row).await.unwrap();
+        if thumbed {
+            writer
+                .set_thumb(
+                    row.date,
+                    Some(&Thumb::sized(row.date.thumb_path(), 480, 320)),
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    let pool = writer.reader().picture_pool(None).await.unwrap();
+    let dates: Vec<String> = pool.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        dates,
+        vec!["2020-01-01", "2020-01-04"],
+        "no thumbnail means nothing to show, and a video thumbnail is a frame rather than the picture"
+    );
+
+    let before = writer
+        .reader()
+        .picture_pool(Some("2020-01-04".parse().unwrap()))
+        .await
+        .unwrap();
+    assert_eq!(
+        before.len(),
+        1,
+        "a day's puzzle can only draw on what was already published"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_word_puzzle_only_takes_explanations_worth_redacting() {
+    let short = std::iter::repeat_n("nebula", 60)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let long = std::iter::repeat_n("nebula", 260)
+        .collect::<Vec<_>>()
+        .join(" ");
+    let right = std::iter::repeat_n("nebula", 100)
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let (writer, path) = seeded(&[
+        ("2020-01-01", "Short", &short),
+        ("2020-01-02", "Long", &long),
+        ("2020-01-03", "Right", &right),
+    ])
+    .await;
+
+    for date in ["2020-01-01", "2020-01-02", "2020-01-03"] {
+        let date: ApodDate = date.parse().unwrap();
+        writer
+            .set_thumb(date, Some(&Thumb::sized(date.thumb_path(), 480, 320)))
+            .await
+            .unwrap();
+    }
+
+    let pool = writer.reader().text_pool(None).await.unwrap();
+    assert_eq!(pool.len(), 1);
+    assert_eq!(pool[0].to_string(), "2020-01-03");
+
+    writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
 

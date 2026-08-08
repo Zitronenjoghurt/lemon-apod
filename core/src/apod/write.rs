@@ -1,3 +1,4 @@
+use super::pictures::{self, Fingerprint, PictureGroup};
 use super::read::{ApodReader, ApodResult, to_dates};
 use crate::PARSER_VERSION;
 use crate::date::ApodDate;
@@ -73,11 +74,23 @@ impl ApodWriter {
     }
 
     pub async fn unmeasured_thumbs(&self) -> ApodResult<Vec<(ApodDate, String)>> {
-        let rows: Vec<(i64, String)> = sqlx::query_as(
+        self.pending_thumbs("thumb_width IS NULL").await
+    }
+
+    pub async fn unhashed_thumbs(&self) -> ApodResult<Vec<(ApodDate, String)>> {
+        self.pending_thumbs("phash IS NULL").await
+    }
+
+    pub async fn stored_thumbs(&self) -> ApodResult<Vec<(ApodDate, String)>> {
+        self.pending_thumbs("1 = 1").await
+    }
+
+    async fn pending_thumbs(&self, missing: &str) -> ApodResult<Vec<(ApodDate, String)>> {
+        let rows: Vec<(i64, String)> = sqlx::query_as(AssertSqlSafe(format!(
             "SELECT date_id, thumb_path FROM entries
-             WHERE thumb_path IS NOT NULL AND thumb_width IS NULL
-             ORDER BY date_id DESC",
-        )
+             WHERE thumb_path IS NOT NULL AND {missing}
+             ORDER BY date_id DESC"
+        )))
         .fetch_all(self.db().reader())
         .await?;
 
@@ -85,6 +98,55 @@ impl ApodWriter {
             .into_iter()
             .map(|(days, path)| (ApodDate::from_days(days as i32), path))
             .collect())
+    }
+
+    pub async fn set_phash(&self, date: ApodDate, phash: Option<&[u8]>) -> ApodResult<()> {
+        sqlx::query("UPDATE entries SET phash = ?2 WHERE date_id = ?1")
+            .bind(date.days())
+            .bind(phash)
+            .execute(self.db().writer()?)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn fingerprints(&self) -> ApodResult<Vec<Fingerprint>> {
+        let rows: Vec<(i64, Option<String>, Option<Vec<u8>>)> =
+            sqlx::query_as("SELECT date_id, media_url, phash FROM entries ORDER BY date_id")
+                .fetch_all(self.db().reader())
+                .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(days, media_url, phash)| Fingerprint {
+                date: ApodDate::from_days(days as i32),
+                media_url,
+                phash,
+            })
+            .collect())
+    }
+
+    pub async fn regroup_pictures(&self) -> ApodResult<Vec<PictureGroup>> {
+        let groups = pictures::group(&self.fingerprints().await?);
+
+        let mut tx = self.db().writer()?.begin().await?;
+        sqlx::query("UPDATE entries SET picture_group = NULL WHERE picture_group IS NOT NULL")
+            .execute(&mut *tx)
+            .await?;
+
+        for group in &groups {
+            let placeholders = vec!["?"; group.dates.len()].join(", ");
+            let mut update = sqlx::query(AssertSqlSafe(format!(
+                "UPDATE entries SET picture_group = ? WHERE date_id IN ({placeholders})"
+            )))
+            .bind(group.id().days());
+            for date in &group.dates {
+                update = update.bind(date.days());
+            }
+            update.execute(&mut *tx).await?;
+        }
+
+        tx.commit().await?;
+        Ok(groups)
     }
 
     pub async fn stale_dates(&self) -> ApodResult<Vec<ApodDate>> {

@@ -2,6 +2,7 @@ mod archive;
 mod client;
 mod config;
 mod fetch;
+mod pictures;
 mod reparse;
 mod report;
 mod shutdown;
@@ -67,6 +68,16 @@ enum Command {
         limit: Option<usize>,
     },
 
+    /// Hash thumbnails and work out which entries show the same picture.
+    Pictures {
+        /// Rehash thumbnails that have been hashed before.
+        #[arg(long)]
+        force: bool,
+        /// List the pictures the archive has shown most often.
+        #[arg(long, default_value_t = 10)]
+        show: usize,
+    },
+
     /// Report parse warnings, to guide parser refinement.
     Quality {
         #[arg(long)]
@@ -100,6 +111,7 @@ async fn main() -> Result<()> {
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
         Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
         Command::Thumbs { force, limit } => thumbs(cfg, force, limit).await,
+        Command::Pictures { force, show } => group_pictures(cfg, force, show).await,
         Command::Quality {
             date,
             warning,
@@ -186,8 +198,11 @@ async fn reparse_range(
 
     println!("reparsing {} entries...", dates.len());
     let report = reparse::run(&cfg, &index, &dates).await?;
-
     println!("parsed {}", report.parsed);
+
+    let pictures = index.regroup_pictures().await?;
+    println!("{} pictures have run more than once", pictures.len());
+
     if !report.failed.is_empty() {
         println!("failed {}:", report.failed.len());
         for (date, error) in report.failed.iter().take(50) {
@@ -252,6 +267,54 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
     }
 
     println!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}");
+
+    let report = pictures::refresh(&cfg, &index, false).await?;
+    println!(
+        "hashed {} more thumbnails, {} pictures have run more than once",
+        report.hashed,
+        report.groups.len()
+    );
+    Ok(())
+}
+
+async fn group_pictures(cfg: Config, force: bool, show: usize) -> Result<()> {
+    let index = ApodWriter::open(&cfg.index_db).await?;
+
+    let pending = if force {
+        index.stored_thumbs().await?.len()
+    } else {
+        index.unhashed_thumbs().await?.len()
+    };
+    println!("hashing {pending} thumbnails...");
+
+    let report = pictures::refresh(&cfg, &index, force).await?;
+    println!("hashed {}, failed {}", report.hashed, report.failed);
+    println!(
+        "{} pictures have run more than once, across {} entries",
+        report.groups.len(),
+        report.entries()
+    );
+
+    let mut ranked: Vec<_> = report.groups.iter().collect();
+    ranked.sort_by_key(|group| (std::cmp::Reverse(group.dates.len()), group.id()));
+
+    for group in ranked.iter().take(show) {
+        let title = match index.reader().entry(group.id()).await? {
+            Some(entry) => entry.title,
+            None => String::from("?"),
+        };
+        println!("  {} runs  {title}", group.dates.len());
+        println!(
+            "            {}",
+            group
+                .dates
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("  ")
+        );
+    }
+
     Ok(())
 }
 async fn measure_existing(cfg: &Config, index: &ApodWriter) -> Result<usize> {

@@ -3,13 +3,19 @@ import type {
   ApodEntry,
   ApodSummary,
   Coverage,
+  GamePicture,
   HostCount,
   KindFilter,
   Listing,
+  MatchAnswer,
+  MatchRound,
+  OrderPair,
   Page,
+  Puzzle,
   Resource,
   ResourceRefs,
   ResourceSort,
+  Reveal,
   SearchResults,
   Sky,
   SortOrder,
@@ -18,6 +24,7 @@ import type {
   Timeline,
   Word,
   WordSort,
+  WordsRound,
   WordUse,
 } from './types'
 
@@ -157,6 +164,11 @@ export interface ResourceOptions {
   limit?: number
 }
 
+export interface PuzzleOptions {
+  day?: string
+  rounds?: number
+}
+
 export interface WordOptions {
   q?: string
   min_total?: number
@@ -208,4 +220,26 @@ export const api = {
 
   word: (word: string, signal?: AbortSignal) =>
     request<WordUse>(`/api/words/${encodeURIComponent(word)}`, signal),
+
+  games: {
+    date: (options: PuzzleOptions = {}, signal?: AbortSignal) =>
+      request<Puzzle<GamePicture>>(`/api/games/date${query({ ...options })}`, signal),
+
+    order: (options: PuzzleOptions = {}, signal?: AbortSignal) =>
+      request<Puzzle<OrderPair>>(`/api/games/order${query({ ...options })}`, signal),
+
+    match: (options: PuzzleOptions = {}, signal?: AbortSignal) =>
+      request<Puzzle<MatchRound>>(`/api/games/match${query({ ...options })}`, signal),
+
+    words: (options: PuzzleOptions = {}, signal?: AbortSignal) =>
+      request<Puzzle<WordsRound>>(`/api/games/words${query({ ...options })}`, signal),
+
+    reveal: (tokens: string[], signal?: AbortSignal) =>
+      request<Reveal[]>(`/api/games/reveal${query({ t: tokens.join(',') })}`, signal),
+
+    answer: (round: string, pick: string, signal?: AbortSignal) =>
+      request<MatchAnswer>(`/api/games/answer${query({ round, pick })}`, signal),
+
+    picture: (token: string) => `/pic/${encodeURIComponent(token)}`,
+  },
 }

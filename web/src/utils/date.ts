@@ -31,6 +31,32 @@ export function month(date: string): number {
 
 export const FIRST_ENTRY = '1995-06-16'
 
+export function daysBetween(from: string, to: string): number {
+  const one = parse(from)
+  const other = parse(to)
+  if (!one || !other) return 0
+  return Math.round(Math.abs(one.getTime() - other.getTime()) / 86_400_000)
+}
+
+export function describeGap(days: number): string {
+  if (days === 0) return 'exactly right'
+  if (days === 1) return 'one day out'
+  if (days < 31) return `${days} days out`
+
+  const months = Math.round(days / 30.44)
+  if (days < 365) return `${months} month${months === 1 ? '' : 's'} out`
+
+  const years = days / 365.25
+  const rounded = years < 10 ? Math.round(years * 10) / 10 : Math.round(years)
+  return `${rounded} year${rounded === 1 ? '' : 's'} out`
+}
+
+export function clampDate(date: string, first: string, last: string): string {
+  if (date < first) return first
+  if (date > last) return last
+  return date
+}
+
 function shift(date: string, days: number): string | null {
   const parsed = parse(date)
   if (!parsed) return null

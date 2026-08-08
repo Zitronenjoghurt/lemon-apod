@@ -53,6 +53,16 @@ pub struct Stats {
     pub resources: ResourceSummary,
 }
 
+#[derive(Debug, Default, Serialize)]
+pub struct PictureSummary {
+    pub hashed: i64,
+    pub pictures: i64,
+    pub entries: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub most_shown: Option<ApodDate>,
+    pub most_shown_times: i64,
+}
+
 #[derive(Debug, Serialize)]
 pub struct KindCount {
     pub kind: String,
@@ -100,8 +110,6 @@ pub struct Timeline {
     pub years: Vec<YearStats>,
 }
 
-/// How many entries the archive holds for each calendar month it covers. Months with nothing in
-/// them are absent rather than zero, so the length of this is also the count of months reached.
 #[derive(Debug, Serialize)]
 pub struct Coverage {
     pub months: Vec<MonthCount>,
@@ -133,7 +141,6 @@ pub struct YearStats {
     pub videos: i64,
 }
 
-/// One catalogued link target.
 #[derive(Debug, Serialize)]
 pub struct Resource {
     pub id: i64,
@@ -239,4 +246,20 @@ pub struct WordEntry {
     pub date: ApodDate,
     pub title: String,
     pub count: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Cloze {
+    pub salt: String,
+    pub title: Vec<ClozePiece>,
+    pub text: Vec<ClozePiece>,
+    pub hidden: usize,
+    pub distinct: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+pub enum ClozePiece {
+    Shown { s: String },
+    Hidden { h: String, n: usize },
 }

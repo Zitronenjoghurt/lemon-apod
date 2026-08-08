@@ -17,7 +17,7 @@ const { intercept } = useExternalLinks()
 const menuOpen = ref(false)
 const settingsOpen = ref(false)
 
-const compactNav = window.matchMedia('(max-width: 66rem)')
+const compactNav = window.matchMedia('(max-width: 72rem)')
 const compact = ref(compactNav.matches)
 compactNav.addEventListener('change', (event) => (compact.value = event.matches))
 
@@ -34,6 +34,7 @@ const links = [
   { to: '/search', label: 'Search', icon: 'pi pi-search' },
   { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
   { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
+  { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
   { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
   { to: '/random', label: 'Random', icon: 'pi pi-sync' },
 ]
@@ -276,7 +277,7 @@ router.afterEach(() => (menuOpen.value = false))
   opacity: 0.85;
 }
 
-@media (max-width: 66rem) {
+@media (max-width: 72rem) {
   .nav {
     gap: 0.25rem;
   }

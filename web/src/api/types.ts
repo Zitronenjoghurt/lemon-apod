@@ -333,6 +333,60 @@ export interface Sky {
   feeds: FeedState[]
 }
 
+export type GameSlug = 'date' | 'order' | 'match' | 'words'
+
+export interface GamePicture {
+  picture: string
+  width?: number
+  height?: number
+}
+
+export interface Puzzle<T> {
+  game: GameSlug
+  day?: string
+  first: string
+  last: string
+  rounds: T[]
+}
+
+export interface OrderPair {
+  a: GamePicture
+  b: GamePicture
+}
+
+export interface MatchRound {
+  round: string
+  explanation: string
+  choices: GamePicture[]
+}
+
+export type ClozePiece = { s: string } | { h: string; n: number }
+
+export interface WordsRound {
+  picture: string
+  title_words: number
+  salt: string
+  title: ClozePiece[]
+  text: ClozePiece[]
+  hidden: number
+  distinct: number
+}
+
+export interface Reveal extends ApodSummary {
+  picture: string
+  dates: string[]
+  source_url: string
+}
+
+export interface MatchAnswer {
+  correct: boolean
+  answer: Reveal
+}
+
+export function isHidden(piece: ClozePiece): piece is { h: string; n: number } {
+  return 'h' in piece
+}
+
 export type ResourceSort = 'refs' | 'entries' | 'first' | 'last' | 'label' | 'address'
 export type WordSort = 'total' | 'entries' | 'word'
 export type SortOrder = 'asc' | 'desc'

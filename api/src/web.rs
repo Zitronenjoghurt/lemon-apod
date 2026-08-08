@@ -56,5 +56,6 @@ pub fn unmetered(state: &ServerState) -> Router<ServerState> {
     Router::new()
         .route("/health", get(health::get_health))
         .route("/robots.txt", get(sitemap::get_robots))
+        .route("/pic/{token}", get(crate::api::routes::games::get_picture))
         .nest("/thumbs", thumbs)
 }

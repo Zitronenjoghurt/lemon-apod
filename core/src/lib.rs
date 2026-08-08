@@ -18,9 +18,10 @@ pub mod text;
 pub use apod::ApodWriter;
 #[cfg(feature = "data-read")]
 pub use apod::{
-    ApodError, ApodReader, ApodResult, Filters, HostCount, Listing, Order, Page, Resource,
-    ResourceFilters, ResourceOrder, ResourceRef, ResourceRefs, SearchResults, Snippet, Stats,
-    TextSummary, Timeline, Word, WordFilters, WordOrder, WordUse,
+    ApodError, ApodReader, ApodResult, Cloze, ClozePiece, Deal, Filters, Fingerprint, HostCount,
+    Listing, Order, Page, PictureGroup, PictureSummary, Resource, ResourceFilters, ResourceOrder,
+    ResourceRef, ResourceRefs, SearchResults, Snippet, Stats, TextSummary, Timeline, Word,
+    WordFilters, WordOrder, WordUse,
 };
 pub use date::ApodDate;
 #[cfg(feature = "data")]

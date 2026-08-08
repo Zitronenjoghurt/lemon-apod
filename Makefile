@@ -3,8 +3,8 @@ ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-archiver --
 API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p apod-api
 COMPOSE = docker compose -f docker/compose.yaml
 
-.PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs sky docker \
-        seed up down logs ps shell
+.PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs pictures sky \
+        docker seed up down logs ps shell
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +45,9 @@ reparse: ## Rebuild the index from the HTML on disk
 
 thumbs: ## Generate any missing thumbnails
 	$(ARCHIVER) thumbs
+
+pictures: ## Hash thumbnails and group the pictures the archive has run more than once
+	$(ARCHIVER) pictures
 
 sky: ## Poll the launch and space weather feeds once into ./data/sky.db
 	$(ARCHIVER) sky

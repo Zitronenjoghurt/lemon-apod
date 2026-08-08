@@ -11,6 +11,27 @@ const router = createRouter({
     { path: '/favorites', name: 'favorites', component: () => import('@/views/FavoritesView.vue') },
     { path: '/random', name: 'random', component: () => import('@/views/RandomView.vue') },
     { path: '/stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
+    { path: '/games', name: 'games', component: () => import('@/views/GamesView.vue') },
+    {
+      path: '/games/date',
+      name: 'game-date',
+      component: () => import('@/views/games/GuessDateView.vue'),
+    },
+    {
+      path: '/games/words',
+      name: 'game-words',
+      component: () => import('@/views/games/FillWordsView.vue'),
+    },
+    {
+      path: '/games/order',
+      name: 'game-order',
+      component: () => import('@/views/games/OrderView.vue'),
+    },
+    {
+      path: '/games/match',
+      name: 'game-match',
+      component: () => import('@/views/games/MatchView.vue'),
+    },
     { path: '/resources', name: 'resources', component: () => import('@/views/ResourcesView.vue') },
     { path: '/contact', name: 'contact', component: () => import('@/views/ContactView.vue') },
     {

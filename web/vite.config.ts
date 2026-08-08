@@ -32,9 +32,12 @@ export default defineConfig({
         alias: {'@': fileURLToPath(new URL('./src', import.meta.url))},
     },
     server: {
+        // /pic is where the games fetch their thumbnails, deliberately outside /api so a grid of
+        // them is not rate limited. It has to be proxied like the rest or the games have no images.
         proxy: {
             '/api': backend,
             '/thumbs': backend,
+            '/pic': backend,
         },
     },
 })

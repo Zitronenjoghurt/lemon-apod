@@ -4,7 +4,7 @@ use axum::Router;
 pub mod error;
 pub mod params;
 pub mod response;
-mod routes;
+pub mod routes;
 
 pub fn build() -> Router<ServerState> {
     Router::new()

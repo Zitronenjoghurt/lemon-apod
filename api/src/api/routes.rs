@@ -3,6 +3,7 @@ use axum::Router;
 
 mod entries;
 mod entry;
+pub mod games;
 mod on_this_day;
 mod random;
 mod resources;
@@ -19,6 +20,7 @@ pub fn build_routes() -> Router<ServerState> {
         .nest("/search", search::router())
         .nest("/on-this-day", on_this_day::router())
         .nest("/random", random::router())
+        .nest("/games", games::router())
         .nest("/status", status::router())
         .nest("/sky", sky::router())
         .nest("/stats", stats::router())

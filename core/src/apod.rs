@@ -1,23 +1,27 @@
 pub mod catalogue;
+pub mod games;
 pub mod insight;
 pub mod model;
+pub mod pictures;
 pub mod query;
 pub mod read;
 #[cfg(feature = "data-write")]
 pub mod write;
 
+pub use games::Deal;
 pub use model::{
-    Coverage, EntryLength, Filters, HostCount, KindCount, Listing, MonthCount, Order, Page,
-    Resource, ResourceFilters, ResourceOrder, ResourceRef, ResourceRefs, ResourceSummary,
-    SearchResults, Stats, TextSummary, Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse,
-    YearCount, YearStats,
+    Cloze, ClozePiece, Coverage, EntryLength, Filters, HostCount, KindCount, Listing, MonthCount,
+    Order, Page, PictureSummary, Resource, ResourceFilters, ResourceOrder, ResourceRef,
+    ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary, Timeline, Word, WordEntry,
+    WordFilters, WordOrder, WordUse, YearCount, YearStats,
 };
+pub use pictures::{Fingerprint, PictureGroup};
 pub use read::{ApodError, ApodReader, ApodResult, Snippet};
 #[cfg(feature = "data-write")]
 pub use write::ApodWriter;
 
-pub const SCHEMA_VERSION: i64 = 3;
-pub const MIN_SCHEMA_VERSION: i64 = 3;
+pub const SCHEMA_VERSION: i64 = 4;
+pub const MIN_SCHEMA_VERSION: i64 = 4;
 
 pub(crate) const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_html, \
                                         explanation_text, credits, has_copyright, license_url, \

@@ -14,7 +14,10 @@ A service for archiving and serving NASAs Astronomy Picture Of the Day in a mode
 - **A resource catalogue** of everything the archive links out to.
 - **Statistics** over the whole archive and how it has changed year by year, down to how often every individual word has
   ever been used.
-- **What the sky is doing**, on the front page: the moon's phase, which planets are up and when, the next meteor shower
+- **Four games** over the archive: guess when a blurred picture ran, uncover a redacted explanation one word at a time,
+  put two pictures in chronological order, or match an explanation to the picture it describes. Each one deals the same
+  puzzle to everybody each day (but also offers a free play mode).
+- **What the sky is up to**, on the front page: the moon's phase, which planets are up and when, the next meteor shower
   and whether the moon will ruin it, the next eclipse, and the next few rocket launches.
 
 ## Running it in containers
@@ -51,7 +54,7 @@ Everything lives under `APOD_DATA_DIR` (`/data` in the container, `./data` local
 html/YYYY/MM/YYYY-MM-DD.html   raw bytes, exactly as served
 thumbs/YYYY/MM/YYYY-MM-DD.webp grid thumbnails
 archive.db                     fetch state, NOT derived, do not delete
-apod.db                        parsed entries, search index, catalogue and word counts
+apod.db                        parsed entries, search index, catalogue, word counts, picture hashes
 sky.db                         upcoming launches and space weather, refetched every few hours
 ```
 

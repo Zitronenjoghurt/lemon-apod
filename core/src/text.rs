@@ -13,12 +13,36 @@ pub struct TextStats {
     pub sentences: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Token<'a> {
+    Word(&'a str),
+    Gap(&'a str),
+}
+
 pub fn word_counts(text: &str) -> BTreeMap<String, u32> {
     let mut counts: BTreeMap<String, u32> = BTreeMap::new();
     for word in split_words(text).into_iter().filter_map(normalise) {
         *counts.entry(word).or_default() += 1;
     }
     counts
+}
+
+pub fn tokens(text: &str) -> Vec<Token<'_>> {
+    let mut out = Vec::new();
+    let mut last = 0;
+
+    for (from, word) in word_spans(text) {
+        if from > last {
+            out.push(Token::Gap(&text[last..from]));
+        }
+        out.push(Token::Word(word));
+        last = from + word.len();
+    }
+
+    if last < text.len() {
+        out.push(Token::Gap(&text[last..]));
+    }
+    out
 }
 
 pub fn stats(text: &str, counts: &BTreeMap<String, u32>) -> TextStats {
@@ -31,6 +55,10 @@ pub fn stats(text: &str, counts: &BTreeMap<String, u32>) -> TextStats {
 }
 
 fn split_words(text: &str) -> Vec<&str> {
+    word_spans(text).into_iter().map(|(_, word)| word).collect()
+}
+
+fn word_spans(text: &str) -> Vec<(usize, &str)> {
     let mut out = Vec::new();
     let mut start: Option<usize> = None;
     let mut previous = '\0';
@@ -52,7 +80,7 @@ fn split_words(text: &str) -> Vec<&str> {
         match (inside, start) {
             (true, None) => start = Some(index),
             (false, Some(from)) => {
-                out.push(&text[from..index]);
+                out.push((from, &text[from..index]));
                 start = None;
             }
             _ => {}
@@ -61,12 +89,12 @@ fn split_words(text: &str) -> Vec<&str> {
     }
 
     if let Some(from) = start {
-        out.push(&text[from..]);
+        out.push((from, &text[from..]));
     }
     out
 }
 
-fn normalise(raw: &str) -> Option<String> {
+pub fn normalise(raw: &str) -> Option<String> {
     raw.chars().any(char::is_alphabetic).then(|| {
         raw.chars()
             .map(|ch| if ch == '\u{2019}' { '\'' } else { ch })
@@ -237,6 +265,61 @@ mod tests {
     fn unterminated_prose_still_holds_a_sentence() {
         assert_eq!(count_sentences("No full stop here"), 1);
         assert_eq!(count_sentences("   "), 0);
+    }
+
+    #[test]
+    fn tokens_put_the_text_back_together_exactly() {
+        for text in [
+            "The star is bright. The star is far.",
+            "  M31 is 2.5 million light-years away, in 1995!  ",
+            "gravity--the real problem--wins",
+            "The n\u{e9}bula glows.",
+            "",
+            "...",
+        ] {
+            let rebuilt: String = tokens(text)
+                .iter()
+                .map(|token| match token {
+                    Token::Word(word) => *word,
+                    Token::Gap(gap) => *gap,
+                })
+                .collect();
+            assert_eq!(
+                rebuilt, text,
+                "a redacted text has to read as it was written"
+            );
+        }
+    }
+
+    #[test]
+    fn tokens_agree_with_the_words_the_catalogue_counts() {
+        let text = "M31 is 2.5 million light-years away, in 1995.";
+        let words: Vec<&str> = tokens(text)
+            .into_iter()
+            .filter_map(|token| match token {
+                Token::Word(word) => Some(word),
+                Token::Gap(_) => None,
+            })
+            .collect();
+
+        assert_eq!(
+            words,
+            vec![
+                "M31",
+                "is",
+                "2.5",
+                "million",
+                "light-years",
+                "away",
+                "in",
+                "1995"
+            ]
+        );
+        assert_eq!(
+            words.iter().filter_map(|word| normalise(word)).count(),
+            6,
+            "the two bare numbers are tokens but not words"
+        );
     }
 
     #[test]
