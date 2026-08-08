@@ -3,7 +3,7 @@ ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-archiver --
 API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p apod-api
 COMPOSE = docker compose -f docker/compose.yaml
 
-.PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs docker \
+.PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs sky docker \
         seed up down logs ps shell
 
 help:
@@ -45,6 +45,9 @@ reparse: ## Rebuild the index from the HTML on disk
 
 thumbs: ## Generate any missing thumbnails
 	$(ARCHIVER) thumbs
+
+sky: ## Poll the launch and space weather feeds once into ./data/sky.db
+	$(ARCHIVER) sky
 
 docker: ## Build both images locally
 	docker build -f docker/Dockerfile --target archiver -t lemon-apod-archiver:dev .

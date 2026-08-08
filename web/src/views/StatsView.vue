@@ -1,22 +1,22 @@
 <script lang="ts" setup>
-import {computed, onMounted, ref} from 'vue'
-import {RouterLink, useRoute, useRouter} from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RetryNotice from '@/components/RetryNotice.vue'
 import WordDetail from '@/components/WordDetail.vue'
 import YearChart from '@/components/YearChart.vue'
-import {api} from '@/api/client'
-import type {SortOrder, Word, WordSort} from '@/api/types'
-import {useAsync} from '@/composables/useAsync'
-import {formatDate} from '@/utils/date'
+import { api } from '@/api/client'
+import type { SortOrder, Word, WordSort } from '@/api/types'
+import { useAsync } from '@/composables/useAsync'
+import { formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 50
 const DEBOUNCE_MS = 250
 
 const SORTS: { label: string; value: `${WordSort}:${SortOrder}` }[] = [
-  {label: 'Most used', value: 'total:desc'},
-  {label: 'Least used', value: 'total:asc'},
-  {label: 'In most entries', value: 'entries:desc'},
-  {label: 'A to Z', value: 'word:asc'},
+  { label: 'Most used', value: 'total:desc' },
+  { label: 'Least used', value: 'total:asc' },
+  { label: 'In most entries', value: 'entries:desc' },
+  { label: 'A to Z', value: 'word:asc' },
 ]
 
 const route = useRoute()
@@ -48,14 +48,14 @@ const {
 } = useAsync((signal) => {
   const [by, order] = sort.value.split(':') as [WordSort, SortOrder]
   return api.words(
-      {
-        q: query.value || undefined,
-        sort: by,
-        order,
-        offset: (page.value - 1) * PAGE_SIZE,
-        limit: PAGE_SIZE,
-      },
-      signal,
+    {
+      q: query.value || undefined,
+      sort: by,
+      order,
+      offset: (page.value - 1) * PAGE_SIZE,
+      limit: PAGE_SIZE,
+    },
+    signal,
   )
 })
 
@@ -81,13 +81,13 @@ onMounted(() => {
 const openWord = computed(() => String(route.query.word ?? '') || undefined)
 
 function openDetail(word: Word) {
-  void router.push({query: {...route.query, word: word.word}})
+  void router.push({ query: { ...route.query, word: word.word } })
 }
 
 function closeDetail() {
-  const query = {...route.query}
+  const query = { ...route.query }
   delete query.word
-  void router.replace({query})
+  void router.replace({ query })
 }
 
 const text = computed(() => stats.value?.text)
@@ -96,13 +96,13 @@ const unmeasured = computed(() => stats.value != null && stats.value.text.measur
 const years = computed(() => timeline.value?.years ?? [])
 
 function series(pick: (year: (typeof years.value)[number]) => number) {
-  return years.value.map((year) => ({year: year.year, value: pick(year)}))
+  return years.value.map((year) => ({ year: year.year, value: pick(year) }))
 }
 
 const kindShare = computed(() => {
   const rows = stats.value?.by_media_kind ?? []
   const total = rows.reduce((sum, row) => sum + row.count, 0)
-  return rows.map((row) => ({...row, share: total ? row.count / total : 0}))
+  return rows.map((row) => ({ ...row, share: total ? row.count / total : 0 }))
 })
 
 const KIND_LABELS: Record<string, string> = {
@@ -136,7 +136,7 @@ function count(value: number | undefined): string {
       <h1>Statistics</h1>
     </header>
 
-    <RetryNotice v-if="statsError" :busy="statsLoading" :message="statsError" @retry="loadStats"/>
+    <RetryNotice v-if="statsError" :busy="statsLoading" :message="statsError" @retry="loadStats" />
 
     <Message v-else-if="unmeasured" :closable="false" severity="secondary">
       The archive has not been parsed by a build that counts words yet. Run
@@ -228,40 +228,40 @@ function count(value: number | undefined): string {
       <h2>Over time</h2>
 
       <RetryNotice
-          v-if="timelineError"
-          :busy="timelineLoading"
-          :message="timelineError"
-          @retry="loadTimeline"
+        v-if="timelineError"
+        :busy="timelineLoading"
+        :message="timelineError"
+        @retry="loadTimeline"
       />
 
       <div v-else-if="timelineLoading && !years.length" class="charts">
-        <Skeleton v-for="index in 6" :key="index" height="9rem" width="100%"/>
+        <Skeleton v-for="index in 6" :key="index" height="9rem" width="100%" />
       </div>
 
       <div v-else-if="years.length" class="charts">
-        <YearChart :points="series((y) => y.entries)" label="Entries published"/>
+        <YearChart :points="series((y) => y.entries)" label="Entries published" />
         <YearChart
-            :decimals="1"
-            :points="series((y) => y.avg_words)"
-            kind="line"
-            label="Average words per entry"
+          :decimals="1"
+          :points="series((y) => y.avg_words)"
+          kind="line"
+          label="Average words per entry"
         />
         <YearChart
-            :decimals="1"
-            :points="series((y) => y.avg_words_per_sentence)"
-            kind="line"
-            label="Average words per sentence"
+          :decimals="1"
+          :points="series((y) => y.avg_words_per_sentence)"
+          kind="line"
+          label="Average words per sentence"
         />
         <YearChart
-            :decimals="1"
-            :points="series((y) => y.avg_links)"
-            kind="line"
-            label="Average links per entry"
+          :decimals="1"
+          :points="series((y) => y.avg_links)"
+          kind="line"
+          label="Average links per entry"
         />
-        <YearChart :points="series((y) => y.distinct_words)" label="Different words used"/>
-        <YearChart :points="series((y) => y.new_words)" label="Words used for the first time"/>
-        <YearChart :points="series((y) => y.videos)" label="Entries that were video"/>
-        <YearChart :points="series((y) => y.copyright)" label="Entries under copyright"/>
+        <YearChart :points="series((y) => y.distinct_words)" label="Different words used" />
+        <YearChart :points="series((y) => y.new_words)" label="Words used for the first time" />
+        <YearChart :points="series((y) => y.videos)" label="Entries that were video" />
+        <YearChart :points="series((y) => y.copyright)" label="Entries under copyright" />
       </div>
 
       <p v-else class="muted empty">
@@ -275,7 +275,7 @@ function count(value: number | undefined): string {
         <li v-for="row in kindShare" :key="row.kind">
           <span class="kind-name">{{ KIND_LABELS[row.kind] ?? row.kind }}</span>
           <span class="meter" role="presentation">
-            <span :style="{ width: `${Math.max(row.share * 100, 0.6)}%` }" class="fill"/>
+            <span :style="{ width: `${Math.max(row.share * 100, 0.6)}%` }" class="fill" />
           </span>
           <span class="tabular kind-count">{{ count(row.count) }}</span>
         </li>
@@ -286,32 +286,32 @@ function count(value: number | undefined): string {
       <h2>Every word</h2>
       <div class="row controls">
         <IconField class="word-search">
-          <InputIcon class="pi pi-search"/>
+          <InputIcon class="pi pi-search" />
           <InputText
-              v-model="query"
-              aria-label="Search words"
-              fluid
-              placeholder="nebula, neb*, …"
-              type="search"
-              @input="searchWords(true)"
+            v-model="query"
+            aria-label="Search words"
+            fluid
+            placeholder="nebula, neb*, …"
+            type="search"
+            @input="searchWords(true)"
           />
         </IconField>
         <Select
-            v-model="sort"
-            :options="SORTS"
-            aria-label="Order"
-            class="word-sort"
-            option-label="label"
-            option-value="value"
-            @update:model-value="searchWords(true)"
+          v-model="sort"
+          :options="SORTS"
+          aria-label="Order"
+          class="word-sort"
+          option-label="label"
+          option-value="value"
+          @update:model-value="searchWords(true)"
         />
       </div>
 
       <RetryNotice
-          v-if="wordsError"
-          :busy="wordsLoading"
-          :message="wordsError"
-          @retry="loadWords"
+        v-if="wordsError"
+        :busy="wordsLoading"
+        :message="wordsError"
+        @retry="loadWords"
       />
 
       <p v-if="words" aria-live="polite" class="muted count">
@@ -322,7 +322,7 @@ function count(value: number | undefined): string {
       </p>
 
       <div v-if="wordsLoading && !words" class="stack lines">
-        <Skeleton v-for="index in 6" :key="index" height="1.6rem" width="100%"/>
+        <Skeleton v-for="index in 6" :key="index" height="1.6rem" width="100%" />
       </div>
 
       <p v-else-if="words && !words.items.length" class="muted empty">
@@ -332,15 +332,15 @@ function count(value: number | undefined): string {
       <ul v-else-if="words" class="words">
         <li v-for="word in words.items" :key="word.word">
           <button
-              v-tooltip.bottom="
+            v-tooltip.bottom="
               `Written ${count(word.total)} times, across ${count(word.entries)} entries`
             "
-              class="word"
-              type="button"
-              @click="openDetail(word)"
+            class="word"
+            type="button"
+            @click="openDetail(word)"
           >
             <span class="text">{{ word.word }}</span>
-            <span aria-hidden="true" class="leader"/>
+            <span aria-hidden="true" class="leader" />
             <span class="tabular uses">{{ count(word.total) }}&times;</span>
             <span class="muted tabular entries">{{ count(word.entries) }}</span>
             <span class="sr-only">
@@ -351,15 +351,15 @@ function count(value: number | undefined): string {
       </ul>
 
       <Paginator
-          v-if="words && words.total > PAGE_SIZE"
-          :first="(page - 1) * PAGE_SIZE"
-          :rows="PAGE_SIZE"
-          :total-records="words.total"
-          @page="onPage"
+        v-if="words && words.total > PAGE_SIZE"
+        :first="(page - 1) * PAGE_SIZE"
+        :rows="PAGE_SIZE"
+        :total-records="words.total"
+        @page="onPage"
       />
     </section>
 
-    <WordDetail :word="openWord" @close="closeDetail"/>
+    <WordDetail :word="openWord" @close="closeDetail" />
   </div>
 </template>
 
@@ -532,8 +532,9 @@ h2 {
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease,
-  background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .word:hover {

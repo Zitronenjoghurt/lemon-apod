@@ -34,6 +34,7 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     push_url(&mut xml, &format!("{base}/"), Some("daily"));
     push_url(&mut xml, &format!("{base}/resources"), Some("weekly"));
     push_url(&mut xml, &format!("{base}/stats"), Some("weekly"));
+    push_url(&mut xml, &format!("{base}/contact"), Some("yearly"));
 
     let years: BTreeSet<String> = dates.iter().map(|date| date.format("%Y")).collect();
     for year in years.iter().rev() {

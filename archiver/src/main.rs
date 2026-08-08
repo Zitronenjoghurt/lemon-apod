@@ -5,6 +5,7 @@ mod fetch;
 mod reparse;
 mod report;
 mod shutdown;
+mod sky;
 mod thumbs;
 mod video;
 mod workers;
@@ -77,6 +78,9 @@ enum Command {
         limit: usize,
     },
 
+    /// Poll the launch and space weather feeds once into sky.db, then exit.
+    Sky,
+
     /// Coverage and index health.
     Status,
 }
@@ -104,6 +108,7 @@ async fn main() -> Result<()> {
             let index = ApodWriter::open(&cfg.index_db).await?;
             report::quality(index.reader(), date, warning.as_deref(), limit).await
         }
+        Command::Sky => sky::poll(&cfg).await,
         Command::Status => {
             let archive = ArchiveStore::open(&cfg.archive_db).await?;
             let index = ApodWriter::open(&cfg.index_db).await?;

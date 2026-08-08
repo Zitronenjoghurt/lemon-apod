@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import {RouterLink} from 'vue-router'
+import { RouterLink } from 'vue-router'
 
 const links = [
-  {to: '/', label: 'Latest entry', icon: 'pi pi-image'},
-  {to: '/archive', label: 'Archive', icon: 'pi pi-calendar'},
-  {to: '/random', label: 'Something random', icon: 'pi pi-sync'},
+  { to: '/', label: 'Latest entry', icon: 'pi pi-image' },
+  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
+  { to: '/random', label: 'Something random', icon: 'pi pi-sync' },
 ]
 </script>
 
@@ -15,12 +15,12 @@ const links = [
     <div class="row links">
       <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="plain">
         <Button
-            :icon="link.icon"
-            :label="link.label"
-            outlined
-            severity="secondary"
-            size="small"
-            tabindex="-1"
+          :icon="link.icon"
+          :label="link.label"
+          outlined
+          severity="secondary"
+          size="small"
+          tabindex="-1"
         />
       </RouterLink>
     </div>

@@ -47,7 +47,9 @@ export function useExternalLinks() {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
 
     const anchor = (event.target as HTMLElement | null)?.closest?.('a')
-    const href = anchor?.getAttribute('href')
+    if (!anchor || anchor.hasAttribute('data-ours')) return
+
+    const href = anchor.getAttribute('href')
     if (!href || !isUnaudited(href)) return
 
     event.preventDefault()

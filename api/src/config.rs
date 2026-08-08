@@ -7,6 +7,7 @@ use std::str::FromStr;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub index_db: PathBuf,
+    pub sky_db: PathBuf,
     pub thumb_dir: PathBuf,
     pub static_dir: PathBuf,
 
@@ -31,6 +32,17 @@ pub struct Config {
     pub cache_sitemap_secs: u64,
     pub cache_timeline_secs: u64,
     pub cache_status_secs: u64,
+    pub cache_sky_secs: u64,
+
+    pub sky_launch_limit: i64,
+
+    pub contact: Contact,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct Contact {
+    pub form_key: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,6 +72,7 @@ impl Config {
 
         Ok(Self {
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
+            sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
             thumb_dir: env_or("APOD_THUMB_DIR", data_dir.join("thumbs"))?,
             static_dir: env_or("APOD_STATIC_DIR", "./static".into())?,
 
@@ -92,6 +105,14 @@ impl Config {
             cache_sitemap_secs: env_or("APOD_CACHE_SITEMAP_SECS", 3_600)?,
             cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
             cache_status_secs: env_or("APOD_CACHE_STATUS_SECS", 60)?,
+            cache_sky_secs: env_or("APOD_CACHE_SKY_SECS", 1800)?,
+
+            sky_launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 10)?,
+
+            contact: Contact {
+                form_key: optional("APOD_CONTACT_FORM_KEY"),
+                email: optional("APOD_CONTACT_EMAIL"),
+            },
         })
         .and_then(Self::validated)
     }
@@ -100,6 +121,13 @@ impl Config {
         self.publish.validate()?;
         Ok(self)
     }
+}
+
+fn optional(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|raw| raw.trim().to_owned())
+        .filter(|raw| !raw.is_empty())
 }
 
 fn env_or<T>(key: &str, default: T) -> Result<T>

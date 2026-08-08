@@ -14,6 +14,8 @@ A service for archiving and serving NASAs Astronomy Picture Of the Day in a mode
 - **A resource catalogue** of everything the archive links out to.
 - **Statistics** over the whole archive and how it has changed year by year, down to how often every individual word has
   ever been used.
+- **What the sky is doing**, on the front page: the moon's phase, which planets are up and when, the next meteor shower
+  and whether the moon will ruin it, the next eclipse, and the next few rocket launches.
 
 ## Running it in containers
 
@@ -50,6 +52,7 @@ html/YYYY/MM/YYYY-MM-DD.html   raw bytes, exactly as served
 thumbs/YYYY/MM/YYYY-MM-DD.webp grid thumbnails
 archive.db                     fetch state, NOT derived, do not delete
 apod.db                        parsed entries, search index, catalogue and word counts
+sky.db                         upcoming launches and space weather, refetched every few hours
 ```
 
 The raw HTML on disk is the source of truth. `apod.db` is derived from it and can be deleted and
@@ -59,3 +62,8 @@ missing.
 
 `archive.db` records when each page was fetched and what it hashed to, which is not recoverable from the filesystem.
 Losing it means re-fetching the whole archive at whatever delay configured.
+
+`sky.db` holds the two things the front page cannot work out for itself, upcoming rocket launches and the current
+geomagnetic activity. The archiver refreshes it every six hours, and `make sky` does one pass now and prints what it
+got. Deleting it costs one poll. Everything else on those panels, the moon and the planets and the showers and the
+eclipses, is computed on the spot and needs neither this file nor a network.

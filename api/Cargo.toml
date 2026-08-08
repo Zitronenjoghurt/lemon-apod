@@ -5,7 +5,7 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-apod-core = { workspace = true, features = ["data-read"] }
+apod-core = { workspace = true, features = ["data-read", "sky-data"] }
 
 anyhow = { workspace = true }
 axum = { version = "0.8.9", features = ["macros"] }

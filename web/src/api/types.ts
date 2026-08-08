@@ -139,10 +139,16 @@ export interface PublishSchedule {
   next_at: string
 }
 
+export interface ContactConfig {
+  form_key: string | null
+  email: string | null
+}
+
 export interface Status {
   latest: ApodSummary | null
   entries: number
   publish: PublishSchedule
+  contact: ContactConfig
 }
 
 export interface MonthCount {
@@ -197,6 +203,134 @@ export interface WordUse extends Word {
   last?: string
   by_year: { year: number; total: number; entries: number }[]
   top_entries: { date: string; title: string; count: number }[]
+}
+
+export type MoonPhase =
+  | 'new'
+  | 'waxing_crescent'
+  | 'first_quarter'
+  | 'waxing_gibbous'
+  | 'full'
+  | 'waning_gibbous'
+  | 'last_quarter'
+  | 'waning_crescent'
+
+export interface MoonQuarter {
+  quarter: 'new' | 'first' | 'full' | 'last'
+  label: string
+  at: string
+}
+
+export interface Moon {
+  phase: MoonPhase
+  label: string
+  illumination: number
+  age_days: number
+  waxing: boolean
+  distance_km: number
+  cycle: number
+  last_new_moon: string
+  next_quarters: MoonQuarter[]
+}
+
+export interface Turning {
+  turning: 'march_equinox' | 'june_solstice' | 'september_equinox' | 'december_solstice'
+  label: string
+  at: string
+  opens_northern: string
+  opens_southern: string
+}
+
+export type PlanetVisibility = 'evening' | 'morning' | 'lost'
+
+export interface PlanetMilestone {
+  name: string
+  milestone: 'opposition' | 'greatest_eastern_elongation' | 'greatest_western_elongation'
+  label: string
+  at: string
+  elongation: number
+}
+
+export interface Planet {
+  planet: string
+  name: string
+  naked_eye: boolean
+  visibility: PlanetVisibility
+  visibility_label: string
+  elongation: number
+  magnitude: number
+  distance_au: number
+  next_milestone: PlanetMilestone | null
+}
+
+export interface ShowerPeak {
+  name: string
+  radiant: string
+  parent: string
+  zenith_hourly_rate: number
+  peak: string
+  moon_illumination: number
+  moonlight: 'dark' | 'some' | 'washed_out'
+  moonlight_label: string
+}
+
+export interface EclipseEvent {
+  label: string
+  solar: boolean
+  at: string
+  magnitude: number
+}
+
+export type SkyEventKind = 'moon' | 'season' | 'shower' | 'eclipse' | 'planet'
+
+export interface SkyEvent {
+  kind: SkyEventKind
+  title: string
+  detail: string | null
+  at: string
+}
+
+export interface Launch {
+  id: string
+  name: string
+  provider: string | null
+  vehicle: string | null
+  pad: string | null
+  mission: string | null
+  orbit: string | null
+  status: string | null
+  net: string
+  window_start: string | null
+  window_end: string | null
+  precision: string | null
+  image_url: string | null
+  info_url: string | null
+}
+
+export interface SpaceWeather {
+  kp: number
+  observed_at: string
+}
+
+export interface FeedState {
+  name: string
+  fetched_at: string | null
+  succeeded: boolean
+  error: string | null
+}
+
+export interface Sky {
+  at: string
+  moon: Moon
+  season: Turning
+  next_turning: Turning
+  planets: Planet[]
+  showers: ShowerPeak[]
+  eclipses: EclipseEvent[]
+  events: SkyEvent[]
+  launches: Launch[]
+  space_weather: SpaceWeather | null
+  feeds: FeedState[]
 }
 
 export type ResourceSort = 'refs' | 'entries' | 'first' | 'last' | 'label' | 'address'

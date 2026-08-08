@@ -10,6 +10,7 @@ pub struct Config {
     pub thumb_dir: PathBuf,
     pub archive_db: PathBuf,
     pub index_db: PathBuf,
+    pub sky_db: PathBuf,
 
     pub source_base_url: String,
     pub user_agent: String,
@@ -21,6 +22,19 @@ pub struct Config {
     pub daily: Daily,
     pub recheck_per_day: u32,
     pub thumbs: Thumbs,
+    pub sky: Sky,
+}
+
+#[derive(Debug, Clone)]
+pub struct Sky {
+    pub enabled: bool,
+    pub launches_enabled: bool,
+    pub weather_enabled: bool,
+    pub launches_url: String,
+    pub launch_page_url: String,
+    pub weather_url: String,
+    pub launch_limit: u32,
+    pub interval: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -63,6 +77,7 @@ impl Config {
             thumb_dir: env_or("APOD_THUMB_DIR", data_dir.join("thumbs"))?,
             archive_db: env_or("APOD_ARCHIVE_DB", data_dir.join("archive.db"))?,
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
+            sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
 
             source_base_url: env_or(
                 "APOD_SOURCE_BASE_URL",
@@ -97,6 +112,29 @@ impl Config {
             },
 
             recheck_per_day: env_or("APOD_RECHECK_PER_DAY", 0)?,
+
+            sky: Sky {
+                enabled: env_or("APOD_SKY_ENABLED", true)?,
+                launches_enabled: env_or("APOD_SKY_LAUNCHES_ENABLED", true)?,
+                weather_enabled: env_or("APOD_SKY_WEATHER_ENABLED", true)?,
+                launches_url: env_or(
+                    "APOD_SKY_LAUNCHES_URL",
+                    "https://ll.thespacedevs.com/2.3.0/launches/upcoming/".to_owned(),
+                )?,
+                launch_page_url: env_or(
+                    "APOD_SKY_LAUNCH_PAGE_URL",
+                    "https://spacelaunchnow.me/launch/{slug}/".to_owned(),
+                )?,
+                weather_url: env_or(
+                    "APOD_SKY_WEATHER_URL",
+                    "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+                        .to_owned(),
+                )?,
+                launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 20)?,
+                interval: Duration::from_secs(
+                    u64::from(env_or::<u32>("APOD_SKY_INTERVAL_HOURS", 1)?.max(1)) * 3600,
+                ),
+            },
 
             thumbs: Thumbs {
                 enabled: env_or("APOD_THUMBS_ENABLED", true)?,

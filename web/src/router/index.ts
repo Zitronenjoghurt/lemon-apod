@@ -12,6 +12,7 @@ const router = createRouter({
     { path: '/random', name: 'random', component: () => import('@/views/RandomView.vue') },
     { path: '/stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
     { path: '/resources', name: 'resources', component: () => import('@/views/ResourcesView.vue') },
+    { path: '/contact', name: 'contact', component: () => import('@/views/ContactView.vue') },
     {
       path: '/resources/:id(\\d+)',
       name: 'resource',
@@ -36,7 +37,6 @@ const router = createRouter({
   scrollBehavior(to, from, saved) {
     if (to.name === 'feed') return false
     if (saved) return saved
-    // Paging or refining in place should not throw the reader back to the top.
     if (to.name === from.name && ['search', 'resources', 'stats'].includes(String(to.name))) {
       return {}
     }

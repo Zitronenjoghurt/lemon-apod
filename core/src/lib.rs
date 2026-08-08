@@ -10,6 +10,8 @@ pub mod media;
 pub mod parse;
 pub mod quality;
 pub mod resource;
+#[cfg(feature = "sky")]
+pub mod sky;
 pub mod text;
 
 #[cfg(feature = "data-write")]

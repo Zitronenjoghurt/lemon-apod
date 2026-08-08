@@ -9,6 +9,8 @@ default = []
 data = ["dep:sqlx"]
 data-read = ["data", "dep:serde_json"]
 data-write = ["data-read"]
+sky = []
+sky-data = ["sky", "data"]
 
 [dependencies]
 chrono = { workspace = true }

@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ReadProgress from '@/components/ReadProgress.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
+import SkyPanels from '@/components/SkyPanels.vue'
 import { api } from '@/api/client'
 import { type ApodSummary, isVideo } from '@/api/types'
 import { useCoverage } from '@/composables/useCoverage'
@@ -143,10 +144,6 @@ watch([standing, localToday], loadLocalDay, { immediate: true })
 
 <template>
   <div class="stack status">
-    <header class="stack head">
-      <h1>Today</h1>
-    </header>
-
     <RetryNotice v-if="error" :busy="loading" :message="error" @retry="reload" />
 
     <div v-else-if="!publish || (!featured && standing !== 'behind')" class="stack">
@@ -233,7 +230,7 @@ watch([standing, localToday], loadLocalDay, { immediate: true })
 
       <div class="panels">
         <section class="card panel">
-          <h2 class="muted">Next picture in</h2>
+          <h2 class="muted">Next picture most likely in</h2>
 
           <p v-if="eta" class="countdown">
             <template v-if="eta.soon">
@@ -281,6 +278,8 @@ watch([standing, localToday], loadLocalDay, { immediate: true })
           </p>
         </section>
       </div>
+
+      <SkyPanels />
     </template>
   </div>
 </template>

@@ -11,6 +11,7 @@ import type {
   ResourceRefs,
   ResourceSort,
   SearchResults,
+  Sky,
   SortOrder,
   Stats,
   Status,
@@ -185,6 +186,8 @@ export const api = {
     request<ApodEntry>(`/api/random${query({ kind })}`, signal),
 
   status: (signal?: AbortSignal) => request<Status>('/api/status', signal),
+
+  sky: (signal?: AbortSignal) => request<Sky>('/api/sky', signal),
 
   stats: (signal?: AbortSignal) => request<Stats>('/api/stats', signal),
 

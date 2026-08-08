@@ -53,7 +53,7 @@ services:
       APOD_RATE_LIMIT_BURST: 30
       RUST_LOG: info
     healthcheck:
-      test: ["CMD", "apod-api", "--health"]
+      test: [ "CMD", "apod-api", "--health" ]
       interval: 30s
       timeout: 5s
       retries: 3

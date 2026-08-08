@@ -1,5 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::response;
+use crate::config::Contact;
 use crate::schedule::Schedule;
 use crate::state::ServerState;
 use apod_core::ApodSummary;
@@ -14,6 +15,7 @@ struct Status {
     latest: Option<ApodSummary>,
     entries: i64,
     publish: Schedule,
+    contact: Contact,
 }
 
 async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
@@ -21,6 +23,7 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
         latest: state.store.latest().await?.map(|entry| entry.to_summary()),
         entries: state.store.count().await?,
         publish: Schedule::now(&state.config.publish),
+        contact: state.config.contact.clone(),
     };
 
     Ok(response::cached(state.config.cache_status_secs, status))

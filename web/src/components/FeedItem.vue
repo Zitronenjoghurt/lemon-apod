@@ -23,7 +23,7 @@ const DWELL_RATIO = 0.35
 
 const router = useRouter()
 const { isFavorite, toggle } = useFavorites()
-const { isRead, dimmed, markRead, toggleRead } = useRead()
+const { isRead, markRead, toggleRead } = useRead()
 
 const root = useTemplateRef<HTMLElement>('root')
 const entry = ref<ApodEntry | undefined>(props.preloaded)
@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <article ref="root" :class="{ faded: dimmed(date) }" class="feed-item card">
+  <article ref="root" class="feed-item card">
     <header class="head">
       <RouterLink :to="`/${date}`" class="plain">
         <time :datetime="date" class="muted date">
@@ -214,16 +214,6 @@ onBeforeUnmount(() => {
   background: var(--accent);
   margin-right: 0.4rem;
   vertical-align: 0.08em;
-}
-
-.feed-item.faded {
-  opacity: 0.55;
-  transition: opacity 0.25s ease;
-}
-
-.feed-item.faded:hover,
-.feed-item.faded:focus-within {
-  opacity: 1;
 }
 
 .actions {

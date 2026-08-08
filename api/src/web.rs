@@ -19,7 +19,7 @@ const CSP: &str = "default-src 'self'; \
      img-src 'self' https: data:; \
      media-src 'self' https:; \
      font-src 'self'; \
-     connect-src 'self'; \
+     connect-src 'self' https://api.web3forms.com; \
      frame-src https://www.youtube-nocookie.com https://player.vimeo.com; \
      object-src 'none'; \
      base-uri 'self'; \

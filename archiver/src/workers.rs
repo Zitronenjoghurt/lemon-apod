@@ -58,6 +58,16 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!("re-check disabled");
     }
 
+    if cfg.sky.enabled {
+        handles.push(tokio::spawn(crate::sky::run(
+            cfg.clone(),
+            client.clone(),
+            shutdown.clone(),
+        )));
+    } else {
+        tracing::info!("sky feeds disabled");
+    }
+
     shutdown::signal().await;
     tracing::info!("shutting down; letting workers finish their current step");
     let _ = stop.send(true);

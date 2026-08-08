@@ -2,7 +2,9 @@ use crate::config::Config;
 use crate::meta::Shell;
 use anyhow::Result;
 use apod_core::db::DbConfig;
+use apod_core::sky::store::SkyReader;
 use apod_core::{ApodReader, Snippet};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -14,6 +16,7 @@ const HEALTH_TTL: Duration = Duration::from_secs(2);
 pub struct ServerState {
     pub config: Arc<Config>,
     pub store: ApodReader,
+    pub sky: Sky,
     pub shell: Arc<Shell>,
     pub sitemap: Cached,
     pub timeline: Cached,
@@ -31,6 +34,10 @@ impl ServerState {
 
         Ok(Self {
             shell: Arc::new(Shell::load(&config)?),
+            sky: Sky::new(
+                config.sky_db.clone(),
+                Duration::from_secs(config.cache_sky_secs),
+            ),
             sitemap: Cached::new(Duration::from_secs(config.cache_sitemap_secs)),
             timeline: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             coverage: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
@@ -38,6 +45,46 @@ impl ServerState {
             store,
             config: Arc::new(config),
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct Sky {
+    path: Arc<PathBuf>,
+    reader: Arc<RwLock<Option<SkyReader>>>,
+    pub cached: Cached,
+}
+
+impl Sky {
+    fn new(path: PathBuf, ttl: Duration) -> Self {
+        Self {
+            path: Arc::new(path),
+            reader: Arc::new(RwLock::new(None)),
+            cached: Cached::new(ttl),
+        }
+    }
+
+    pub async fn reader(&self) -> Option<SkyReader> {
+        if let Some(reader) = self.reader.read().await.as_ref() {
+            return Some(reader.clone());
+        }
+
+        let mut held = self.reader.write().await;
+        if let Some(reader) = held.as_ref() {
+            return Some(reader.clone());
+        }
+
+        match SkyReader::open(&*self.path).await {
+            Ok(reader) => {
+                tracing::info!(path = %self.path.display(), "opened the sky database");
+                *held = Some(reader.clone());
+                Some(reader)
+            }
+            Err(error) => {
+                tracing::debug!(path = %self.path.display(), "no sky database yet: {error}");
+                None
+            }
+        }
     }
 }
 
