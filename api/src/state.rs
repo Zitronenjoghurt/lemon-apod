@@ -19,6 +19,8 @@ pub struct ServerState {
     pub sky: Sky,
     pub shell: Arc<Shell>,
     pub sitemap: Cached,
+    pub atom: Cached,
+    pub rss: Cached,
     pub timeline: Cached,
     pub coverage: Cached,
     pub health: Cached,
@@ -39,6 +41,8 @@ impl ServerState {
                 Duration::from_secs(config.cache_sky_secs),
             ),
             sitemap: Cached::new(Duration::from_secs(config.cache_sitemap_secs)),
+            atom: Cached::new(Duration::from_secs(config.cache_feed_secs)),
+            rss: Cached::new(Duration::from_secs(config.cache_feed_secs)),
             timeline: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             coverage: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             health: Cached::new(HEALTH_TTL),
@@ -91,11 +95,21 @@ impl Sky {
 struct Held {
     built: Instant,
     body: Arc<str>,
+    etag: Arc<str>,
 }
 
 pub struct Fresh {
     pub body: Arc<str>,
+    pub etag: Arc<str>,
     pub max_age: Duration,
+}
+
+fn etag_for(body: &str) -> Arc<str> {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    body.hash(&mut hasher);
+    format!("\"{:016x}\"", hasher.finish()).into()
 }
 
 #[derive(Clone)]
@@ -119,6 +133,7 @@ impl Cached {
             .filter(|left| !left.is_zero())
             .map(|max_age| Fresh {
                 body: Arc::clone(&held.body),
+                etag: Arc::clone(&held.etag),
                 max_age,
             })
     }
@@ -138,13 +153,16 @@ impl Cached {
         }
 
         let body: Arc<str> = build().await?.into();
+        let etag = etag_for(&body);
         *held = Some(Held {
             built: Instant::now(),
             body: Arc::clone(&body),
+            etag: Arc::clone(&etag),
         });
 
         Ok(Fresh {
             body,
+            etag,
             max_age: self.ttl,
         })
     }
@@ -198,6 +216,23 @@ mod tests {
             "a body already part way through its life cannot be offered the whole of it"
         );
         assert_eq!(builds.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_reused_body_keeps_the_validator_it_was_built_with() {
+        let cache = Cached::new(Duration::from_secs(60));
+        let builds = AtomicUsize::new(0);
+
+        let built = cache.get_or_build(counting(&builds)).await.unwrap();
+        let reused = cache.get_or_build(counting(&builds)).await.unwrap();
+
+        assert_eq!(built.etag, reused.etag, "same body, same validator");
+        assert!(built.etag.starts_with('"') && built.etag.ends_with('"'));
+    }
+
+    #[tokio::test]
+    async fn a_different_body_gets_a_different_validator() {
+        assert_ne!(etag_for("<urlset/>"), etag_for("<urlset><url/></urlset>"));
     }
 
     #[tokio::test]

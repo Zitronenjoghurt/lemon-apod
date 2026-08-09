@@ -71,5 +71,5 @@ logs: ## Follow both services' logs
 ps: ## Container and health status
 	$(COMPOSE) ps
 
-shell: ## Shell into the running archiver container
-	$(COMPOSE) exec -it archiver /bin/bash
+shell: ## Poke at ./data with a shell. The service images are distroless and carry none
+	docker run --rm -it -v $(DATA):/data -w /data busybox sh

@@ -119,7 +119,7 @@ function magnitude(value: number): string {
   <template v-if="sky && moon">
     <div class="panels">
       <section class="card panel moon-panel">
-        <h2 class="muted">The moon tonight</h2>
+        <h2 class="muted">The moon today</h2>
 
         <div class="row moon-row">
           <MoonDial :illumination="moon.illumination" :label="moon.label" :waxing="moon.waxing" />
@@ -171,7 +171,7 @@ function magnitude(value: number): string {
       </section>
 
       <section class="card panel">
-        <h2 class="muted">Planets tonight</h2>
+        <h2 class="muted">Visible planets today</h2>
 
         <ul v-if="visiblePlanets.length" class="planets">
           <li v-for="planet in visiblePlanets" :key="planet.planet">
@@ -203,7 +203,9 @@ function magnitude(value: number): string {
             <div :style="{ width: `${dial}%` }" class="fill" />
             <div class="threshold" />
           </div>
-          <p class="muted caption">0 to 9 at {{ observed }}. Storms start at 5.</p>
+          <p class="muted caption">
+            Scale of 0 to 9, Storms start at 5. Last measured at {{ observed }}.
+          </p>
         </div>
 
         <ul v-if="levels.length" class="bands">

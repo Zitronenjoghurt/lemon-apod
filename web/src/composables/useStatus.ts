@@ -1,11 +1,12 @@
 import { computed, ref } from 'vue'
 import { api } from '@/api/client'
-import type { ApodSummary, ContactConfig, PublishSchedule } from '@/api/types'
+import type { ApodSummary, ContactConfig, NotifyConfig, PublishSchedule } from '@/api/types'
 
 const latest = ref<ApodSummary | null>(null)
 const entries = ref(0)
 const publish = ref<PublishSchedule | null>(null)
 const contact = ref<ContactConfig | null>(null)
+const notify = ref<NotifyConfig | null>(null)
 
 let loaded = false
 let inFlight: Promise<void> | null = null
@@ -20,6 +21,7 @@ function load(): Promise<void> {
       entries.value = status.entries
       publish.value = status.publish
       contact.value = status.contact
+      notify.value = status.notify
       loaded = true
     })
     .catch(() => {})
@@ -38,6 +40,7 @@ export function useStatus() {
     entries,
     publish,
     contact,
+    notify,
     /** False until the status response has arrived, so /contact can wait rather than flicker. */
     loaded: computed(() => contact.value !== null),
     latestDate: computed(() => latest.value?.date ?? null),

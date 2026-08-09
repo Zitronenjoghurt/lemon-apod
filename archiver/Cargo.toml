@@ -8,7 +8,7 @@ edition.workspace = true
 tokio = { workspace = true, features = ["test-util", "io-util", "net"] }
 
 [dependencies]
-apod-core = { workspace = true, features = ["data-write", "sky-data"] }
+apod-core = { workspace = true, features = ["data-write", "notify-data", "sky-data"] }
 
 anyhow = { workspace = true }
 chrono = { workspace = true }

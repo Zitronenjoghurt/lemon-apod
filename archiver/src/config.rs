@@ -11,6 +11,7 @@ pub struct Config {
     pub archive_db: PathBuf,
     pub index_db: PathBuf,
     pub sky_db: PathBuf,
+    pub notify_db: PathBuf,
 
     pub source_base_url: String,
     pub user_agent: String,
@@ -23,6 +24,51 @@ pub struct Config {
     pub recheck_per_day: u32,
     pub thumbs: Thumbs,
     pub sky: Sky,
+    pub notify: Notify,
+}
+
+#[derive(Debug, Clone)]
+pub struct Notify {
+    pub enabled: bool,
+    pub base_url: String,
+    /// The same value the server declares in its own `auth-tokens`. Both sides are configured
+    /// from one definition rather than one being generated and copied into the other.
+    pub token: Option<String>,
+    pub public_url: String,
+    pub interval: Duration,
+
+    pub apod_topic: Option<String>,
+    pub aurora_topic: Option<String>,
+    pub space_weather_topic: Option<String>,
+    pub sky_topic: Option<String>,
+
+    /// How stale an entry may be and still be worth announcing. Stops a deployment that was down
+    /// over a weekend from opening with a picture nobody is looking at any more.
+    pub apod_max_age: Duration,
+    /// How far ahead a shower peak or a supermoon is announced.
+    pub sky_lead: Duration,
+    /// Eclipses get longer notice than the rest: they are rare, and worth travelling for.
+    pub eclipse_lead: Duration,
+    /// Below this Kp, a storm is not worth a phone buzzing at three in the morning.
+    pub aurora_min_kp: f64,
+}
+
+impl Notify {
+    pub fn topics(&self) -> Vec<&str> {
+        [
+            self.apod_topic.as_deref(),
+            self.aurora_topic.as_deref(),
+            self.space_weather_topic.as_deref(),
+            self.sky_topic.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    pub fn url_for(&self, topic: &str) -> String {
+        format!("{}/{topic}", self.base_url)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -79,6 +125,7 @@ impl Config {
             archive_db: env_or("APOD_ARCHIVE_DB", data_dir.join("archive.db"))?,
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
             sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
+            notify_db: env_or("APOD_NOTIFY_DB", data_dir.join("notify.db"))?,
 
             source_base_url: env_or(
                 "APOD_SOURCE_BASE_URL",
@@ -142,6 +189,35 @@ impl Config {
                 ),
             },
 
+            notify: Notify {
+                enabled: env_or("APOD_NOTIFY_ENABLED", false)?,
+                base_url: env_or("APOD_NTFY_URL", "https://ntfy.sh".to_owned())
+                    .map(|url: String| url.trim_end_matches('/').to_owned())?,
+                token: optional("APOD_NTFY_TOKEN"),
+                public_url: env_or(
+                    "APOD_PUBLIC_URL",
+                    "https://apod.lemon.industries".to_owned(),
+                )
+                .map(|url: String| url.trim_end_matches('/').to_owned())?,
+                interval: secs("APOD_NOTIFY_INTERVAL_SECS", 300)?,
+
+                apod_topic: optional("APOD_NTFY_TOPIC_APOD"),
+                aurora_topic: optional("APOD_NTFY_TOPIC_AURORA"),
+                space_weather_topic: optional("APOD_NTFY_TOPIC_SPACE_WEATHER"),
+                sky_topic: optional("APOD_NTFY_TOPIC_SKY"),
+
+                apod_max_age: Duration::from_secs(
+                    u64::from(env_or::<u32>("APOD_NOTIFY_APOD_MAX_AGE_HOURS", 36)?) * 3600,
+                ),
+                sky_lead: Duration::from_secs(
+                    u64::from(env_or::<u32>("APOD_NOTIFY_SKY_LEAD_HOURS", 24)?) * 3600,
+                ),
+                eclipse_lead: Duration::from_secs(
+                    u64::from(env_or::<u32>("APOD_NOTIFY_ECLIPSE_LEAD_HOURS", 72)?) * 3600,
+                ),
+                aurora_min_kp: env_or("APOD_NOTIFY_AURORA_MIN_KP", 5.0)?,
+            },
+
             thumbs: Thumbs {
                 enabled: env_or("APOD_THUMBS_ENABLED", true)?,
                 max_width: env_or("APOD_THUMB_MAX_WIDTH", 480)?,
@@ -183,6 +259,14 @@ impl Config {
             !self.daily.interval.is_zero(),
             "APOD_DAILY_POLL_INTERVAL_SECS must be greater than zero"
         );
+        anyhow::ensure!(
+            !self.notify.enabled || !self.notify.topics().is_empty(),
+            "APOD_NOTIFY_ENABLED is on but no APOD_NTFY_TOPIC_* was set, so nothing could be sent"
+        );
+        anyhow::ensure!(
+            !self.notify.interval.is_zero(),
+            "APOD_NOTIFY_INTERVAL_SECS must be greater than zero"
+        );
         Ok(self)
     }
 
@@ -219,6 +303,13 @@ where
 
 fn secs(key: &str, default: u64) -> Result<Duration> {
     Ok(Duration::from_secs(env_or(key, default)?))
+}
+
+fn optional(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|raw| raw.trim().to_owned())
+        .filter(|raw| !raw.is_empty())
 }
 
 fn comma_separated(key: &str, default: &str) -> Result<Vec<String>> {

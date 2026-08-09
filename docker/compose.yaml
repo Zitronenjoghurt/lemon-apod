@@ -18,6 +18,15 @@ services:
       APOD_THUMB_MAX_WIDTH: 480
       APOD_THUMB_QUALITY: 80
       APOD_RECHECK_PER_DAY: 0
+      # Off by default: pointing a dev archiver at a real ntfy server would push real messages to
+      # real subscribers. Set it to "true" to exercise the path against the local ntfy below, and
+      # run `notify --seed` first unless you want the backlog.
+      APOD_NOTIFY_ENABLED: "${APOD_NOTIFY_ENABLED:-false}"
+      APOD_NTFY_URL: "${APOD_NTFY_URL:-http://ntfy:80}"
+      APOD_NTFY_TOPIC_APOD: apod
+      APOD_NTFY_TOPIC_AURORA: apod-aurora
+      APOD_NTFY_TOPIC_SPACE_WEATHER: apod-space-weather
+      APOD_NTFY_TOPIC_SKY: apod-sky
       RUST_LOG: info
     stop_grace_period: 35s
     read_only: true
@@ -51,6 +60,11 @@ services:
       APOD_PUBLIC_URL: ${APOD_PUBLIC_URL:-http://localhost:51995}
       APOD_RATE_LIMIT_PER_SECOND: 5
       APOD_RATE_LIMIT_BURST: 30
+      APOD_NTFY_URL: "${APOD_NTFY_PUBLIC_URL:-http://localhost:8080}"
+      APOD_NTFY_TOPIC_APOD: apod
+      APOD_NTFY_TOPIC_AURORA: apod-aurora
+      APOD_NTFY_TOPIC_SPACE_WEATHER: apod-space-weather
+      APOD_NTFY_TOPIC_SKY: apod-sky
       RUST_LOG: info
     healthcheck:
       test: [ "CMD", "apod-api", "--health" ]
@@ -65,6 +79,25 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # A throwaway ntfy so the notification path can be exercised end to end without a real server
+  # and without pushing anything at real subscribers. No auth and no persistence on purpose:
+  # this is not the shape you would deploy. Subscribe with
+  #
+  #   curl -s "http://localhost:8080/apod,apod-aurora,apod-sky/json"
+  #
+  # and see the production shape in ~/ansible/infra/stacks/ntfy.
+  ntfy:
+    image: binwiederhier/ntfy:v2.14.0
+    command: serve --base-url http://localhost:8080
+    restart: unless-stopped
+    ports:
+      - "${APOD_NTFY_HOST_PORT:-8080}:80"
     logging:
       driver: json-file
       options:

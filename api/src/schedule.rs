@@ -47,7 +47,7 @@ fn next_after(publish: &Publish, now: DateTime<Utc>, today: NaiveDate) -> DateTi
     now + Duration::days(1)
 }
 
-fn instant_on(publish: &Publish, day: NaiveDate) -> Option<DateTime<Utc>> {
+pub fn instant_on(publish: &Publish, day: NaiveDate) -> Option<DateTime<Utc>> {
     let start = day.and_hms_opt(publish.hour, publish.minute, 0)?;
 
     (0..120)

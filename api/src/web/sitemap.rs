@@ -1,7 +1,7 @@
 use crate::api::error::ApiResult;
 use crate::state::ServerState;
 use axum::extract::State;
-use axum::http::{HeaderValue, header};
+use axum::http::{HeaderMap, header};
 use axum::response::{IntoResponse, Response};
 use std::collections::BTreeSet;
 
@@ -17,9 +17,16 @@ pub async fn get_robots(State(state): State<ServerState>) -> Response {
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body).into_response()
 }
 
-pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response> {
+pub async fn get_sitemap(
+    State(state): State<ServerState>,
+    headers: HeaderMap,
+) -> ApiResult<Response> {
     let xml = state.sitemap.get_or_build(|| build(&state)).await?;
-    Ok(response(&xml.body, xml.max_age.as_secs()))
+    Ok(super::cached_xml(
+        &headers,
+        &xml,
+        "application/xml; charset=utf-8",
+    ))
 }
 
 async fn build(state: &ServerState) -> ApiResult<String> {
@@ -33,6 +40,7 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     push_url(&mut xml, &format!("{base}/"), Some("daily"));
     push_url(&mut xml, &format!("{base}/resources"), Some("weekly"));
     push_url(&mut xml, &format!("{base}/stats"), Some("weekly"));
+    push_url(&mut xml, &format!("{base}/notifications"), Some("yearly"));
     push_url(&mut xml, &format!("{base}/contact"), Some("yearly"));
 
     let years: BTreeSet<String> = dates.iter().map(|date| date.format("%Y")).collect();
@@ -48,23 +56,9 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     Ok(xml)
 }
 
-fn response(xml: &str, max_age: u64) -> Response {
-    let mut response = xml.to_owned().into_response();
-    let headers = response.headers_mut();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("application/xml; charset=utf-8"),
-    );
-    if let Ok(value) = HeaderValue::from_str(&format!("public, max-age={max_age}")) {
-        headers.insert(header::CACHE_CONTROL, value);
-    }
-
-    response
-}
-
 fn push_url(xml: &mut String, location: &str, change_frequency: Option<&str>) {
     xml.push_str("  <url>\n    <loc>");
-    xml.push_str(&escape(location));
+    xml.push_str(&super::escape(location));
     xml.push_str("</loc>\n");
     if let Some(frequency) = change_frequency {
         xml.push_str("    <changefreq>");
@@ -72,14 +66,6 @@ fn push_url(xml: &mut String, location: &str, change_frequency: Option<&str>) {
         xml.push_str("</changefreq>\n");
     }
     xml.push_str("  </url>\n");
-}
-
-fn escape(raw: &str) -> String {
-    raw.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('\'', "&apos;")
-        .replace('"', "&quot;")
 }
 
 #[cfg(test)]

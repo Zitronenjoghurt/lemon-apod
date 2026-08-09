@@ -9,6 +9,7 @@ default = []
 data = ["dep:sqlx"]
 data-read = ["data", "dep:serde_json"]
 data-write = ["data-read"]
+notify-data = ["data"]
 sky = []
 sky-data = ["sky", "data"]
 

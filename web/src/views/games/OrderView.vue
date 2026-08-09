@@ -358,7 +358,9 @@ watch(
         />
       </header>
 
-      <p v-if="!settled" class="ask">Is the new picture older or newer than the dated one?</p>
+      <p v-if="!settled" class="ask">
+        Is the second picture older or newer than the first picture?
+      </p>
       <p v-else class="ask">
         <strong :class="settled.right ? 'right' : 'wrong'">
           <i
@@ -371,7 +373,6 @@ watch(
       </p>
 
       <div class="pair">
-        <!-- The one you already have, with the date that makes it worth measuring against. -->
         <div class="side">
           <GamePicture
             :picture="settled ? settled.pair.a : pair.a"
@@ -392,7 +393,6 @@ watch(
           </p>
         </div>
 
-        <!-- The one being placed. It becomes the picture above on the next round. -->
         <div class="side">
           <GamePicture
             :picture="settled ? settled.pair.b : pair.b"

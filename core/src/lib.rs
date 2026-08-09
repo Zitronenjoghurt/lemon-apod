@@ -7,6 +7,8 @@ pub mod decode;
 pub mod entry;
 pub mod html;
 pub mod media;
+#[cfg(feature = "notify-data")]
+pub mod notify;
 pub mod parse;
 pub mod quality;
 pub mod resource;

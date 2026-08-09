@@ -24,20 +24,19 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     && mkdir -p /out \
     && cp target/release/apod-archiver target/release/apod-api /out/
 
-FROM debian:trixie-slim AS runtime
-RUN useradd --system --uid 10001 --create-home apod
-RUN mkdir -p /data && chown apod:apod /data
-USER apod
+FROM debian:trixie-slim AS prep
+RUN useradd --system --uid 10001 --no-create-home --home-dir /nonexistent apod \
+    && install -d -o apod -g apod /skel/data
+
+FROM gcr.io/distroless/cc-debian13 AS runtime
+COPY --from=prep /etc/passwd /etc/passwd
+COPY --from=prep /etc/group /etc/group
+COPY --from=prep --chown=10001:10001 /skel/data /data
+USER 10001:10001
 ENV APOD_DATA_DIR=/data
 WORKDIR /app
 
 FROM runtime AS archiver
-USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-USER apod
-
 COPY --from=rust /out/apod-archiver /usr/local/bin/apod-archiver
 ENTRYPOINT ["apod-archiver"]
 CMD ["run"]

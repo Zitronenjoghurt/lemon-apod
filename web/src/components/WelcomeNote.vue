@@ -10,14 +10,14 @@ const { dismissed, dismiss } = useWelcome()
     <div class="body">
       <h2>This is an archive of every NASA Astronomy Picture of the Day</h2>
       <p>
-        NASA has published a picture of the sky with a short explanation every day since June 1995.
-        This is an unofficial archive of all of them, aimed at displaying them in a modern way and
-        offering neat little features that derive data from every entry:
+        NASA has published a piece of astronomy media with a short explanation every day since June
+        1995. This is an unofficial archive of all of them, aimed at displaying them in a modern way
+        and offering neat little features that derive data from every entry:
         <RouterLink to="/search">search</RouterLink>
-        the text,
+        through every texts,
         <RouterLink to="/archive">browse</RouterLink>
         by month,
-        <RouterLink to="/stats">dig through the numbers</RouterLink>
+        <RouterLink to="/stats">view statistics</RouterLink>
         , or
         <RouterLink to="/games">play some minigames</RouterLink>
         .

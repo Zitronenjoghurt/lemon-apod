@@ -1,6 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::response;
-use crate::config::Contact;
+use crate::config::{Contact, Notify};
 use crate::schedule::Schedule;
 use crate::state::ServerState;
 use apod_core::ApodSummary;
@@ -16,6 +16,7 @@ struct Status {
     entries: i64,
     publish: Schedule,
     contact: Contact,
+    notify: Notify,
 }
 
 async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
@@ -24,6 +25,7 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
         entries: state.store.count().await?,
         publish: Schedule::now(&state.config.publish),
         contact: state.config.contact.clone(),
+        notify: state.config.notify.clone(),
     };
 
     Ok(response::cached(state.config.cache_status_secs, status))

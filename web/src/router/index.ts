@@ -38,6 +38,11 @@ const router = createRouter({
       component: () => import('@/views/games/MatchView.vue'),
     },
     { path: '/resources', name: 'resources', component: () => import('@/views/ResourcesView.vue') },
+    {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('@/views/NotificationsView.vue'),
+    },
     { path: '/contact', name: 'contact', component: () => import('@/views/ContactView.vue') },
     {
       path: '/resources/:id(\\d+)',

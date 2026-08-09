@@ -33,16 +33,46 @@ pub struct Config {
     pub cache_timeline_secs: u64,
     pub cache_status_secs: u64,
     pub cache_sky_secs: u64,
+    pub cache_feed_secs: u64,
+
+    pub feed_limit: usize,
 
     pub sky_launch_limit: i64,
 
     pub contact: Contact,
+    pub notify: Notify,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Contact {
     pub form_key: Option<String>,
     pub email: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct Notify {
+    pub base_url: Option<String>,
+    pub apod_topic: Option<String>,
+    pub aurora_topic: Option<String>,
+    pub space_weather_topic: Option<String>,
+    pub sky_topic: Option<String>,
+}
+
+impl Notify {
+    fn from_env() -> Self {
+        let base_url = optional("APOD_NTFY_URL").map(|url| url.trim_end_matches('/').to_owned());
+
+        match base_url {
+            None => Self::default(),
+            Some(base_url) => Self {
+                base_url: Some(base_url),
+                apod_topic: optional("APOD_NTFY_TOPIC_APOD"),
+                aurora_topic: optional("APOD_NTFY_TOPIC_AURORA"),
+                space_weather_topic: optional("APOD_NTFY_TOPIC_SPACE_WEATHER"),
+                sky_topic: optional("APOD_NTFY_TOPIC_SKY"),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -106,6 +136,9 @@ impl Config {
             cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
             cache_status_secs: env_or("APOD_CACHE_STATUS_SECS", 60)?,
             cache_sky_secs: env_or("APOD_CACHE_SKY_SECS", 1800)?,
+            cache_feed_secs: env_or("APOD_CACHE_FEED_SECS", 3_600)?,
+
+            feed_limit: env_or("APOD_FEED_LIMIT", 25)?,
 
             sky_launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 10)?,
 
@@ -113,6 +146,8 @@ impl Config {
                 form_key: optional("APOD_CONTACT_FORM_KEY"),
                 email: optional("APOD_CONTACT_EMAIL"),
             },
+
+            notify: Notify::from_env(),
         })
         .and_then(Self::validated)
     }

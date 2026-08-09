@@ -35,6 +35,7 @@ const links = [
   { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
   { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
   { to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt' },
+  { to: '/notifications', label: 'Notifications', icon: 'pi pi-bell' },
   { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
   { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
   { to: '/random', label: 'Random', icon: 'pi pi-sync' },

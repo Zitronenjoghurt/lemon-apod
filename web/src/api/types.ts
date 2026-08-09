@@ -144,11 +144,20 @@ export interface ContactConfig {
   email: string | null
 }
 
+export interface NotifyConfig {
+  base_url: string | null
+  apod_topic: string | null
+  aurora_topic: string | null
+  space_weather_topic: string | null
+  sky_topic: string | null
+}
+
 export interface Status {
   latest: ApodSummary | null
   entries: number
   publish: PublishSchedule
   contact: ContactConfig
+  notify: NotifyConfig
 }
 
 export interface MonthCount {

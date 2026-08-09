@@ -43,6 +43,51 @@ impl Client {
         self.fetch(url, Some(limit)).await
     }
 
+    pub async fn post(&self, url: &str, headers: &[(&str, String)], body: String) -> Result<()> {
+        let mut attempt = 0;
+
+        loop {
+            attempt += 1;
+
+            match self.try_post(url, headers, &body).await {
+                Attempt::Done(_) => return Ok(()),
+                Attempt::Fatal(error) => return Err(error),
+                Attempt::Retryable(error) if attempt > self.max_retries => return Err(error),
+                Attempt::Retryable(error) => {
+                    let backoff = Duration::from_secs(2u64.pow(attempt.min(6)));
+                    tracing::debug!(%url, attempt, ?backoff, "retrying after {error:#}");
+                    tokio::time::sleep(backoff).await;
+                }
+            }
+        }
+    }
+
+    async fn try_post(&self, url: &str, headers: &[(&str, String)], body: &str) -> Attempt {
+        let mut request = self.http.post(url).body(body.to_owned());
+        for (name, value) in headers {
+            request = request.header(*name, value);
+        }
+
+        let response = match request.send().await {
+            Ok(response) => response,
+            Err(error) => {
+                return Attempt::Retryable(
+                    anyhow::Error::new(error).context(format!("posting to {url}")),
+                );
+            }
+        };
+
+        let status = response.status();
+        if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return Attempt::Retryable(anyhow::anyhow!("{url} returned {status}"));
+        }
+        if !status.is_success() {
+            return Attempt::Fatal(anyhow::anyhow!("{url} returned {status}"));
+        }
+
+        Attempt::Done(Response::Body(Vec::new()))
+    }
+
     async fn fetch(&self, url: &str, limit: Option<Limit>) -> Result<Response> {
         let mut attempt = 0;
 

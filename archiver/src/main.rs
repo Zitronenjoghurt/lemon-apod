@@ -2,6 +2,7 @@ mod archive;
 mod client;
 mod config;
 mod fetch;
+mod notify;
 mod pictures;
 mod reparse;
 mod report;
@@ -93,6 +94,18 @@ enum Command {
     /// Poll the launch and space weather feeds once into sky.db, then exit.
     Sky,
 
+    /// Send any notification that is due, then exit.
+    Notify {
+        /// Record everything currently due as already sent, without sending it. Run this once
+        /// before enabling notifications on an existing archive, or the first pass announces
+        /// every eclipse inside the lead window at once.
+        #[arg(long)]
+        seed: bool,
+        /// List what would be sent and leave the record untouched.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Coverage and index health.
     Status,
 }
@@ -122,12 +135,74 @@ async fn main() -> Result<()> {
             report::quality(index.reader(), date, warning.as_deref(), limit).await
         }
         Command::Sky => sky::poll(&cfg).await,
+        Command::Notify { seed, dry_run } => notify_once(cfg, seed, dry_run).await,
         Command::Status => {
             let archive = ArchiveStore::open(&cfg.archive_db).await?;
             let index = ApodWriter::open(&cfg.index_db).await?;
             report::status(&cfg, &archive, &index).await
         }
     }
+}
+
+async fn notify_once(cfg: Config, seed: bool, dry_run: bool) -> Result<()> {
+    use apod_core::notify::NotifyStore;
+    use chrono::Utc;
+
+    let now = Utc::now();
+    let topics = cfg.notify.topics();
+    if topics.is_empty() {
+        println!("no APOD_NTFY_TOPIC_* is set, so there is nowhere to send anything");
+        return Ok(());
+    }
+    println!("ntfy {} topics {}", cfg.notify.base_url, topics.join(", "));
+
+    let store = NotifyStore::open(&cfg.notify_db).await?;
+
+    if dry_run {
+        let mut pending = 0;
+        for notification in notify::gather(&cfg, now).await? {
+            let sent = store
+                .is_sent(&notification.topic, &notification.key)
+                .await?;
+            println!(
+                "  [{}] {} {}",
+                if sent { "sent" } else { "due " },
+                notification.topic,
+                notification.key
+            );
+            if !sent {
+                println!("        {}", notification.title);
+                pending += 1;
+            }
+        }
+        println!(
+            "{pending} would be sent, {} on record",
+            store.count().await?
+        );
+        store.close().await;
+        return Ok(());
+    }
+
+    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let delivery = match seed {
+        true => notify::Delivery::Seed,
+        false => notify::Delivery::Send,
+    };
+
+    let pass = notify::deliver(&cfg, &client, &store, now, delivery).await?;
+    match seed {
+        true => println!(
+            "seeded {} as already dealt with, {} were on record already",
+            pass.claimed, pass.already
+        ),
+        false => println!(
+            "sent {}, failed {}, already on record {}",
+            pass.sent, pass.failed, pass.already
+        ),
+    }
+
+    store.close().await;
+    Ok(())
 }
 
 async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {

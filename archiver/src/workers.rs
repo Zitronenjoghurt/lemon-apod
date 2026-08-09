@@ -69,6 +69,17 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!("sky feeds disabled");
     }
 
+    if cfg.notify.enabled {
+        tracing::info!(topics = ?cfg.notify.topics(), "notifications enabled");
+        handles.push(tokio::spawn(crate::notify::run(
+            cfg.clone(),
+            client.clone(),
+            shutdown.clone(),
+        )));
+    } else {
+        tracing::info!("notifications disabled");
+    }
+
     shutdown::signal().await;
     tracing::info!("shutting down; letting workers finish their current step");
     let _ = stop.send(true);

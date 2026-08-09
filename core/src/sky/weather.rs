@@ -6,13 +6,13 @@ const ALERT_LIFE_HOURS: i64 = 3;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Band {
-    R,
-    S,
     G,
+    S,
+    R,
 }
 
 impl Band {
-    pub const ALL: [Self; 3] = [Self::R, Self::S, Self::G];
+    pub const ALL: [Self; 3] = [Self::G, Self::S, Self::R];
 
     pub const fn letter(self) -> &'static str {
         match self {
@@ -24,22 +24,22 @@ impl Band {
 
     pub const fn name(self) -> &'static str {
         match self {
-            Self::R => "Radio blackouts",
-            Self::S => "Solar radiation",
             Self::G => "Geomagnetic storms",
+            Self::S => "Solar radiation",
+            Self::R => "Radio blackouts",
         }
     }
 
     pub const fn about(self) -> &'static str {
         match self {
-            Self::R => {
-                "Flares soaking the sunlit side of Earth in x-rays, which drowns out high frequency radio."
+            Self::G => {
+                "The magnetic field being shaken by the solar wind, which influences power grids and brings auroras closer to the equator."
             }
             Self::S => {
                 "Energetic protons streaming past Earth, which reaches satellites and polar flights."
             }
-            Self::G => {
-                "The magnetic field being shaken by the solar wind, which influences power grids and brings auroras closer to the equator."
+            Self::R => {
+                "Flares soaking the sunlit side of Earth in x-rays, which drowns out high frequency radio."
             }
         }
     }
@@ -136,14 +136,33 @@ pub struct Alert {
 
 impl Alert {
     pub fn current(&self, now: DateTime<Utc>) -> bool {
-        if !self.notice.pressing() {
-            return false;
-        }
+        self.notice.pressing() && self.in_force(now)
+    }
 
+    pub fn in_force(&self, now: DateTime<Utc>) -> bool {
         match self.valid_until {
             Some(until) => until >= now,
             None => now - self.issued_at <= TimeDelta::hours(ALERT_LIFE_HOURS),
         }
+    }
+
+    pub fn band(&self) -> Option<Band> {
+        let lettered = self
+            .scale
+            .as_deref()
+            .and_then(|scale| scale.trim().chars().next())
+            .and_then(|letter| match letter {
+                'G' => Some(Band::G),
+                'S' => Some(Band::S),
+                'R' => Some(Band::R),
+                _ => None,
+            });
+
+        lettered.or_else(|| self.headline.contains("Geomagnetic").then_some(Band::G))
+    }
+
+    pub fn is_geomagnetic(&self) -> bool {
+        self.band() == Some(Band::G)
     }
 }
 
@@ -204,6 +223,112 @@ mod tests {
             valid_until: until.map(at),
             message: String::new(),
         }
+    }
+
+    fn banded(headline: &str, scale: Option<&str>) -> Alert {
+        Alert {
+            headline: headline.to_owned(),
+            scale: scale.map(str::to_owned),
+            ..alert(Notice::Alert, 100, None)
+        }
+    }
+
+    #[test]
+    fn the_noaa_scale_field_names_the_band() {
+        assert_eq!(banded("x", Some("G2 - Moderate")).band(), Some(Band::G));
+        assert_eq!(banded("x", Some("S1 - Minor")).band(), Some(Band::S));
+        assert_eq!(banded("x", Some("R3 - Strong")).band(), Some(Band::R));
+    }
+
+    #[test]
+    fn a_geomagnetic_alert_below_the_scale_is_still_geomagnetic() {
+        let quiet = banded("Geomagnetic K-index of 4", None);
+
+        assert_eq!(quiet.band(), Some(Band::G));
+        assert!(quiet.is_geomagnetic());
+    }
+
+    #[test]
+    fn an_alert_on_no_scale_at_all_is_not_claimed_for_a_band() {
+        let electron = banded("Electron 2MeV Integral Flux exceeded 1,000pfu", None);
+
+        assert_eq!(electron.band(), None);
+        assert!(!electron.is_geomagnetic());
+    }
+
+    #[test]
+    fn a_proton_event_is_not_mistaken_for_an_aurora() {
+        let proton = banded(
+            "Proton Event 10MeV Integral Flux exceeded 10pfu",
+            Some("S1 - Minor"),
+        );
+
+        assert!(!proton.is_geomagnetic());
+    }
+
+    #[test]
+    fn every_alert_shape_noaa_actually_issues_lands_on_the_right_side() {
+        let cases: [(&str, Option<&str>, bool); 15] = [
+            ("Geomagnetic K-index of 4", None, true),
+            ("Geomagnetic K-index of 4 expected", None, true),
+            ("Geomagnetic K-index of 5", Some("G1 - Minor"), true),
+            (
+                "Geomagnetic K-index of 5 expected",
+                Some("G1 - Minor"),
+                true,
+            ),
+            ("Geomagnetic K-index of 6", Some("G2 - Moderate"), true),
+            (
+                "Geomagnetic K-index of 6 expected",
+                Some("G2 - Moderate"),
+                true,
+            ),
+            ("Geomagnetic Storm Category G1 Predicted", None, true),
+            ("Geomagnetic Storm Category G2 Predicted", None, true),
+            ("Geomagnetic Sudden Impulse", None, true),
+            ("Geomagnetic Sudden Impulse expected", None, true),
+            ("Electron 2MeV Integral Flux exceeded 1,000pfu", None, false),
+            (
+                "Proton Event 100MeV Integral Flux exceeded 1pfu",
+                None,
+                false,
+            ),
+            (
+                "Proton 10MeV Integral Flux above 10pfu expected",
+                Some("S1 - Minor"),
+                false,
+            ),
+            (
+                "Proton Event 10MeV Integral Flux exceeded 10pfu",
+                Some("S1 - Minor"),
+                false,
+            ),
+            (
+                "Proton Event 10meV Integral Flux exceeded 10pfu",
+                Some("S1 - Minor"),
+                false,
+            ),
+        ];
+
+        for (headline, scale, geomagnetic) in cases {
+            assert_eq!(
+                banded(headline, scale).is_geomagnetic(),
+                geomagnetic,
+                "{headline:?} with scale {scale:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_watch_is_in_force_even_though_it_is_not_pressing() {
+        let watch = alert(Notice::Watch, 100, Some(150));
+
+        assert!(watch.in_force(at(120)), "still inside its validity");
+        assert!(
+            !watch.current(at(120)),
+            "but not urgent enough for `current`"
+        );
+        assert!(!watch.in_force(at(151)), "and it does expire");
     }
 
     #[test]
