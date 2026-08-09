@@ -12,7 +12,7 @@ import { useArrowKeys } from '@/composables/useArrowKeys'
 import { useCoverage } from '@/composables/useCoverage'
 import { usePreferences } from '@/composables/usePreferences'
 import { useLatestDate } from '@/composables/useStatus'
-import { useRead } from '@/composables/useRead'
+import { provideReadScope, useRead } from '@/composables/useRead'
 import { FIRST_ENTRY, month as monthOf, year as yearOf } from '@/utils/date'
 
 const FIRST_YEAR = yearOf(FIRST_ENTRY)
@@ -35,7 +35,8 @@ const route = useRoute()
 const router = useRouter()
 
 const latest = useLatestDate()
-const { apply, active: filtered, countIn } = useRead()
+provideReadScope('archive')
+const { apply, active: filtered, countIn } = useRead('archive')
 const { archiveView } = usePreferences()
 const coverage = useCoverage()
 

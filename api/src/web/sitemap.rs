@@ -4,7 +4,6 @@ use axum::extract::State;
 use axum::http::{HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use std::collections::BTreeSet;
-use std::sync::Arc;
 
 pub async fn get_robots(State(state): State<ServerState>) -> Response {
     let body = format!(
@@ -20,7 +19,7 @@ pub async fn get_robots(State(state): State<ServerState>) -> Response {
 
 pub async fn get_sitemap(State(state): State<ServerState>) -> ApiResult<Response> {
     let xml = state.sitemap.get_or_build(|| build(&state)).await?;
-    Ok(response(xml))
+    Ok(response(&xml.body, xml.max_age.as_secs()))
 }
 
 async fn build(state: &ServerState) -> ApiResult<String> {
@@ -49,17 +48,16 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     Ok(xml)
 }
 
-fn response(xml: Arc<str>) -> Response {
-    let mut response = xml.to_string().into_response();
+fn response(xml: &str, max_age: u64) -> Response {
+    let mut response = xml.to_owned().into_response();
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/xml; charset=utf-8"),
     );
-    headers.insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=3600"),
-    );
+    if let Ok(value) = HeaderValue::from_str(&format!("public, max-age={max_age}")) {
+        headers.insert(header::CACHE_CONTROL, value);
+    }
 
     response
 }

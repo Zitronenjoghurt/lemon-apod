@@ -17,15 +17,15 @@ const { intercept } = useExternalLinks()
 const menuOpen = ref(false)
 const settingsOpen = ref(false)
 
-const compactNav = window.matchMedia('(max-width: 72rem)')
-const compact = ref(compactNav.matches)
-compactNav.addEventListener('change', (event) => (compact.value = event.matches))
+const railQuery = window.matchMedia('(min-width: 48rem) and (max-width: 63.999rem)')
+const rail = ref(railQuery.matches)
+railQuery.addEventListener('change', (event) => (rail.value = event.matches))
 
 onMounted(() => document.addEventListener('click', intercept, true))
 onUnmounted(() => document.removeEventListener('click', intercept, true))
 
 const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
-const themeLabel = { auto: 'Match system', dark: 'Dark', light: 'Light' }
+const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
 
 const links = [
   { to: '/', label: 'Today', icon: 'pi pi-sparkles', exact: true },
@@ -34,6 +34,7 @@ const links = [
   { to: '/search', label: 'Search', icon: 'pi pi-search' },
   { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
   { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
+  { to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt' },
   { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
   { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
   { to: '/random', label: 'Random', icon: 'pi pi-sync' },
@@ -73,25 +74,9 @@ router.afterEach(() => (menuOpen.value = false))
         <span>APOD Archive</span>
       </RouterLink>
 
-      <nav aria-label="Main" class="row nav wide-only">
-        <RouterLink
-          v-for="link in links"
-          :key="link.to"
-          v-tooltip.bottom="{ value: link.label, disabled: !compact }"
-          :class="{ on: isActive(link) }"
-          :to="link.to"
-          active-class=""
-          exact-active-class=""
-        >
-          <i :class="link.icon" aria-hidden="true" />
-          <span class="label">{{ link.label }}</span>
-          <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
-        </RouterLink>
-      </nav>
-
       <div class="row trailing">
         <Button
-          v-tooltip.bottom="`Theme: ${themeLabel[theme]}`"
+          v-tooltip.bottom="{ value: `Theme: ${themeLabel[theme]}`, class: 'tip-tight' }"
           :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
           rounded
           severity="secondary"
@@ -105,7 +90,7 @@ router.afterEach(() => (menuOpen.value = false))
           </svg>
         </Button>
         <Button
-          v-tooltip.bottom="'Settings'"
+          v-tooltip.bottom="{ value: 'Settings', class: 'tip-tight' }"
           aria-label="Settings"
           icon="pi pi-cog"
           rounded
@@ -134,11 +119,11 @@ router.afterEach(() => (menuOpen.value = false))
         :class="{ on: isActive(link) }"
         :to="link.to"
         active-class=""
-        class="menu-link"
+        class="nav-link"
         exact-active-class=""
       >
         <i :class="link.icon" aria-hidden="true" />
-        <span>{{ link.label }}</span>
+        <span class="label">{{ link.label }}</span>
         <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
       </RouterLink>
     </nav>
@@ -150,53 +135,76 @@ router.afterEach(() => (menuOpen.value = false))
     </div>
   </Transition>
 
-  <main id="main" class="container page">
-    <RouterView v-slot="{ Component }">
-      <Transition mode="out-in" name="fade">
-        <KeepAlive :include="['FeedView']" :max="1">
-          <component :is="Component" />
-        </KeepAlive>
-      </Transition>
-    </RouterView>
-  </main>
-
-  <footer class="site-footer">
-    <span class="version muted">v{{ version }}</span>
-
-    <div class="container stack foot">
-      <nav aria-label="Elsewhere" class="row foot-links">
-        <RouterLink to="/contact"
-          ><i aria-hidden="true" class="pi pi-envelope" />Contact</RouterLink
+  <div class="shell">
+    <aside class="sidebar">
+      <nav aria-label="Main" class="menu">
+        <RouterLink
+          v-for="link in links"
+          :key="link.to"
+          v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
+          :class="{ on: isActive(link) }"
+          :to="link.to"
+          active-class=""
+          class="nav-link"
+          exact-active-class=""
         >
-        <a
-          data-ours
-          href="https://github.com/Zitronenjoghurt/lemon-apod"
-          rel="noopener"
-          target="_blank"
-        >
-          <i aria-hidden="true" class="pi pi-github" />
-          Source
-        </a>
-        <a
-          data-ours
-          href="https://mastodon.social/@zitronenjoghurt"
-          rel="me noopener"
-          target="_blank"
-        >
-          <i aria-hidden="true" class="pi pi-at" />
-          Mastodon
-        </a>
+          <i :class="link.icon" aria-hidden="true" />
+          <span class="label">{{ link.label }}</span>
+          <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
+        </RouterLink>
       </nav>
+    </aside>
 
-      <p class="muted">
-        An unofficial archive of NASA's
-        <a href="https://apod.nasa.gov/apod/" rel="noopener" target="_blank">
-          Astronomy Picture of the Day</a
-        >. Not affiliated with or endorsed by NASA. The text and media of all APOD entries originate
-        from NASA and belong to the credited people and institutions.
-      </p>
+    <div class="column">
+      <main id="main" class="container page">
+        <RouterView v-slot="{ Component }">
+          <Transition mode="out-in" name="fade">
+            <KeepAlive :include="['FeedView']" :max="1">
+              <component :is="Component" />
+            </KeepAlive>
+          </Transition>
+        </RouterView>
+      </main>
+
+      <footer class="site-footer">
+        <span class="version muted">v{{ version }}</span>
+
+        <div class="container stack foot">
+          <nav aria-label="Elsewhere" class="row foot-links">
+            <RouterLink to="/contact"
+              ><i aria-hidden="true" class="pi pi-envelope" />Contact
+            </RouterLink>
+            <a
+              data-ours
+              href="https://github.com/Zitronenjoghurt/lemon-apod"
+              rel="noopener"
+              target="_blank"
+            >
+              <i aria-hidden="true" class="pi pi-github" />
+              Source
+            </a>
+            <a
+              data-ours
+              href="https://mastodon.social/@zitronenjoghurt"
+              rel="me noopener"
+              target="_blank"
+            >
+              <i aria-hidden="true" class="pi pi-at" />
+              Mastodon
+            </a>
+          </nav>
+
+          <p class="muted">
+            An unofficial archive of NASA's
+            <a href="https://apod.nasa.gov/apod/" rel="noopener" target="_blank">
+              Astronomy Picture of the Day</a
+            >. Not affiliated with or endorsed by NASA. The text and media of all APOD entries
+            originate from NASA and belong to the credited people and institutions.
+          </p>
+        </div>
+      </footer>
     </div>
-  </footer>
+  </div>
 
   <SettingsDialog v-model:visible="settingsOpen" />
   <ExternalLinkNotice />
@@ -255,42 +263,56 @@ router.afterEach(() => (menuOpen.value = false))
   overflow: visible;
 }
 
-.nav {
-  gap: 1rem;
-  font-size: 0.94rem;
-  flex-wrap: nowrap;
+.auto-mark {
+  width: 1rem;
+  height: 1rem;
 }
 
-.nav a {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  text-decoration: none;
-  color: var(--text-muted);
-  padding: 0.2rem 0;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
+.shell {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
 }
 
-.nav a i {
-  font-size: 0.82em;
-  opacity: 0.85;
+.column {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
 }
 
-@media (max-width: 72rem) {
-  .nav {
-    gap: 0.25rem;
+.sidebar {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .bar {
+    max-width: none;
   }
 
-  .nav a {
-    padding: 0.2rem 0.45rem;
+  .sidebar {
+    display: block;
+    flex: none;
+    align-self: stretch;
+    width: var(--rail-w);
+    padding: 0.9rem 0.5rem;
+    border-right: 1px solid var(--border);
   }
 
-  .nav a i {
-    font-size: 1rem;
+  .sidebar .menu {
+    position: sticky;
+    top: calc(var(--header-h) + 1px + 0.9rem);
   }
 
-  .nav .label {
+  .sidebar .nav-link {
+    position: relative;
+    justify-content: center;
+    padding: 0.7rem 0.5rem;
+  }
+
+  .sidebar .nav-link .label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -298,25 +320,44 @@ router.afterEach(() => (menuOpen.value = false))
     clip-path: inset(50%);
   }
 
-  .nav .count {
-    margin-left: 0.15rem;
-    font-size: 0.65rem;
-    padding: 0 0.3rem;
+  .sidebar .count {
+    position: absolute;
+    top: 0.15rem;
+    right: 0.2rem;
+    margin: 0;
+    font-size: 0.6rem;
+    padding: 0 0.25rem;
   }
 }
 
-.auto-mark {
-  width: 1rem;
-  height: 1rem;
-}
+@media (min-width: 64rem) {
+  .sidebar {
+    width: var(--sidebar-w);
+    padding: 1rem 0.6rem;
+  }
 
-.nav a:hover {
-  color: var(--text);
-}
+  .sidebar .menu {
+    top: calc(var(--header-h) + 1px + 1rem);
+  }
 
-.nav a.on {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  .sidebar .nav-link {
+    justify-content: flex-start;
+    padding: 0.55rem 0.65rem;
+  }
+
+  .sidebar .nav-link .label {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+  }
+
+  .sidebar .count {
+    position: static;
+    margin-left: auto;
+    font-size: 0.72rem;
+    padding: 0 0.4rem;
+  }
 }
 
 .trailing {
@@ -340,7 +381,7 @@ router.afterEach(() => (menuOpen.value = false))
   gap: 0.15rem;
 }
 
-.menu-link {
+.nav-link {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -350,21 +391,21 @@ router.afterEach(() => (menuOpen.value = false))
   color: var(--text);
 }
 
-.menu-link:hover {
+.nav-link:hover {
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.menu-link.on {
+.nav-link.on {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.menu-link i {
+.nav-link i {
   width: 1.25rem;
   text-align: center;
 }
 
-.menu-link .count {
+.nav-link .count {
   margin-left: auto;
 }
 
@@ -444,11 +485,7 @@ router.afterEach(() => (menuOpen.value = false))
   display: none;
 }
 
-@media (max-width: 48rem) {
-  .wide-only {
-    display: none;
-  }
-
+@media (max-width: 47.999rem) {
   .narrow-only {
     display: inline-flex;
   }

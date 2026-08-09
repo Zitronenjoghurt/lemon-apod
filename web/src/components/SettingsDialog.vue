@@ -10,6 +10,7 @@ import { usePreferences, WEEK_STARTS } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
 import { BackupError, type ImportMode, useSiteData } from '@/composables/useSiteData'
 import { useStatus } from '@/composables/useStatus'
+import { useWelcome } from '@/composables/useWelcome'
 
 const open = defineModel<boolean>('visible', { default: false })
 
@@ -19,6 +20,7 @@ const toast = useToast()
 const { count: favoriteCount, clear: clearFavorites } = useFavorites()
 const { count: readCount, clear: clearRead, countIn } = useRead()
 const { acknowledged, reset: resetWarning } = useExternalLinks()
+const { dismissed: welcomeGone, reset: resetWelcome } = useWelcome()
 const { weekStart } = usePreferences()
 const { download, restore } = useSiteData()
 const { entries } = useStatus()
@@ -147,6 +149,16 @@ function bringBackWarning() {
     life: 3000,
   })
 }
+
+function bringBackWelcome() {
+  resetWelcome()
+  toast.add({
+    severity: 'secondary',
+    summary: 'Welcome note is back',
+    detail: 'You will find it at the top of the start page.',
+    life: 3000,
+  })
+}
 </script>
 
 <template>
@@ -267,6 +279,21 @@ function bringBackWarning() {
             severity="secondary"
             size="small"
             @click="bringBackWarning"
+          />
+        </div>
+      </section>
+
+      <section v-if="welcomeGone" class="stack panel">
+        <h3>Welcome note</h3>
+        <p class="muted">You have dismissed the short note on the start page.</p>
+        <div class="row controls">
+          <Button
+            icon="pi pi-info-circle"
+            label="Show it again"
+            outlined
+            severity="secondary"
+            size="small"
+            @click="bringBackWelcome"
           />
         </div>
       </section>

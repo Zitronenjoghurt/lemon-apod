@@ -9,10 +9,11 @@ import RetryNotice from '@/components/RetryNotice.vue'
 import { api, ApiError } from '@/api/client'
 import type { ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
-import { useRead } from '@/composables/useRead'
+import { provideReadScope, useRead } from '@/composables/useRead'
 
 const { favorites, count, clear } = useFavorites()
-const { apply, active: filtered } = useRead()
+provideReadScope('favorites')
+const { apply, active: filtered } = useRead('favorites')
 const confirm = useConfirm()
 const toast = useToast()
 

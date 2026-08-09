@@ -7,10 +7,12 @@ import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { KindFilter } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
-import { useRead } from '@/composables/useRead'
+import { useNarrow } from '@/composables/useNarrow'
+import { provideReadScope, useRead } from '@/composables/useRead'
 
 const route = useRoute()
 const router = useRouter()
+const { pageLinks } = useNarrow()
 
 const PAGE_SIZE = 30
 const DEBOUNCE_MS = 250
@@ -43,7 +45,8 @@ const sort = ref<'relevance' | 'date'>(route.query.sort === 'date' ? 'date' : 'r
 const page = ref(Number.parseInt(String(route.query.page ?? '1'), 10) || 1)
 
 const help = useTemplateRef<{ toggle: (event: Event) => void }>('help')
-const { apply, active: filtered } = useRead()
+provideReadScope('search')
+const { apply, active: filtered } = useRead('search')
 
 const {
   data: results,
@@ -225,6 +228,7 @@ const onlyExclusions = computed(
     />
 
     <Paginator
+      :page-link-size="pageLinks"
       v-if="results && results.total > PAGE_SIZE"
       :first="(page - 1) * PAGE_SIZE"
       :rows="PAGE_SIZE"

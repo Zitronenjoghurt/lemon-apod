@@ -5,11 +5,13 @@ import EntryGrid from '@/components/EntryGrid.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
+import { useNarrow } from '@/composables/useNarrow'
 import { formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 30
 
 const route = useRoute()
+const { pageLinks } = useNarrow()
 const id = computed(() => Number(route.params.id))
 const page = ref(1)
 
@@ -123,6 +125,7 @@ const anchors = computed(() => {
       <EntryGrid :entries="data.items" :loading="loading" empty="Nothing references this." />
 
       <Paginator
+        :page-link-size="pageLinks"
         v-if="data.total > PAGE_SIZE"
         :first="(page - 1) * PAGE_SIZE"
         :rows="PAGE_SIZE"

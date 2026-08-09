@@ -41,7 +41,8 @@ pub struct Match {
 
 #[derive(Debug, Serialize)]
 pub struct Words {
-    picture: String,
+    #[serde(flatten)]
+    picture: Picture,
     title_words: usize,
     #[serde(flatten)]
     cloze: Cloze,
@@ -72,46 +73,17 @@ pub async fn order(state: &ServerState, mut setup: Setup) -> ApiResult<Puzzle<Pa
     let pool = state.store.picture_pool(setup.before()).await?;
     let range = range(&pool)?;
 
-    let mut used: HashSet<ApodDate> = HashSet::new();
-    let mut rounds = Vec::with_capacity(setup.rounds);
-
-    for _ in 0..setup.rounds {
-        let fresh: Vec<ApodDate> = pool
-            .iter()
-            .copied()
-            .filter(|date| !used.contains(date))
-            .collect();
-
-        let Some(&first) = setup.deal.take(&fresh, 1).first() else {
-            break;
-        };
-        let far: Vec<ApodDate> = fresh
-            .iter()
-            .copied()
-            .filter(|date| (date.days() - first.days()).abs() >= MIN_GAP)
-            .collect();
-        let Some(&second) = setup
-            .deal
-            .take(if far.is_empty() { &fresh } else { &far }, 1)
-            .first()
-        else {
-            break;
-        };
-        if first == second {
-            break;
-        }
-
-        used.insert(first);
-        used.insert(second);
-
-        let summaries = state.store.summaries(&[first, second]).await?;
-        if summaries.len() == 2 {
-            rounds.push(Pair {
-                a: Picture::of(&summaries[0]),
-                b: Picture::of(&summaries[1]),
-            });
-        }
-    }
+    let chain = chain(&mut setup, &pool);
+    let rounds = state
+        .store
+        .summaries(&chain)
+        .await?
+        .windows(2)
+        .map(|pair| Pair {
+            a: Picture::of(&pair[0]),
+            b: Picture::of(&pair[1]),
+        })
+        .collect();
 
     Ok(Puzzle {
         game: "order",
@@ -119,6 +91,47 @@ pub async fn order(state: &ServerState, mut setup: Setup) -> ApiResult<Puzzle<Pa
         range,
         rounds,
     })
+}
+
+fn chain(setup: &mut Setup, pool: &[ApodDate]) -> Vec<ApodDate> {
+    let start = setup
+        .from
+        .filter(|date| pool.contains(date))
+        .or_else(|| setup.deal.take(pool, 1).first().copied());
+
+    let Some(start) = start else {
+        return Vec::new();
+    };
+
+    let mut used: HashSet<ApodDate> = HashSet::from([start]);
+    let mut chain = vec![start];
+
+    while chain.len() <= setup.rounds {
+        let last = *chain.last().expect("the chain starts with one picture");
+
+        let mut fresh: Vec<ApodDate> = pool
+            .iter()
+            .copied()
+            .filter(|date| !used.contains(date) && (date.days() - last.days()).abs() >= MIN_GAP)
+            .collect();
+
+        if fresh.is_empty() {
+            fresh = pool
+                .iter()
+                .copied()
+                .filter(|date| !used.contains(date))
+                .collect();
+        }
+
+        let Some(&next) = setup.deal.take(&fresh, 1).first() else {
+            break;
+        };
+
+        used.insert(next);
+        chain.push(next);
+    }
+
+    chain
 }
 
 pub async fn pick(state: &ServerState, mut setup: Setup) -> ApiResult<Puzzle<Match>> {
@@ -183,7 +196,7 @@ pub async fn words(state: &ServerState, mut setup: Setup) -> ApiResult<Puzzle<Wo
         day: setup.day,
         range,
         rounds: vec![Words {
-            picture: token::encode(Kind::Picture, date),
+            picture: Picture::of(&entry.to_summary()),
             title_words,
             cloze,
         }],

@@ -65,6 +65,11 @@ pub fn dynamical_to_utc(jde: f64) -> DateTime<Utc> {
     from_julian(jde - correction)
 }
 
+pub fn dynamical_julian(at: DateTime<Utc>) -> f64 {
+    let jd = to_julian(at);
+    jd + delta_t_seconds(approximate_year(jd)) / SECONDS_PER_DAY
+}
+
 pub fn normalize_degrees(degrees: f64) -> f64 {
     let wrapped = degrees % 360.0;
     if wrapped < 0.0 {

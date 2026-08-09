@@ -9,6 +9,7 @@ mod shutdown;
 mod sky;
 mod thumbs;
 mod video;
+mod weather;
 mod workers;
 
 use anyhow::Result;

@@ -136,7 +136,6 @@ async fn poll_space_weather(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Resu
     let readings: Vec<KpReading> = serde_json::from_slice(&body)
         .with_context(|| format!("parsing the space weather feed from {}", cfg.weather_url))?;
 
-    // The feed is a rolling week in ascending order, and only the last row is current.
     let latest = readings
         .into_iter()
         .filter_map(|reading| reading.into_weather())
@@ -144,6 +143,10 @@ async fn poll_space_weather(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Resu
         .context("the space weather feed carried no usable reading")?;
 
     sky.set_space_weather(latest).await?;
+
+    let report = crate::weather::report(cfg, client).await?;
+    sky.set_weather_report(&report).await?;
+
     Ok(1)
 }
 

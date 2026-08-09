@@ -3,6 +3,14 @@ import { computed } from 'vue'
 import MoonDial from './MoonDial.vue'
 import type { Launch, SkyEventKind } from '@/api/types'
 import { useSky } from '@/composables/useSky'
+import {
+  BAND_NAMES,
+  inForce,
+  kpPercent,
+  kpReading,
+  levelName,
+  NOTICE_LABELS,
+} from '@/utils/weather'
 import { RouterLink } from 'vue-router'
 
 const { sky, failed, visiblePlanets } = useSky()
@@ -55,66 +63,46 @@ function countdown(iso: string): string {
 
 const moon = computed(() => sky.value?.moon ?? null)
 
-const nextNew = computed(() =>
-  moon.value?.next_quarters.find((quarter) => quarter.quarter === 'new'),
-)
-const nextFull = computed(() =>
-  moon.value?.next_quarters.find((quarter) => quarter.quarter === 'full'),
+const NAMED_QUARTERS: Record<string, string> = { full: 'Next full', new: 'Next new' }
+
+const nextQuarters = computed(() =>
+  (moon.value?.next_quarters ?? [])
+    .filter((quarter) => quarter.quarter in NAMED_QUARTERS)
+    .map((quarter) => ({ ...quarter, name: NAMED_QUARTERS[quarter.quarter] as string }))
+    .sort((one, other) => one.at.localeCompare(other.at)),
 )
 
-const distance = computed(() =>
-  moon.value ? Math.round(moon.value.distance_km).toLocaleString() : '',
-)
+function thousands(km: number): string {
+  return Math.round(km).toLocaleString()
+}
+
+const orbit = computed(() => {
+  const now = moon.value
+  if (!now) return 0
+
+  const span = now.apogee_km - now.perigee_km
+  if (span <= 0) return 0
+  return Math.min(100, Math.max(0, ((now.distance_km - now.perigee_km) / span) * 100))
+})
 
 const weather = computed(() => sky.value?.space_weather ?? null)
-
-const SWPC_URL = 'https://www.swpc.noaa.gov/products/planetary-k-index'
-
-const KP_SCALE: { at: number; label: string; note: string }[] = [
-  {
-    at: 9,
-    label: 'Extreme storm (G5)',
-    note: 'The aurora may be visible as far south as 40 degrees latitude.',
-  },
-  {
-    at: 8,
-    label: 'Severe storm (G4)',
-    note: 'The aurora may be visible as far south as 45 degrees latitude.',
-  },
-  {
-    at: 7,
-    label: 'Strong storm (G3)',
-    note: 'The aurora may be visible as far south as 50 degrees latitude.',
-  },
-  {
-    at: 6,
-    label: 'Moderate storm (G2)',
-    note: 'The aurora may be visible as far south as 55 degrees latitude.',
-  },
-  {
-    at: 5,
-    label: 'Minor storm (G1)',
-    note: 'The aurora may be visible as far south as 60 degrees latitude.',
-  },
-  {
-    at: 4,
-    label: 'Unsettled',
-    note: 'Busier than usual, but not a storm. The aurora stays near the poles.',
-  },
-  { at: 0, label: 'Quiet', note: 'A normal day. The aurora stays near the poles.' },
-]
+const report = computed(() => sky.value?.weather ?? null)
 
 const activity = computed(() => {
   const kp = weather.value?.kp
-  if (kp === undefined) return null
-  return KP_SCALE.find((step) => kp >= step.at) ?? KP_SCALE[KP_SCALE.length - 1]!
+  return kp === undefined ? null : kpReading(kp)
 })
 
-const stormy = computed(() => (weather.value?.kp ?? 0) >= 5)
+const raised = computed(() => {
+  const alert = report.value?.alert
+  return alert && inForce(alert) ? alert : null
+})
 
-const kpPercent = computed(() =>
-  weather.value ? Math.min(100, Math.max(0, (weather.value.kp / 9) * 100)) : 0,
-)
+const stormy = computed(() => (weather.value?.kp ?? 0) >= 5 || !!raised.value)
+
+const dial = computed(() => (weather.value ? kpPercent(weather.value.kp) : 0))
+
+const levels = computed(() => report.value?.scales?.levels ?? [])
 
 const observed = computed(() => {
   if (!weather.value) return ''
@@ -142,21 +130,41 @@ function magnitude(value: number): string {
               {{ Math.round(moon.illumination * 100) }}% lit,
               {{ moon.age_days < 1 ? 'less than a day' : `${Math.round(moon.age_days)} days` }} old
             </p>
-            <p class="muted lit">{{ distance }} km away</p>
+            <p class="muted lit">
+              {{ thousands(moon.distance_km) }} km away,
+              <span class="drift">
+                <i
+                  :class="['pi', moon.closing ? 'pi-arrow-down-left' : 'pi-arrow-up-right']"
+                  aria-hidden="true"
+                />
+                {{ moon.closing ? 'coming closer' : 'moving away' }}
+              </span>
+            </p>
           </div>
         </div>
 
-        <dl class="facts">
-          <div v-if="nextFull">
-            <dt class="muted">Next full</dt>
-            <dd>
-              {{ when(nextFull.at) }} <span class="muted">{{ countdown(nextFull.at) }}</span>
-            </dd>
+        <div class="gauge orbit">
+          <div class="track">
+            <div :style="{ width: `${orbit}%` }" class="fill" />
+            <span :style="{ left: `${orbit}%` }" class="pin" />
           </div>
-          <div v-if="nextNew">
-            <dt class="muted">Next new</dt>
+          <p class="muted ends">
+            <span>
+              <strong>{{ thousands(moon.perigee_km) }} km</strong>
+              at its closest
+            </span>
+            <span class="far">
+              <strong>{{ thousands(moon.apogee_km) }} km</strong>
+              at its farthest
+            </span>
+          </p>
+        </div>
+
+        <dl class="facts">
+          <div v-for="quarter in nextQuarters" :key="quarter.quarter">
+            <dt class="muted">{{ quarter.name }}</dt>
             <dd>
-              {{ when(nextNew.at) }} <span class="muted">{{ countdown(nextNew.at) }}</span>
+              {{ when(quarter.at) }} <span class="muted">{{ countdown(quarter.at) }}</span>
             </dd>
           </div>
         </dl>
@@ -192,20 +200,32 @@ function magnitude(value: number): string {
 
         <div class="gauge">
           <div class="track">
-            <div :style="{ width: `${kpPercent}%` }" class="fill" />
+            <div :style="{ width: `${dial}%` }" class="fill" />
             <div class="threshold" />
           </div>
-          <p class="muted caption">0 to 9. Storms start at 5.</p>
+          <p class="muted caption">0 to 9 at {{ observed }}. Storms start at 5.</p>
         </div>
 
-        <p class="muted note">{{ activity.note }}</p>
+        <ul v-if="levels.length" class="bands">
+          <li v-for="level in levels" :key="level.band" :class="{ up: (level.scale ?? 0) > 0 }">
+            <span class="mark">{{ levelName(level) }}</span>
+            <span class="muted band-name">{{ BAND_NAMES[level.band] }}</span>
+          </li>
+        </ul>
 
-        <p class="muted source">
-          <a :href="SWPC_URL" data-ours rel="noopener" target="_blank"
-            >NOAA Space Weather Prediction Center</a
-          >
-          ({{ observed }})
+        <p v-if="raised" class="raised">
+          <i aria-hidden="true" class="pi pi-exclamation-triangle" />
+          <span>
+            <strong>{{ NOTICE_LABELS[raised.notice] }}:</strong>
+            {{ raised.headline }}
+          </span>
         </p>
+        <p v-else class="muted note">{{ activity.note }}</p>
+
+        <RouterLink class="more" to="/space-weather">
+          Space weather in detail
+          <i aria-hidden="true" class="pi pi-angle-right" />
+        </RouterLink>
       </section>
     </div>
 
@@ -335,6 +355,16 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.drift {
+  white-space: nowrap;
+}
+
+.drift i {
+  font-size: 0.75em;
+  margin-right: 0.1rem;
+  color: var(--accent);
+}
+
 .facts {
   display: flex;
   gap: 1.5rem;
@@ -455,15 +485,112 @@ h2 {
   background: color-mix(in srgb, var(--text) 45%, transparent);
 }
 
+.orbit .track {
+  overflow: visible;
+}
+
+.pin {
+  position: absolute;
+  top: 50%;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-left: -0.275rem;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  border: 2px solid var(--accent);
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+.ends span {
+  display: flex;
+  flex-direction: column;
+}
+
+.ends strong {
+  font-weight: 600;
+}
+
+.far {
+  text-align: right;
+}
+
 .caption {
   margin: 0;
   font-size: 0.72rem;
 }
 
-.source {
+.bands {
+  list-style: none;
   margin: 0;
-  font-size: 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+}
+
+.bands li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.mark {
+  min-width: 2.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.bands li.up .mark {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.band-name {
+  font-size: 0.8rem;
+}
+
+.raised {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 0.85rem;
   text-wrap: pretty;
+}
+
+.raised i {
+  color: var(--accent);
+  font-size: 0.9em;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: auto;
+  font-size: 0.85rem;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.more:hover {
+  text-decoration: underline;
 }
 
 .columns {

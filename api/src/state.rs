@@ -93,6 +93,11 @@ struct Held {
     body: Arc<str>,
 }
 
+pub struct Fresh {
+    pub body: Arc<str>,
+    pub max_age: Duration,
+}
+
 #[derive(Clone)]
 pub struct Cached {
     held: Arc<RwLock<Option<Held>>>,
@@ -107,12 +112,18 @@ impl Cached {
         }
     }
 
-    fn fresh(&self, held: &Option<Held>) -> Option<Arc<str>> {
+    fn fresh(&self, held: &Option<Held>) -> Option<Fresh> {
         let held = held.as_ref()?;
-        (held.built.elapsed() < self.ttl).then(|| Arc::clone(&held.body))
+        self.ttl
+            .checked_sub(held.built.elapsed())
+            .filter(|left| !left.is_zero())
+            .map(|max_age| Fresh {
+                body: Arc::clone(&held.body),
+                max_age,
+            })
     }
 
-    pub async fn get_or_build<B, F, E>(&self, build: B) -> Result<Arc<str>, E>
+    pub async fn get_or_build<B, F, E>(&self, build: B) -> Result<Fresh, E>
     where
         B: FnOnce() -> F,
         F: Future<Output = Result<String, E>>,
@@ -132,7 +143,10 @@ impl Cached {
             body: Arc::clone(&body),
         });
 
-        Ok(body)
+        Ok(Fresh {
+            body,
+            max_age: self.ttl,
+        })
     }
 }
 
@@ -157,8 +171,8 @@ mod tests {
         let builds = AtomicUsize::new(0);
 
         for _ in 0..5 {
-            let body = cache.get_or_build(counting(&builds)).await.unwrap();
-            assert_eq!(&*body, "<urlset/>");
+            let fresh = cache.get_or_build(counting(&builds)).await.unwrap();
+            assert_eq!(&*fresh.body, "<urlset/>");
         }
 
         assert_eq!(
@@ -166,6 +180,24 @@ mod tests {
             1,
             "only the first should build"
         );
+    }
+
+    #[tokio::test]
+    async fn a_reused_body_is_only_offered_for_the_life_it_has_left() {
+        let cache = Cached::new(Duration::from_secs(60));
+        let builds = AtomicUsize::new(0);
+
+        let built = cache.get_or_build(counting(&builds)).await.unwrap();
+        assert_eq!(built.max_age, Duration::from_secs(60), "freshly built");
+
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let reused = cache.get_or_build(counting(&builds)).await.unwrap();
+
+        assert!(
+            reused.max_age < Duration::from_secs(60),
+            "a body already part way through its life cannot be offered the whole of it"
+        );
+        assert_eq!(builds.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -204,7 +236,7 @@ mod tests {
         }
 
         for task in tasks {
-            assert_eq!(&*task.await.unwrap(), "<urlset/>");
+            assert_eq!(&*task.await.unwrap().body, "<urlset/>");
         }
         assert_eq!(
             builds.load(Ordering::SeqCst),

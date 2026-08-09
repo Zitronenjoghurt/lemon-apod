@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import ReadProgress from '@/components/ReadProgress.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import SkyPanels from '@/components/SkyPanels.vue'
+import WelcomeNote from '@/components/WelcomeNote.vue'
 import { api } from '@/api/client'
 import { type ApodSummary, isVideo } from '@/api/types'
 import { useCoverage } from '@/composables/useCoverage'
@@ -11,7 +12,8 @@ import { useRead } from '@/composables/useRead'
 import { useStatus } from '@/composables/useStatus'
 import { formatDate } from '@/utils/date'
 
-const TICK_MS = 30_000
+const TICK_MS = 1_000
+const POLL_MS = 30_000
 
 const { latest, entries, publish, refresh } = useStatus()
 const { countIn, isRead } = useRead()
@@ -87,14 +89,20 @@ const eta = computed(() => {
   if (left === null) return null
   if (left <= 0) return { parts: [], soon: 'any moment now' }
 
-  const minutes = Math.round(left / 60_000)
-  if (minutes < 1) return { parts: [], soon: 'any moment now' }
-  if (minutes < 60) return { parts: [{ value: minutes, unit: minutes === 1 ? 'min' : 'mins' }] }
+  const total = Math.floor(left / 1_000)
+  const hours = Math.floor(total / 3_600)
+  const minutes = Math.floor((total % 3_600) / 60)
+  const seconds = total % 60
 
-  const hours = Math.floor(minutes / 60)
-  const rest = minutes % 60
-  const parts = [{ value: hours, unit: hours === 1 ? 'hour' : 'hours' }]
-  if (rest) parts.push({ value: rest, unit: 'min' })
+  const parts: { value: string; unit: string }[] = []
+  if (hours) parts.push({ value: String(hours), unit: hours === 1 ? 'hour' : 'hours' })
+  if (hours || minutes) {
+    parts.push({ value: hours ? String(minutes).padStart(2, '0') : String(minutes), unit: 'min' })
+  }
+  parts.push({
+    value: parts.length ? String(seconds).padStart(2, '0') : String(seconds),
+    unit: 'sec',
+  })
 
   return { parts }
 })
@@ -129,21 +137,27 @@ async function reload() {
 }
 
 let timer: ReturnType<typeof setInterval> | undefined
+let poller: ReturnType<typeof setInterval> | undefined
 
 onMounted(() => {
-  timer = setInterval(() => {
-    now.value = Date.now()
+  timer = setInterval(() => (now.value = Date.now()), TICK_MS)
+  poller = setInterval(() => {
     if ((millisToPublish.value ?? 1) <= 0) void refresh()
-  }, TICK_MS)
+  }, POLL_MS)
 })
 
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(timer)
+  clearInterval(poller)
+})
 
 watch([standing, localToday], loadLocalDay, { immediate: true })
 </script>
 
 <template>
   <div class="stack status">
+    <WelcomeNote />
+
     <RetryNotice v-if="error" :busy="loading" :message="error" @retry="reload" />
 
     <div v-else-if="!publish || (!featured && standing !== 'behind')" class="stack">
@@ -298,10 +312,6 @@ h1 {
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
-}
-
-.head {
-  gap: 0.4rem;
 }
 
 .today {

@@ -11,6 +11,11 @@ const router = createRouter({
     { path: '/favorites', name: 'favorites', component: () => import('@/views/FavoritesView.vue') },
     { path: '/random', name: 'random', component: () => import('@/views/RandomView.vue') },
     { path: '/stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
+    {
+      path: '/space-weather',
+      name: 'space-weather',
+      component: () => import('@/views/SpaceWeatherView.vue'),
+    },
     { path: '/games', name: 'games', component: () => import('@/views/GamesView.vue') },
     {
       path: '/games/date',

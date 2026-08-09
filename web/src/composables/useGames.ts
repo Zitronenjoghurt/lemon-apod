@@ -33,7 +33,7 @@ const SHARE_BANDS: Record<GameSlug, string[]> = {
   date: ['\u{1F3AF}', '\u{1F7E9}', '\u{1F7E8}', '\u{1F7E7}', '\u{2B1B}'],
   words: ['\u{1F7E9}', '\u{1F7E9}', '\u{1F7E8}', '\u{1F7E7}', '\u{2B1B}'],
   order: ['\u{1F7E9}', '\u{1F7E9}', '\u{1F7E8}', '\u{1F7E7}', '\u{1F7E5}'],
-  match: ['\u{1F7E9}', '\u{1F7E9}', '\u{1F7E8}', '\u{1F7E7}', '\u{1F7E5}'],
+  match: ['\u{1F3AF}', '\u{1F7E9}', '\u{1F7E8}', '\u{1F7E7}', '\u{1F7E5}'],
 }
 
 export type GameMode = 'daily' | 'free'
@@ -67,18 +67,19 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
     },
     {
       slug: 'order',
-      name: 'Which Came First',
+      name: 'Older or Newer',
       path: '/games/order',
       icon: 'pi pi-sort-alt',
       blurb:
-        'Two pictures, months or years apart. Always guess which one appeared first to keep the run going.',
+        'One picture with its date, one without. Say whether the new one appeared before or after it, and keep the run going.',
     },
     {
       slug: 'match',
       name: 'Match the Picture',
       path: '/games/match',
       icon: 'pi pi-images',
-      blurb: 'One explanation and six pictures. Guess which picture it describes.',
+      blurb:
+        'One blurred out explanation and six pictures. Uncover as little of the text as you can and still pick right.',
     },
   ]
 

@@ -14,7 +14,7 @@ async fn get_stats(State(state): State<ServerState>) -> ApiResult<Response> {
 }
 
 async fn get_timeline(State(state): State<ServerState>) -> ApiResult<Response> {
-    let body = state
+    let timeline = state
         .timeline
         .get_or_build(|| async {
             let timeline = state.store.timeline().await?;
@@ -22,11 +22,14 @@ async fn get_timeline(State(state): State<ServerState>) -> ApiResult<Response> {
         })
         .await?;
 
-    Ok(response::cached_json(state.config.cache_list_secs, &body))
+    Ok(response::cached_json(
+        timeline.max_age.as_secs(),
+        &timeline.body,
+    ))
 }
 
 async fn get_coverage(State(state): State<ServerState>) -> ApiResult<Response> {
-    let body = state
+    let coverage = state
         .coverage
         .get_or_build(|| async {
             let coverage = state.store.coverage().await?;
@@ -34,7 +37,10 @@ async fn get_coverage(State(state): State<ServerState>) -> ApiResult<Response> {
         })
         .await?;
 
-    Ok(response::cached_json(state.config.cache_list_secs, &body))
+    Ok(response::cached_json(
+        coverage.max_age.as_secs(),
+        &coverage.body,
+    ))
 }
 
 pub fn router() -> Router<ServerState> {

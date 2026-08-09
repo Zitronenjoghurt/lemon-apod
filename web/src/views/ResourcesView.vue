@@ -5,6 +5,7 @@ import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { HostCount, ResourceSort, SortOrder } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
+import { useNarrow } from '@/composables/useNarrow'
 import { year as yearOf } from '@/utils/date'
 
 const PAGE_SIZE = 30
@@ -22,6 +23,7 @@ const SORTS: { label: string; value: `${ResourceSort}:${SortOrder}` }[] = [
 
 const route = useRoute()
 const router = useRouter()
+const { pageLinks } = useNarrow()
 
 const query = ref(String(route.query.q ?? ''))
 const host = ref<string | null>((route.query.host as string) ?? null)
@@ -198,6 +200,7 @@ function span(first?: string, last?: string): string {
     </ul>
 
     <Paginator
+      :page-link-size="pageLinks"
       v-if="listing && listing.total > PAGE_SIZE"
       :first="(page - 1) * PAGE_SIZE"
       :rows="PAGE_SIZE"
@@ -214,13 +217,6 @@ h1 {
 
 .head {
   gap: 0.4rem;
-}
-
-.note {
-  margin: 0;
-  font-size: 0.88rem;
-  max-width: 64ch;
-  text-wrap: pretty;
 }
 
 .controls {

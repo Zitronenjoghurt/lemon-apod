@@ -1089,6 +1089,33 @@ async fn a_rerun_picture_is_findable_from_any_of_its_dates() {
         "a picture that ran once answers with its own date"
     );
 
+    let pool: Vec<String> = reader
+        .picture_pool(None)
+        .await
+        .unwrap()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        pool,
+        vec!["2019-09-20", "2023-01-01"],
+        "the games deal each picture once, on the day it first ran, or a round can ask which of \
+         two identical pictures came first"
+    );
+
+    let before: Vec<String> = reader
+        .picture_pool(Some("2022-01-01".parse().unwrap()))
+        .await
+        .unwrap()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        before,
+        vec!["2019-09-20"],
+        "a daily only knows the reruns that had already happened"
+    );
+
     let summary = reader.picture_summary().await.unwrap();
     assert_eq!((summary.pictures, summary.entries), (1, 3));
     assert_eq!(summary.hashed, 4);

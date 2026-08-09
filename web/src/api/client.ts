@@ -6,6 +6,7 @@ import type {
   GamePicture,
   HostCount,
   KindFilter,
+  KnownWord,
   Listing,
   MatchAnswer,
   MatchRound,
@@ -22,6 +23,7 @@ import type {
   Stats,
   Status,
   Timeline,
+  WeatherReport,
   Word,
   WordSort,
   WordsRound,
@@ -167,6 +169,7 @@ export interface ResourceOptions {
 export interface PuzzleOptions {
   day?: string
   rounds?: number
+  from?: string
 }
 
 export interface WordOptions {
@@ -200,6 +203,8 @@ export const api = {
   status: (signal?: AbortSignal) => request<Status>('/api/status', signal),
 
   sky: (signal?: AbortSignal) => request<Sky>('/api/sky', signal),
+
+  weather: (signal?: AbortSignal) => request<WeatherReport>('/api/sky/weather', signal),
 
   stats: (signal?: AbortSignal) => request<Stats>('/api/stats', signal),
 
@@ -239,6 +244,9 @@ export const api = {
 
     answer: (round: string, pick: string, signal?: AbortSignal) =>
       request<MatchAnswer>(`/api/games/answer${query({ round, pick })}`, signal),
+
+    known: (word: string, signal?: AbortSignal) =>
+      request<KnownWord>(`/api/games/known${query({ w: word })}`, signal),
 
     picture: (token: string) => `/pic/${encodeURIComponent(token)}`,
   },

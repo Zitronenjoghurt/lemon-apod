@@ -2,8 +2,9 @@ import { EXTERNAL_WARNING_KEY, hydrateExternalLinks } from './useExternalLinks'
 import { hydrateFavorites } from './useFavorites'
 import { gameKey, GAMES, hydrateGames } from './useGames'
 import { ARCHIVE_VIEW_KEY, hydratePreferences, WEEK_START_KEY } from './usePreferences'
-import { hydrateRead } from './useRead'
+import { filterKey, hydrateRead, READ_SCOPES } from './useRead'
 import { hydrateTheme } from './useTheme'
+import { hydrateWelcome, WELCOME_KEY } from './useWelcome'
 
 const APP = 'lemon-apod'
 const FORMAT = 1
@@ -20,7 +21,12 @@ interface Field {
 const FIELDS: Field[] = [
   { key: 'apod:favorites', shape: 'dates', label: 'favorites', hydrate: hydrateFavorites },
   { key: 'apod:read', shape: 'dates', label: 'read entries', hydrate: hydrateRead },
-  { key: 'apod:read-filter', shape: 'scalar', label: 'read filter', hydrate: hydrateRead },
+  ...READ_SCOPES.map((scope) => ({
+    key: filterKey(scope),
+    shape: 'scalar' as Shape,
+    label: `${scope} read filter`,
+    hydrate: hydrateRead,
+  })),
   { key: 'apod:theme', shape: 'scalar', label: 'theme', hydrate: hydrateTheme },
   { key: WEEK_START_KEY, shape: 'scalar', label: 'week start', hydrate: hydratePreferences },
   { key: ARCHIVE_VIEW_KEY, shape: 'scalar', label: 'archive layout', hydrate: hydratePreferences },
@@ -30,6 +36,7 @@ const FIELDS: Field[] = [
     label: 'link warning',
     hydrate: hydrateExternalLinks,
   },
+  { key: WELCOME_KEY, shape: 'scalar', label: 'welcome note', hydrate: hydrateWelcome },
   ...GAMES.map((game) => ({
     key: gameKey(game.slug),
     shape: 'results' as Shape,

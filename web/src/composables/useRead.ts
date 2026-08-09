@@ -1,9 +1,15 @@
-import { computed, ref, watch } from 'vue'
+import { computed, inject, type InjectionKey, provide, ref } from 'vue'
 
 const READ_KEY = 'apod:read'
-const FILTER_KEY = 'apod:read-filter'
+const LEGACY_FILTER_KEY = 'apod:read-filter'
 
 export type ReadFilter = 'all' | 'unread' | 'read'
+export type ReadScope = 'feed' | 'archive' | 'search' | 'favorites'
+export const READ_SCOPES: ReadScope[] = ['feed', 'archive', 'search', 'favorites']
+
+export function filterKey(scope: ReadScope): string {
+  return `${LEGACY_FILTER_KEY}:${scope}`
+}
 
 export const READ_FILTERS: { label: string; value: ReadFilter; icon: string }[] = [
   { label: 'All', value: 'all', icon: 'pi pi-list' },
@@ -11,8 +17,14 @@ export const READ_FILTERS: { label: string; value: ReadFilter; icon: string }[] 
   { label: 'Read', value: 'read', icon: 'pi pi-check' },
 ]
 
+const SCOPE: InjectionKey<ReadScope> = Symbol('read-scope')
+
+export function provideReadScope(scope: ReadScope): void {
+  provide(SCOPE, scope)
+}
+
 const dates = ref<Set<string>>(loadDates())
-const filter = ref<ReadFilter>(loadFilter())
+const filters = ref<Record<ReadScope, ReadFilter>>(loadFilters())
 
 function loadDates(): Set<string> {
   try {
@@ -26,8 +38,14 @@ function loadDates(): Set<string> {
   }
 }
 
-function loadFilter(): ReadFilter {
-  const stored = localStorage.getItem(FILTER_KEY)
+function loadFilters(): Record<ReadScope, ReadFilter> {
+  const held = {} as Record<ReadScope, ReadFilter>
+  for (const scope of READ_SCOPES) held[scope] = loadFilter(scope)
+  return held
+}
+
+function loadFilter(scope: ReadScope): ReadFilter {
+  const stored = localStorage.getItem(filterKey(scope)) ?? localStorage.getItem(LEGACY_FILTER_KEY)
   return stored === 'unread' || stored === 'read' ? stored : 'all'
 }
 
@@ -37,20 +55,26 @@ function persist(): void {
   } catch {}
 }
 
-watch(filter, (next) => {
-  try {
-    localStorage.setItem(FILTER_KEY, next)
-  } catch {}
-})
-
 export function hydrateRead(): void {
   dates.value = loadDates()
-  filter.value = loadFilter()
+  filters.value = loadFilters()
 }
 
-export function useRead() {
+export function useRead(scope?: ReadScope) {
+  const which = scope ?? inject(SCOPE, 'archive' as ReadScope)
+
   const admitted = new Set<string>()
-  let admittedFor = filter.value
+  let admittedFor = filters.value[which]
+
+  const filter = computed<ReadFilter>({
+    get: () => filters.value[which],
+    set: (next) => {
+      filters.value = { ...filters.value, [which]: next }
+      try {
+        localStorage.setItem(filterKey(which), next)
+      } catch {}
+    },
+  })
 
   function isRead(date: string): boolean {
     return dates.value.has(date)

@@ -1,3 +1,4 @@
+use super::weather::WeatherReport;
 use crate::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, TimeZone, Utc};
 use serde::Serialize;
@@ -114,6 +115,15 @@ impl SkyReader {
         }))
     }
 
+    pub async fn weather_report(&self) -> DbResult<Option<WeatherReport>> {
+        let body: Option<String> =
+            sqlx::query_scalar("SELECT body FROM weather_report WHERE id = 1")
+                .fetch_optional(self.db.reader())
+                .await?;
+
+        Ok(body.and_then(|body| serde_json::from_str(&body).ok()))
+    }
+
     pub async fn feeds(&self) -> DbResult<Vec<FeedState>> {
         let rows: Vec<(String, Option<i64>, i64, Option<String>)> =
             sqlx::query_as("SELECT name, fetched_at, succeeded, error FROM feeds ORDER BY name")
@@ -212,6 +222,26 @@ impl SkyWriter {
         )
         .bind(weather.kp)
         .bind(weather.observed_at.timestamp())
+        .bind(Utc::now().timestamp())
+        .execute(self.db.writer()?)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_weather_report(&self, report: &WeatherReport) -> DbResult<()> {
+        let body = serde_json::to_string(report).map_err(|error| {
+            sqlx::Error::Encode(Box::new(std::io::Error::other(error.to_string())))
+        })?;
+
+        sqlx::query(
+            "INSERT INTO weather_report (id, body, updated_at)
+             VALUES (1, ?1, ?2)
+             ON CONFLICT(id) DO UPDATE SET
+               body = excluded.body,
+               updated_at = excluded.updated_at",
+        )
+        .bind(body)
         .bind(Utc::now().timestamp())
         .execute(self.db.writer()?)
         .await?;

@@ -21,14 +21,18 @@ const STAGES = [
   { blur: 2.5, worth: 0.6, seconds: 7 },
   { blur: 0, worth: 0.5, seconds: 0 },
 ]
-const GRADES = ['Bullseye', 'Close', 'Not bad', 'Wide', 'Way off']
-const HALF_POINTS_DAYS = 180
+const GRADES = ['Bullseye', 'Very close', 'Close', 'Roughly there', 'Way off']
+/** How far out a guess has to land to be worth half its points, as a share of the archive's span. */
+const HALF_POINTS_SHARE = 0.08
+/** How close a guess has to land for each grade, again as a share of the span. */
+const GRADE_SHARES = [0.01, 0.05, 0.15]
 const PER_ROUND = 1000
 const DAY_MS = 86_400_000
 
 const HOW = [
   'You are prompted with a random blurred picture that sharpens every couple of seconds.',
   'Guessing fast could yield you more points, waiting for the image to fully reveal yields you the least.',
+  'How close you have to land is measured against how much archive there is, so a month out is worth the same whether the archive covers three years or thirty.',
   'Some pictures may have appeared multiple times over the years. Whichever one is closest to your guess is the one scored.',
 ]
 
@@ -69,6 +73,9 @@ const locked = ref<{
 }>()
 const scored = ref<Round[]>([])
 
+/** A guess is in flight. A second press while it travels would score the round twice. */
+const checking = ref(false)
+
 const { record, resultFor } = useGame('date')
 const progress = useProgress<Saved>('date')
 let ticker: ReturnType<typeof setInterval> | undefined
@@ -92,10 +99,6 @@ const clueLeft = computed(() => {
 })
 
 const worth = computed(() => Math.round(STAGES[stage.value].worth * 100))
-const nextWorth = computed(() =>
-  Math.round(STAGES[Math.min(stage.value + 1, STAGES.length - 1)].worth * 100),
-)
-const sharpWorth = Math.round(STAGES[STAGES.length - 1].worth * 100)
 
 const landed = computed(() => {
   const one = locked.value
@@ -122,12 +125,17 @@ function place(date: string): number {
   return to > from ? Math.min(100, Math.max(0, ((at - from) / (to - from)) * 100)) : 0
 }
 
+/**
+ * Grades are measured against how wide the archive is rather than against a fixed number of days.
+ * A month out of thirty years is a good guess. A month out of one year is not, and a partial
+ * archive or another twenty years of entries should not quietly change what a grade means.
+ */
 function band(days: number): Band {
   if (days === 0) return 0
-  if (days <= 30) return 1
-  if (days <= 180) return 2
-  if (days <= 730) return 3
-  return 4
+
+  const share = days / span.value
+  const grade = GRADE_SHARES.findIndex((edge) => share <= edge)
+  return (grade === -1 ? 4 : grade + 1) as Band
 }
 
 const bands = computed(() => scored.value.map((one) => band(one.days)))
@@ -157,6 +165,10 @@ const bounds = computed(() => ({
   from: Math.round(Date.parse(`${first.value}T00:00:00Z`) / DAY_MS),
   to: Math.round(Date.parse(`${last.value}T00:00:00Z`) / DAY_MS),
 }))
+
+/** How many days the archive covers. Everything about how close a guess landed is relative to it. */
+const span = computed(() => Math.max(1, bounds.value.to - bounds.value.from))
+const halfPoints = computed(() => Math.max(1, span.value * HALF_POINTS_SHARE))
 
 function stopTicking(): void {
   if (ticker) clearInterval(ticker)
@@ -258,16 +270,17 @@ async function deal(): Promise<void> {
 }
 
 function points(days: number, worth: number): number {
-  return Math.round((PER_ROUND * worth) / (1 + days / HALF_POINTS_DAYS))
+  return Math.round((PER_ROUND * worth) / (1 + days / halfPoints.value))
 }
 
 async function lockIn(): Promise<void> {
   const current = round.value
-  if (!current || locked.value) return
+  if (!current || locked.value || checking.value) return
 
   const chosen = clampDate(guess.value, first.value, last.value)
   const held = stage.value
   stopTicking()
+  checking.value = true
 
   try {
     const [reveal] = await api.games.reveal([current.picture])
@@ -284,6 +297,8 @@ async function lockIn(): Promise<void> {
   } catch (thrown) {
     error.value = thrown instanceof Error ? thrown.message : 'That guess could not be checked.'
     startTicking(held)
+  } finally {
+    checking.value = false
   }
 }
 
@@ -358,50 +373,40 @@ onUnmounted(stopTicking)
         />
 
         <div v-if="!locked" class="controls">
-          <div class="meter">
-            <div class="row meter-head">
-              <span class="muted">
-                <i aria-hidden="true" class="pi pi-eye" />
-                This round is worth
-              </span>
-              <strong>{{ worth }}%</strong>
-            </div>
-            <div class="track">
-              <div :style="{ width: `${worth}%` }" class="fill" />
-            </div>
-          </div>
-
-          <div v-if="sharpening" class="clue">
+          <div class="clue">
             <div class="row clue-head">
-              <span class="muted">
-                Sharpens again in <strong class="secs">{{ untilClue }}s</strong>
+              <span class="worth">
+                Worth <strong>{{ worth }}%</strong>
               </span>
+
+              <span v-if="sharpening" class="muted next">
+                sharper in <strong class="secs">{{ untilClue }}s</strong>
+              </span>
+              <span v-else class="muted next">fully in focus</span>
+
+              <template v-if="sharpening">
+                <Button
+                  icon="pi pi-bolt"
+                  label="Sharpen"
+                  severity="secondary"
+                  size="small"
+                  text
+                  @click="sharpen"
+                />
+                <Button
+                  icon="pi pi-eye"
+                  label="Full focus"
+                  severity="secondary"
+                  size="small"
+                  text
+                  @click="revealAll"
+                />
+              </template>
             </div>
             <div class="track thin">
               <div :style="{ width: `${clueLeft * 100}%` }" class="fill wait" />
             </div>
-            <div class="row clue-actions">
-              <Button
-                :label="`Sharpen now (${nextWorth}%)`"
-                icon="pi pi-bolt"
-                outlined
-                severity="secondary"
-                size="small"
-                @click="sharpen"
-              />
-              <Button
-                :label="`Reveal it all (${sharpWorth}%)`"
-                icon="pi pi-eye"
-                severity="secondary"
-                size="small"
-                text
-                @click="revealAll"
-              />
-            </div>
           </div>
-          <p v-else class="muted hint">
-            The image is now fully in focus, yielding you the least points.
-          </p>
 
           <div class="timeline">
             <input
@@ -427,7 +432,7 @@ onUnmounted(stopTicking)
               class="date-input"
               type="date"
             />
-            <Button icon="pi pi-check" label="Lock it in" @click="lockIn" />
+            <Button :loading="checking" icon="pi pi-check" label="Lock it in" @click="lockIn" />
           </div>
         </div>
 
@@ -568,24 +573,37 @@ onUnmounted(stopTicking)
   align-self: flex-start;
 }
 
-.meter,
 .clue {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   font-size: 0.85rem;
 }
 
-.meter-head,
 .clue-head {
-  justify-content: space-between;
-  gap: 0.5rem;
+  gap: 0.35rem 0.6rem;
   min-height: 2rem;
 }
 
-.meter-head i {
-  font-size: 0.85em;
-  margin-right: 0.2rem;
+.worth {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.6rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.worth strong {
+  color: var(--text);
+}
+
+.next {
+  margin-right: auto;
+  white-space: nowrap;
 }
 
 .secs {
@@ -620,18 +638,8 @@ onUnmounted(stopTicking)
   transition: width 1s linear;
 }
 
-.hint {
-  margin: 0;
-  font-size: 0.8rem;
-}
-
 .small {
   font-size: 0.75rem;
-}
-
-.clue-actions {
-  gap: 0.4rem;
-  margin-top: 0.15rem;
 }
 
 .score-head {

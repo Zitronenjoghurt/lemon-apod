@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 /// Deliberately outside the rate limiter.
 pub async fn get_health(State(state): State<ServerState>) -> Response {
-    let built: Result<Arc<str>, apod_core::ApodError> = state
+    let built: Result<crate::state::Fresh, apod_core::ApodError> = state
         .health
         .get_or_build(|| async {
             let stats = state.store.stats().await?;
@@ -22,7 +22,7 @@ pub async fn get_health(State(state): State<ServerState>) -> Response {
         .await;
 
     match built {
-        Ok(body) => ok(body),
+        Ok(fresh) => ok(fresh.body),
         Err(error) => {
             tracing::error!("health check failed: {error:#}");
             (

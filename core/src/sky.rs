@@ -6,6 +6,7 @@ pub mod showers;
 pub mod store;
 pub mod sun;
 pub mod time;
+pub mod weather;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
@@ -15,6 +16,7 @@ pub use moon::{MoonNow, Phase, Quarter, QuarterEvent};
 pub use planets::{Milestone, Planet, PlanetEvent, PlanetNow, Visibility};
 pub use showers::{Moonlight, Shower, ShowerPeak};
 pub use sun::{Turning, TurningEvent};
+pub use weather::{Alert, Band, Notice, WeatherReport, WeatherSummary};
 
 const TIMELINE_LENGTH: usize = 10;
 const TIMELINE_HORIZON_DAYS: i64 = 400;

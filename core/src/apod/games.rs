@@ -15,10 +15,11 @@ pub const GIVEN_SHARE: f64 = 0.4;
 impl ApodReader {
     pub async fn picture_pool(&self, before: Option<ApodDate>) -> ApodResult<Vec<ApodDate>> {
         let days: Vec<i64> = sqlx::query_scalar(AssertSqlSafe(format!(
-            "SELECT date_id FROM entries
+            "SELECT MIN(date_id) FROM entries
              WHERE thumb_path IS NOT NULL AND media_kind IN ({PICTURE_KINDS})
                AND (?1 IS NULL OR date_id < ?1)
-             ORDER BY date_id"
+             GROUP BY COALESCE(picture_group, date_id)
+             ORDER BY 1"
         )))
         .bind(before.map(ApodDate::days))
         .fetch_all(self.db().reader())
@@ -107,6 +108,15 @@ impl ApodReader {
             most_shown: most.map(|(days, _)| ApodDate::from_days(days as i32)),
             most_shown_times: most.map_or(0, |(_, count)| count),
         })
+    }
+
+    pub async fn word_reach(&self, word: &str) -> ApodResult<Option<i64>> {
+        Ok(
+            sqlx::query_scalar("SELECT entries FROM words WHERE word = ?1")
+                .bind(word)
+                .fetch_optional(self.db().reader())
+                .await?,
+        )
     }
 
     pub async fn given_words(&self) -> ApodResult<HashSet<String>> {

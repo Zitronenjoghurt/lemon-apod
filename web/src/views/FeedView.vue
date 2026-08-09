@@ -16,7 +16,7 @@ import ReadFilter from '@/components/ReadFilter.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
-import { useRead } from '@/composables/useRead'
+import { provideReadScope, useRead } from '@/composables/useRead'
 import { FIRST_ENTRY, formatDate } from '@/utils/date'
 
 defineOptions({ name: 'FeedView' })
@@ -42,7 +42,8 @@ const TOP_BUTTON_AFTER = 3
 
 const route = useRoute()
 const router = useRouter()
-const { apply, active: filtered, filter } = useRead()
+provideReadScope('feed')
+const { apply, active: filtered, filter } = useRead('feed')
 
 const mode = ref<Mode>(readMode())
 const from = ref<string | undefined>(readFrom())

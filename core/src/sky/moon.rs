@@ -1,11 +1,14 @@
 use super::time::{
-    self, centuries, cos_deg, dynamical_to_utc, normalize_degrees, sin_deg, to_julian,
+    self, centuries, cos_deg, dynamical_julian, dynamical_to_utc, normalize_degrees, sin_deg,
+    to_julian,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 const MEAN_DISTANCE_KM: f64 = 385_000.56;
 const SUPERMOON_KM: f64 = 360_000.0;
+pub const PERIGEE_KM: f64 = 356_500.0;
+pub const APOGEE_KM: f64 = 406_700.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -81,6 +84,9 @@ pub struct MoonNow {
     pub age_days: f64,
     pub waxing: bool,
     pub distance_km: f64,
+    pub perigee_km: f64,
+    pub apogee_km: f64,
+    pub closing: bool,
     pub cycle: f64,
     pub last_new_moon: DateTime<Utc>,
     pub next_quarters: Vec<QuarterEvent>,
@@ -116,6 +122,9 @@ pub fn now(at: DateTime<Utc>) -> MoonNow {
         age_days: age_seconds / 86_400.0,
         waxing,
         distance_km: distance_km(at),
+        perigee_km: PERIGEE_KM,
+        apogee_km: APOGEE_KM,
+        closing: is_closing(at),
         cycle,
         last_new_moon: last_new,
         next_quarters,
@@ -136,7 +145,7 @@ fn phase_for(cycle: f64) -> Phase {
 }
 
 pub fn illumination(at: DateTime<Utc>) -> f64 {
-    let t = centuries(to_julian(at));
+    let t = centuries(dynamical_julian(at));
 
     let d = normalize_degrees(
         297.850_192_1 + 445_267.111_403_4 * t - 0.001_881_9 * t.powi(2) + t.powi(3) / 545_868.0
@@ -159,46 +168,81 @@ pub fn illumination(at: DateTime<Utc>) -> f64 {
     ((1.0 + cos_deg(phase_angle)) / 2.0).clamp(0.0, 1.0)
 }
 
+const DISTANCE_TERMS: [(f64, f64, f64, f64, f64); 46] = [
+    (0.0, 0.0, 1.0, 0.0, -20_905_355.0),
+    (2.0, 0.0, -1.0, 0.0, -3_699_111.0),
+    (2.0, 0.0, 0.0, 0.0, -2_955_968.0),
+    (0.0, 0.0, 2.0, 0.0, -569_925.0),
+    (0.0, 1.0, 0.0, 0.0, 48_888.0),
+    (0.0, 0.0, 0.0, 2.0, -3_149.0),
+    (2.0, 0.0, -2.0, 0.0, 246_158.0),
+    (2.0, -1.0, -1.0, 0.0, -152_138.0),
+    (2.0, 0.0, 1.0, 0.0, -170_733.0),
+    (2.0, -1.0, 0.0, 0.0, -204_586.0),
+    (0.0, 1.0, -1.0, 0.0, -129_620.0),
+    (1.0, 0.0, 0.0, 0.0, 108_743.0),
+    (0.0, 1.0, 1.0, 0.0, 104_755.0),
+    (2.0, 0.0, 0.0, -2.0, 10_321.0),
+    (0.0, 0.0, 1.0, -2.0, 79_661.0),
+    (4.0, 0.0, -1.0, 0.0, -34_782.0),
+    (0.0, 0.0, 3.0, 0.0, -23_210.0),
+    (4.0, 0.0, -2.0, 0.0, -21_636.0),
+    (2.0, 1.0, -1.0, 0.0, 24_208.0),
+    (2.0, 1.0, 0.0, 0.0, 30_824.0),
+    (1.0, 0.0, -1.0, 0.0, -8_379.0),
+    (1.0, 1.0, 0.0, 0.0, -16_675.0),
+    (2.0, -1.0, 1.0, 0.0, -12_831.0),
+    (2.0, 0.0, 2.0, 0.0, -10_445.0),
+    (4.0, 0.0, 0.0, 0.0, -11_650.0),
+    (2.0, 0.0, -3.0, 0.0, 14_403.0),
+    (0.0, 1.0, -2.0, 0.0, -7_003.0),
+    (2.0, -1.0, -2.0, 0.0, 10_056.0),
+    (1.0, 0.0, 1.0, 0.0, 6_322.0),
+    (2.0, -2.0, 0.0, 0.0, -9_884.0),
+    (0.0, 1.0, 2.0, 0.0, 5_751.0),
+    (2.0, -2.0, -1.0, 0.0, -4_950.0),
+    (2.0, 0.0, 1.0, -2.0, 4_130.0),
+    (4.0, -1.0, -1.0, 0.0, -3_958.0),
+    (3.0, 0.0, -1.0, 0.0, 3_258.0),
+    (2.0, 1.0, 1.0, 0.0, 2_616.0),
+    (4.0, -1.0, -2.0, 0.0, -1_897.0),
+    (0.0, 2.0, -1.0, 0.0, -2_117.0),
+    (2.0, 2.0, -1.0, 0.0, 2_354.0),
+    (4.0, 0.0, 1.0, 0.0, -1_423.0),
+    (0.0, 0.0, 4.0, 0.0, -1_117.0),
+    (4.0, -1.0, 0.0, 0.0, -1_571.0),
+    (1.0, 0.0, -2.0, 0.0, -1_739.0),
+    (0.0, 0.0, 2.0, -2.0, -4_421.0),
+    (0.0, 2.0, 1.0, 0.0, 1_165.0),
+    (2.0, 0.0, -1.0, -2.0, 8_752.0),
+];
+
 pub fn distance_km(at: DateTime<Utc>) -> f64 {
-    let t = centuries(to_julian(at));
+    distance_at(dynamical_julian(at))
+}
+
+fn distance_at(jde: f64) -> f64 {
+    let t = centuries(jde);
 
     let d = normalize_degrees(
-        297.850_192_1 + 445_267.111_403_4 * t - 0.001_881_9 * t.powi(2) + t.powi(3) / 545_868.0,
+        297.850_192_1 + 445_267.111_403_4 * t - 0.001_881_9 * t.powi(2) + t.powi(3) / 545_868.0
+            - t.powi(4) / 113_065_000.0,
     );
-    let m = normalize_degrees(357.529_109_2 + 35_999.050_290_9 * t - 0.000_153_6 * t.powi(2));
+    let m = normalize_degrees(
+        357.529_109_2 + 35_999.050_290_9 * t - 0.000_153_6 * t.powi(2) + t.powi(3) / 24_490_000.0,
+    );
     let m_prime = normalize_degrees(
-        134.963_396_4 + 477_198.867_505_5 * t + 0.008_741_4 * t.powi(2) + t.powi(3) / 69_699.0,
+        134.963_396_4 + 477_198.867_505_5 * t + 0.008_741_4 * t.powi(2) + t.powi(3) / 69_699.0
+            - t.powi(4) / 14_712_000.0,
     );
     let f = normalize_degrees(
-        93.272_095_0 + 483_202.017_523_3 * t - 0.003_653_9 * t.powi(2) - t.powi(3) / 3_526_000.0,
+        93.272_095_0 + 483_202.017_523_3 * t - 0.003_653_9 * t.powi(2) - t.powi(3) / 3_526_000.0
+            + t.powi(4) / 863_310_000.0,
     );
 
     let e = 1.0 - 0.002_516 * t - 0.000_007_4 * t.powi(2);
 
-    const TERMS: [(f64, f64, f64, f64, f64); 20] = [
-        (0.0, 0.0, 1.0, 0.0, -20_905_355.0),
-        (2.0, 0.0, -1.0, 0.0, -3_699_111.0),
-        (2.0, 0.0, 0.0, 0.0, -2_955_968.0),
-        (0.0, 0.0, 2.0, 0.0, -569_925.0),
-        (2.0, 0.0, -2.0, 0.0, 246_158.0),
-        (2.0, -1.0, 0.0, 0.0, -204_586.0),
-        (2.0, 0.0, 1.0, 0.0, -170_733.0),
-        (2.0, -1.0, -1.0, 0.0, -152_138.0),
-        (0.0, 1.0, -1.0, 0.0, -129_620.0),
-        (1.0, 0.0, 0.0, 0.0, 108_743.0),
-        (0.0, 1.0, 1.0, 0.0, 104_755.0),
-        (0.0, 0.0, 1.0, -2.0, 79_661.0),
-        (0.0, 1.0, 0.0, 0.0, 48_888.0),
-        (4.0, 0.0, -1.0, 0.0, -34_782.0),
-        (2.0, 1.0, 0.0, 0.0, 30_824.0),
-        (2.0, 1.0, -1.0, 0.0, 24_208.0),
-        (0.0, 0.0, 3.0, 0.0, -23_210.0),
-        (4.0, 0.0, -2.0, 0.0, -21_636.0),
-        (1.0, 1.0, 0.0, 0.0, -16_675.0),
-        (2.0, 0.0, -3.0, 0.0, 14_403.0),
-    ];
-
-    let sum: f64 = TERMS
+    let sum: f64 = DISTANCE_TERMS
         .iter()
         .map(|&(cd, cm, cm_prime, cf, coefficient)| {
             let argument = cd * d + cm * m + cm_prime * m_prime + cf * f;
@@ -211,6 +255,10 @@ pub fn distance_km(at: DateTime<Utc>) -> f64 {
 
 pub fn is_supermoon(at: DateTime<Utc>) -> bool {
     distance_km(at) < SUPERMOON_KM
+}
+
+pub fn is_closing(at: DateTime<Utc>) -> bool {
+    distance_km(at + chrono::TimeDelta::hours(6)) < distance_km(at)
 }
 
 pub fn last_new_moon(at: DateTime<Utc>) -> DateTime<Utc> {
@@ -551,6 +599,15 @@ mod tests {
     }
 
     #[test]
+    fn the_distance_of_meeus_example_47a() {
+        let found = distance_at(2_448_724.5);
+        assert!(
+            (found - 368_409.7).abs() < 0.5,
+            "got {found}, expected about 368409.7"
+        );
+    }
+
+    #[test]
     fn the_distance_stays_between_perigee_and_apogee() {
         let start = utc(2026, 1, 1, 0, 0);
 
@@ -564,5 +621,36 @@ mod tests {
 
         assert!((356_000.0..359_000.0).contains(&closest), "{closest}");
         assert!((405_000.0..407_500.0).contains(&furthest), "{furthest}");
+
+        assert!(
+            PERIGEE_KM <= closest + 1_000.0 && APOGEE_KM >= furthest - 1_000.0,
+            "the ends the panel measures against have to bracket what the model produces"
+        );
+    }
+
+    #[test]
+    fn the_direction_of_travel_follows_the_distance() {
+        let start = utc(2026, 1, 1, 0, 0);
+
+        let mut turns = 0;
+        let mut previous = is_closing(start);
+
+        for hours in 1..(24 * 60) {
+            let at = start + chrono::TimeDelta::hours(hours);
+            let closing = is_closing(at);
+
+            assert_eq!(
+                closing,
+                distance_km(at + chrono::TimeDelta::hours(6)) < distance_km(at),
+                "at {at}"
+            );
+
+            if closing != previous {
+                turns += 1;
+                previous = closing;
+            }
+        }
+
+        assert!((3..=6).contains(&turns), "{turns} turns in sixty days");
     }
 }

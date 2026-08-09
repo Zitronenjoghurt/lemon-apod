@@ -7,6 +7,7 @@ import YearChart from '@/components/YearChart.vue'
 import { api } from '@/api/client'
 import type { SortOrder, Word, WordSort } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
+import { useNarrow } from '@/composables/useNarrow'
 import { formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 50
@@ -21,6 +22,7 @@ const SORTS: { label: string; value: `${WordSort}:${SortOrder}` }[] = [
 
 const route = useRoute()
 const router = useRouter()
+const { pageLinks } = useNarrow()
 
 const {
   data: stats,
@@ -351,6 +353,7 @@ function count(value: number | undefined): string {
       </ul>
 
       <Paginator
+        :page-link-size="pageLinks"
         v-if="words && words.total > PAGE_SIZE"
         :first="(page - 1) * PAGE_SIZE"
         :rows="PAGE_SIZE"

@@ -6,6 +6,8 @@
     --radius: 0.85rem;
     --gap: 1.25rem;
     --header-h: 3.75rem;
+    --sidebar-w: 14rem;
+    --rail-w: 3.6rem;
 
     --bg: #f6f7fb;
     --bg-elevated: #ffffff;
@@ -131,6 +133,16 @@
     flex-wrap: wrap;
   }
 
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity 0.1s ease;
+  }
+
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     * {
       transition-duration: 0.01ms !important;
@@ -168,4 +180,25 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+.p-tooltip.tip-tight .p-tooltip-text {
+  white-space: nowrap;
+  padding-inline: 0.5rem;
+}
+
+.p-paginator .p-paginator-content {
+  flex-wrap: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .p-paginator {
+    padding-inline: 0;
+  }
+
+  .p-paginator button {
+    min-width: 2rem;
+    width: 2rem;
+    height: 2rem;
+  }
 }

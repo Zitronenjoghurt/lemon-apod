@@ -4,12 +4,14 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import type { GameSlug } from '@/api/types'
 import { copyText, type GameResult, shareText, summarise, useGame } from '@/composables/useGames'
+import { useNarrow } from '@/composables/useNarrow'
 
 const props = defineProps<{ slug: GameSlug; title: string }>()
 
 const PAGE = 10
 
 const { history, clear } = useGame(props.slug)
+const { pageLinks } = useNarrow()
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -174,6 +176,7 @@ function confirmClear() {
       <Paginator
         v-if="listed.length > PAGE"
         :first="first"
+        :page-link-size="pageLinks"
         :rows="PAGE"
         :total-records="listed.length"
         @page="first = $event.first"
@@ -223,8 +226,6 @@ h3 i {
   color: var(--accent);
 }
 
-/* The two modes answer different questions, so they are added up apart rather than into one row of
-   figures that quietly mixes a streak with games that can never be part of one. */
 .split {
   display: grid;
   gap: 1rem;
@@ -295,9 +296,6 @@ h3 i {
   font-size: 0.9rem;
 }
 
-/* A row is a date, what kind of game it was, how it went and its marks. Four separate readings, so
-   the gutter goes on every cell at once: a padding set per column loses to this rule and the four
-   end up shoulder to shoulder. */
 .games td {
   padding: 0.5rem 1.15rem 0.5rem 0;
   border-top: 1px solid var(--border);
@@ -326,8 +324,6 @@ h3 i {
   white-space: nowrap;
 }
 
-/* The marks are the shareable part of a game, so they are the thing you press to share it. The
-   clipboard says so, quietly, on rows whose game keeps no marks at all. */
 .copy {
   display: inline-flex;
   align-items: center;
@@ -370,21 +366,12 @@ h3 i {
   padding-top: 0.6rem;
 }
 
-.note {
-  font-size: 0.8rem;
-  text-wrap: pretty;
-}
-
 :deep(.p-paginator) {
   background: transparent;
   padding: 0.35rem 0;
 }
 
-/* On a phone the squares go and the clipboard stays: copying a result is worth more than looking
-   at it in miniature, and the row has no width to spare. What is left has to be big enough to hit
-   with a thumb, so the button grows into the padding the row already has. */
 @media (max-width: 32rem) {
-  /* A phone has room for the date, how it went and the button, on one line, but only just. */
   .games {
     font-size: 0.85rem;
   }

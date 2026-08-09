@@ -228,6 +228,9 @@ export interface Moon {
   age_days: number
   waxing: boolean
   distance_km: number
+  perigee_km: number
+  apogee_km: number
+  closing: boolean
   cycle: number
   last_new_moon: string
   next_quarters: MoonQuarter[]
@@ -312,6 +315,66 @@ export interface SpaceWeather {
   observed_at: string
 }
 
+export type WeatherBand = 'r' | 's' | 'g'
+
+export interface WeatherLevel {
+  band: WeatherBand
+  scale: number | null
+  text: string | null
+}
+
+export interface ScaleDay {
+  date: string
+  levels: WeatherLevel[]
+}
+
+export interface KpPoint {
+  at: string
+  kp: number
+  ahead: boolean
+}
+
+export interface FluxPoint {
+  at: string
+  flux: number
+}
+
+export interface DstPoint {
+  at: string
+  dst: number
+}
+
+export type NoticeKind = 'alert' | 'warning' | 'watch' | 'summary'
+
+export interface WeatherAlert {
+  id: string
+  notice: NoticeKind
+  headline: string
+  scale: string | null
+  issued_at: string
+  valid_until: string | null
+  message: string
+}
+
+export interface WeatherSummary {
+  kp: number
+  observed_at: string
+  scales: ScaleDay | null
+  alert: WeatherAlert | null
+  active: number
+}
+
+export interface WeatherReport {
+  kp: number
+  observed_at: string
+  scales: ScaleDay | null
+  outlook: ScaleDay[]
+  kp_series: KpPoint[]
+  flux: FluxPoint[]
+  dst: DstPoint[]
+  alerts: WeatherAlert[]
+}
+
 export interface FeedState {
   name: string
   fetched_at: string | null
@@ -330,6 +393,7 @@ export interface Sky {
   events: SkyEvent[]
   launches: Launch[]
   space_weather: SpaceWeather | null
+  weather: WeatherSummary | null
   feeds: FeedState[]
 }
 
@@ -349,9 +413,15 @@ export interface Puzzle<T> {
   rounds: T[]
 }
 
+/** Rounds overlap: the `b` of one round is the `a` of the next, with its date already learnt. */
 export interface OrderPair {
   a: GamePicture
   b: GamePicture
+}
+
+export interface KnownWord {
+  word: string
+  known: boolean
 }
 
 export interface MatchRound {
@@ -362,8 +432,7 @@ export interface MatchRound {
 
 export type ClozePiece = { s: string } | { h: string; n: number }
 
-export interface WordsRound {
-  picture: string
+export interface WordsRound extends GamePicture {
   title_words: number
   salt: string
   title: ClozePiece[]

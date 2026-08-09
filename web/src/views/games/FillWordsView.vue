@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import {
   type ApodEntry,
@@ -20,9 +20,14 @@ import { normaliseWord, wordHash } from '@/utils/wordHash'
 
 const HOW = [
   'You are prompted with an APOD entry where every word (except common ones) is blurred out with only its character count visible.',
+  'The picture is right there beside it, and blanks sharing a colour are the same hidden word.',
   'You win by revealing the title, which is written in the same blurred out words at the top.',
+  'Only words that were written in an APOD at some point count as a guess, so a shot in the dark costs you nothing.',
   'Fewer guesses make up a better score.',
 ]
+
+/** How many colours cycle through the blanks that repeat. */
+const REPEAT_COLOURS = 6
 
 interface Saved {
   puzzle: WordsRound
@@ -46,6 +51,25 @@ const entry = ref('')
 const surrendered = ref(false)
 const recorded = ref<GameResult>()
 const notice = ref('')
+const checking = ref(false)
+
+/** The word the last guess uncovered, kept marked so it can be found in a wall of blanks. */
+const opened = ref<string>()
+
+/** A guess that did not count says so and then gets out of the way again. */
+const NOTICE_LIFE_MS = 5_000
+let noticeTimer: ReturnType<typeof setTimeout> | undefined
+
+function say(message: string): void {
+  notice.value = message
+  clearTimeout(noticeTimer)
+  if (message) noticeTimer = setTimeout(() => (notice.value = ''), NOTICE_LIFE_MS)
+}
+
+onUnmounted(() => clearTimeout(noticeTimer))
+
+/** Words already looked up against the archive, so the same shot in the dark is free the second time. */
+const vocabulary = new Map<string, boolean>()
 
 const field = useTemplateRef<{ $el: HTMLElement } | null>('field')
 const { record, resultFor } = useGame('words')
@@ -71,6 +95,25 @@ const given = computed(() => {
 function hashesOf(pieces: ClozePiece[]): string[] {
   return pieces.filter(isHidden).map((piece) => piece.h)
 }
+
+/**
+ * A colour for the hidden words that stand in the most blanks. Knowing that four blanks across the
+ * page are the same word is most of what makes a long entry solvable, but a colour only says that
+ * if it belongs to one word alone, so only the busiest few get one.
+ */
+const repeats = computed(() => {
+  const counts = new Map<string, number>()
+  for (const hash of [...titleHashes.value, ...textHashes.value]) {
+    counts.set(hash, (counts.get(hash) ?? 0) + 1)
+  }
+
+  const busiest = [...counts]
+    .filter(([, count]) => count > 1)
+    .sort(([, one], [, other]) => other - one)
+    .slice(0, REPEAT_COLOURS)
+
+  return new Map(busiest.map(([hash], index) => [hash, index]))
+})
 
 const solved = computed(
   () => !!puzzle.value && titleHashes.value.every((hash) => found.value.has(hash)),
@@ -141,7 +184,8 @@ async function deal(): Promise<void> {
   revealed.value = new Map()
   surrendered.value = false
   entry.value = ''
-  notice.value = ''
+  opened.value = undefined
+  say('')
 
   try {
     const dealt = await api.games.words(mode.value === 'daily' ? { day: 'today' } : {})
@@ -173,25 +217,54 @@ async function deal(): Promise<void> {
   }
 }
 
-function submit(): void {
+/** Whether a word was ever written in an APOD. Anything else is not worth a guess. */
+async function inArchive(word: string): Promise<boolean> {
+  const seen = vocabulary.get(word)
+  if (seen !== undefined) return seen
+
+  const { known } = await api.games.known(word)
+  vocabulary.set(word, known)
+  return known
+}
+
+async function submit(): Promise<void> {
   const typed = normaliseWord(entry.value)
   entry.value = ''
-  notice.value = ''
-  if (!typed || over.value || !puzzle.value) return
+  say('')
+  if (!typed || over.value || checking.value || !puzzle.value) return
 
   if (given.value.has(typed)) {
-    notice.value = `"${typed}" is already on the page.`
+    say(`"${typed}" is already on the page.`)
     return
   }
   if (guesses.value.some((guess) => guess.word === typed)) {
-    notice.value = `You have already tried "${typed}".`
+    say(`You have already tried "${typed}".`)
     return
   }
 
   const hash = wordHash(salt.value, typed)
   const hitting = [...titleHashes.value, ...textHashes.value].filter((one) => one === hash).length
 
+  // A hit is an archive word by definition. Everything else has to earn its place on the list,
+  // and if the archive cannot be reached the guess is given the benefit of the doubt.
+  if (!hitting) {
+    checking.value = true
+    try {
+      if (!(await inArchive(typed))) {
+        say(`No APOD has ever used "${typed}", so it does not count as a guess.`)
+        return
+      }
+    } catch {
+    } finally {
+      checking.value = false
+      void nextTick(() => field.value?.$el.focus())
+    }
+  }
+
+  if (over.value) return
+
   if (hitting) found.value.set(hash, typed)
+  opened.value = hitting ? hash : undefined
   guesses.value = [...guesses.value, { word: typed, hits: hitting }]
   keep()
 }
@@ -242,25 +315,37 @@ function again(): void {
   else void deal()
 }
 
-function shown(piece: ClozePiece): {
+interface Shown {
   text?: string
   count?: number
   width?: string
   state: string
-} {
+  mark?: string
+  /** Uncovered by the guess that was just made, rather than by an earlier one. */
+  fresh?: boolean
+}
+
+function shown(piece: ClozePiece): Shown {
   if (!isHidden(piece)) return { text: piece.s, state: 'plain' }
 
   const guessed = found.value.get(piece.h)
   const written = revealed.value.get(piece.h)
-  if (guessed) return { text: written ?? guessed, state: 'filled' }
+  if (guessed) {
+    return { text: written ?? guessed, state: 'filled', fresh: piece.h === opened.value }
+  }
   if (written) return { text: written, state: 'revealed' }
 
+  const repeat = repeats.value.get(piece.h)
   return {
     count: piece.n,
     width: `${Math.max(piece.n, 2)}ch`,
     state: over.value ? 'missed' : 'blank',
+    mark: repeat === undefined ? undefined : `r${repeat}`,
   }
 }
+
+const titlePieces = computed<Shown[]>(() => (puzzle.value?.title ?? []).map(shown))
+const textPieces = computed<Shown[]>(() => (puzzle.value?.text ?? []).map(shown))
 
 watch(over, (ended) => {
   if (!ended || recorded.value) return
@@ -336,60 +421,72 @@ watch(
           </div>
         </header>
 
-        <p class="cloze title">
-          <span
-            v-for="(piece, index) in puzzle.title"
-            :key="index"
-            :class="['piece', shown(piece).state]"
-            :style="{ width: shown(piece).width }"
-            >{{ shown(piece).text
-            }}<span v-if="shown(piece).count" class="n">{{ shown(piece).count }}</span></span
-          >
-        </p>
+        <div class="layout">
+          <div class="text">
+            <p class="cloze title">
+              <span
+                v-for="(piece, index) in titlePieces"
+                :key="index"
+                :class="['piece', piece.state, piece.mark, { fresh: piece.fresh }]"
+                :style="{ width: piece.width }"
+                >{{ piece.text }}<span v-if="piece.count" class="n">{{ piece.count }}</span></span
+              >
+            </p>
 
-        <p class="cloze body">
-          <span
-            v-for="(piece, index) in puzzle.text"
-            :key="index"
-            :class="['piece', shown(piece).state]"
-            :style="{ width: shown(piece).width }"
-            >{{ shown(piece).text
-            }}<span v-if="shown(piece).count" class="n">{{ shown(piece).count }}</span></span
-          >
-        </p>
+            <p class="cloze body">
+              <span
+                v-for="(piece, index) in textPieces"
+                :key="index"
+                :class="['piece', piece.state, piece.mark, { fresh: piece.fresh }]"
+                :style="{ width: piece.width }"
+                >{{ piece.text }}<span v-if="piece.count" class="n">{{ piece.count }}</span></span
+              >
+            </p>
+          </div>
+
+          <aside class="shot">
+            <GamePicture :picture="puzzle" alt="The picture the entry is about" />
+            <p v-if="repeats.size && !over" class="muted key">
+              Blanks sharing a colour are the same word, one colour each.
+            </p>
+          </aside>
+        </div>
       </div>
 
-      <form v-if="!over" class="row entry" @submit.prevent="submit">
-        <InputText
-          ref="field"
-          v-model="entry"
-          aria-label="A word to try"
-          autocapitalize="off"
-          autocomplete="off"
-          autocorrect="off"
-          class="grow"
-          placeholder="Try a word"
-          spellcheck="false"
-        />
-        <Button icon="pi pi-arrow-right" label="Guess" type="submit" />
-        <Button
-          aria-label="Give up"
-          class="give-up"
-          icon="pi pi-flag"
-          label="Give up"
-          severity="secondary"
-          text
-          type="button"
-          @click="giveUp"
-        />
-      </form>
+      <!-- The entry form sticks to the bottom of the window, so anything it has to say has to
+           travel with it or it goes unread further up the page. -->
+      <div v-if="!over" class="dock">
+        <form class="row entry" @submit.prevent="submit">
+          <InputText
+            ref="field"
+            v-model="entry"
+            aria-label="A word to try"
+            autocapitalize="off"
+            autocomplete="off"
+            autocorrect="off"
+            class="grow"
+            placeholder="Try a word"
+            spellcheck="false"
+          />
+          <Button :loading="checking" icon="pi pi-arrow-right" label="Guess" type="submit" />
+          <Button
+            aria-label="Give up"
+            class="give-up"
+            icon="pi pi-flag"
+            label="Give up"
+            severity="secondary"
+            text
+            type="button"
+            @click="giveUp"
+          />
+        </form>
+
+        <!-- Always here, empty or not: a line that appears and disappears under the field would
+             shove the field around every time a guess did not count. -->
+        <p :class="{ said: notice }" aria-live="polite" class="notice">{{ notice }}</p>
+      </div>
 
       <div v-if="!over" class="stack playing">
-        <p v-if="notice" aria-live="polite" class="muted notice">
-          <i aria-hidden="true" class="pi pi-info-circle" />
-          {{ notice }}
-        </p>
-
         <ul v-if="guesses.length" class="tried">
           <li
             v-for="guess in [...guesses].reverse()"
@@ -489,6 +586,41 @@ watch(
   transition: width 0.3s ease;
 }
 
+.layout {
+  display: grid;
+  gap: 1.2rem;
+  align-items: start;
+}
+
+@media (min-width: 58rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(13rem, 19rem);
+    gap: 1.6rem;
+  }
+
+  .shot {
+    position: sticky;
+    top: calc(var(--header-h) + 0.8rem);
+  }
+}
+
+.text {
+  min-width: 0;
+}
+
+.shot {
+  --cap: 34vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.key {
+  margin: 0;
+  font-size: 0.78rem;
+  text-wrap: pretty;
+}
+
 .cloze {
   margin: 0;
   line-height: 2.2;
@@ -524,6 +656,41 @@ watch(
   background: color-mix(in srgb, var(--text) 78%, transparent);
 }
 
+/* A blank that stands for a word used more than once carries its colour. Mixing the hue into the
+   page's own text colour keeps the count on top of it readable in either theme. */
+.piece.blank.r0,
+.piece.blank.r1,
+.piece.blank.r2,
+.piece.blank.r3,
+.piece.blank.r4,
+.piece.blank.r5 {
+  background: color-mix(in srgb, var(--hue) 62%, var(--text));
+}
+
+.r0 {
+  --hue: #6366f1;
+}
+
+.r1 {
+  --hue: #22d3ee;
+}
+
+.r2 {
+  --hue: #34d399;
+}
+
+.r3 {
+  --hue: #fbbf24;
+}
+
+.r4 {
+  --hue: #f472b6;
+}
+
+.r5 {
+  --hue: #c084fc;
+}
+
 .piece.missed {
   background: color-mix(in srgb, var(--text) 16%, transparent);
 }
@@ -555,6 +722,13 @@ watch(
   background: color-mix(in srgb, #16a34a 26%, transparent);
 }
 
+/* Every place the last guess opened up, so a hit in the middle of a long entry is not a hunt. The
+   solid fill is what tells it apart from the earlier hits, and from a coloured blank beside it. */
+.piece.filled.fresh {
+  background: #16a34a;
+  color: #fff;
+}
+
 .piece.revealed {
   background: color-mix(in srgb, #dc2626 24%, transparent);
 }
@@ -563,10 +737,16 @@ watch(
   gap: 0.6rem;
 }
 
-.entry {
+.dock {
   position: sticky;
   bottom: 0.6rem;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.entry {
   gap: 0.5rem;
   padding: 0.5rem;
   border: 1px solid var(--border);
@@ -586,13 +766,35 @@ watch(
   }
 }
 
+/* A guess that did not count is worth a word, not a card. It says its piece quietly under the
+   field and takes itself away again a few seconds later. */
 .notice {
-  margin: 0;
-  font-size: 0.85rem;
+  align-self: flex-start;
+  max-width: 100%;
+  margin: 0 0 0 0.15rem;
+  padding: 0 0.5rem;
+  min-height: 1.2rem;
+  font-size: 0.78rem;
+  line-height: 1.2rem;
+  color: var(--text-muted);
+  border-radius: 999px;
+  text-wrap: pretty;
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
-.notice i {
-  margin-right: 0.25rem;
+/* The background only turns up with the words, so an empty line is nothing but reserved room. */
+.notice.said {
+  opacity: 1;
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+/* Room for the two lines the longest of them takes on a phone. */
+@media (max-width: 30rem) {
+  .notice {
+    min-height: 2.4rem;
+  }
 }
 
 .tried {
