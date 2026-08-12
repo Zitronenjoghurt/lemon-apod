@@ -1,12 +1,11 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useStatus } from '@/composables/useStatus'
+import { MASTODON_URL, REPO_URL } from '@/utils/links'
 
 defineOptions({ name: 'ContactView' })
 
 const ENDPOINT = 'https://api.web3forms.com/submit'
-const REPO = 'https://github.com/Zitronenjoghurt/lemon-apod'
-const MASTODON = 'https://mastodon.social/@zitronenjoghurt'
 
 const MAX_MESSAGE = 4000
 const MAX_EMAIL = 200
@@ -124,13 +123,13 @@ const elsewhere = computed(() => [
     icon: 'pi pi-github',
     label: 'GitHub',
     value: 'Zitronenjoghurt/lemon-apod',
-    href: REPO,
+    href: REPO_URL,
   },
   {
     icon: 'pi pi-at',
     label: 'Mastodon',
     value: '@zitronenjoghurt@mastodon.social',
-    href: MASTODON,
+    href: MASTODON_URL,
   },
   ...(address.value
     ? [

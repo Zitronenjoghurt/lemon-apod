@@ -65,10 +65,6 @@ impl Notify {
         .flatten()
         .collect()
     }
-
-    pub fn url_for(&self, topic: &str) -> String {
-        format!("{}/{topic}", self.base_url)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -91,6 +87,9 @@ pub struct Backfill {
     pub delay_max: Duration,
 }
 
+/// When APOD publishes, and how hard to look for it. The first three describe the same fact the
+/// API serves to the front page from `APOD_PUBLISH_*`, so both services read those keys and a
+/// deployment that moves the schedule moves both at once.
 #[derive(Debug, Clone)]
 pub struct Daily {
     pub enabled: bool,
@@ -150,9 +149,12 @@ impl Config {
 
             daily: Daily {
                 enabled: env_or("APOD_DAILY_POLL_ENABLED", true)?,
-                timezone: env_or("APOD_DAILY_POLL_TZ", Tz::America__New_York)?,
-                start_hour: 0,
-                start_minute: 0,
+                timezone: env_or(
+                    "APOD_PUBLISH_TZ",
+                    env_or("APOD_DAILY_POLL_TZ", Tz::America__New_York)?,
+                )?,
+                start_hour: env_or("APOD_PUBLISH_HOUR", 0)?,
+                start_minute: env_or("APOD_PUBLISH_MINUTE", 0)?,
                 interval: secs("APOD_DAILY_POLL_INTERVAL_SECS", 60)?,
                 window: Duration::from_secs(
                     u64::from(env_or::<u32>("APOD_DAILY_POLL_WINDOW_HOURS", 12)?) * 3600,
@@ -260,6 +262,14 @@ impl Config {
             "APOD_DAILY_POLL_INTERVAL_SECS must be greater than zero"
         );
         anyhow::ensure!(
+            self.daily.start_hour < 24,
+            "APOD_PUBLISH_HOUR must be an hour of the day, 0 to 23"
+        );
+        anyhow::ensure!(
+            self.daily.start_minute < 60,
+            "APOD_PUBLISH_MINUTE must be a minute of the hour, 0 to 59"
+        );
+        anyhow::ensure!(
             !self.notify.enabled || !self.notify.topics().is_empty(),
             "APOD_NOTIFY_ENABLED is on but no APOD_NTFY_TOPIC_* was set, so nothing could be sent"
         );
@@ -360,5 +370,20 @@ mod tests {
     #[test]
     fn defaults_the_poll_window_to_eastern_time() {
         assert_eq!(config().daily.timezone, Tz::America__New_York);
+    }
+
+    #[test]
+    fn defaults_the_publication_window_to_midnight() {
+        let daily = config().daily;
+        assert_eq!((daily.start_hour, daily.start_minute), (0, 0));
+    }
+
+    #[test]
+    fn refuses_a_publication_hour_that_is_not_an_hour() {
+        let mut cfg = config();
+        cfg.daily.start_hour = 24;
+
+        let refused = cfg.validated().unwrap_err().to_string();
+        assert!(refused.contains("APOD_PUBLISH_HOUR"), "{refused}");
     }
 }

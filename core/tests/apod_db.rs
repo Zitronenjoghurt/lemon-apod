@@ -1192,6 +1192,40 @@ async fn only_pictures_worth_playing_reach_a_game() {
         "a day's puzzle can only draw on what was already published"
     );
 
+    // The word game draws from its own pool, and it has to exclude videos for the same reason:
+    // solving an explanation should reveal the picture, not a frame off a YouTube still.
+    let prose = "The nebula glows across the field of view in this deep exposure. ".repeat(12);
+    for (date, kind) in [
+        ("2021-01-01", MediaKind::ImageJpg),
+        ("2021-01-02", MediaKind::YouTube),
+        ("2021-01-03", MediaKind::Vimeo),
+    ] {
+        let mut row = entry(date, "Something", &prose);
+        row.media = Media::new(kind, Some(format!("https://example.test/{date}")), None);
+        writer.upsert(&row).await.unwrap();
+        writer
+            .set_thumb(
+                row.date,
+                Some(&Thumb::sized(row.date.thumb_path(), 480, 320)),
+            )
+            .await
+            .unwrap();
+    }
+
+    let words: Vec<String> = writer
+        .reader()
+        .text_pool(None)
+        .await
+        .unwrap()
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        words,
+        vec!["2021-01-01"],
+        "a video's thumbnail is not the picture the explanation describes"
+    );
+
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

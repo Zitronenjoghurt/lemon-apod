@@ -2,12 +2,12 @@ use crate::client::Client;
 use crate::config::{Config, Notify};
 use crate::shutdown::Shutdown;
 use anyhow::{Context, Result};
-use apod_core::ApodReader;
 use apod_core::db::DbConfig;
 use apod_core::notify::NotifyStore;
 use apod_core::sky::store::SkyReader;
 use apod_core::sky::weather::{Alert, Notice, WeatherReport};
 use apod_core::sky::{eclipse, moon, showers};
+use apod_core::ApodReader;
 use chrono::{DateTime, TimeDelta, Utc};
 
 const SUMMARY_CHARS: usize = 300;
@@ -126,15 +126,18 @@ async fn apod(cfg: &Config, topic: &str, now: DateTime<Utc>) -> Result<Vec<Notif
         .with_context(|| format!("opening {}", cfg.index_db.display()))?
         .with_thumb_base("/thumbs/");
 
-    let latest = reader.latest().await?;
+    let latest = reader.latest().await;
     reader.db().close().await;
 
-    let Some(entry) = latest else {
+    let Some(entry) = latest? else {
         return Ok(Vec::new());
     };
 
-    let age = now - entry.date.naive().and_time(Default::default()).and_utc();
-    if age > TimeDelta::from_std(cfg.notify.apod_max_age)? {
+    let published = crate::workers::window_on(&cfg.daily, entry.date.naive())
+        .map(|at| at.with_timezone(&Utc))
+        .unwrap_or_else(|| entry.date.naive().and_time(Default::default()).and_utc());
+
+    if now - published > TimeDelta::from_std(cfg.notify.apod_max_age)? {
         return Ok(Vec::new());
     }
 
@@ -161,10 +164,10 @@ async fn weather(cfg: &Config, now: DateTime<Utc>) -> Result<Vec<Notification>> 
         return Ok(Vec::new());
     };
 
-    let report = sky.weather_report().await?;
+    let report = sky.weather_report().await;
     sky.close().await;
 
-    Ok(match report {
+    Ok(match report? {
         None => Vec::new(),
         Some(report) => route(&cfg.notify, &report, now),
     })
@@ -235,7 +238,7 @@ fn alert_notification(topic: &str, alert: &Alert, url: &str) -> Notification {
 }
 
 fn sky(cfg: &Notify, topic: &str, now: DateTime<Utc>) -> Vec<Notification> {
-    let url = format!("{}/space-weather", cfg.public_url);
+    let url = format!("{}/", cfg.public_url);
     let Ok(lead) = TimeDelta::from_std(cfg.sky_lead) else {
         return Vec::new();
     };
@@ -331,7 +334,12 @@ async fn publish(client: &Client, cfg: &Notify, notification: &Notification) -> 
     client
         .post(&cfg.base_url, &headers, payload.to_string())
         .await
-        .with_context(|| format!("publishing to {}", cfg.url_for(&notification.topic)))
+        .with_context(|| {
+            format!(
+                "publishing to topic {} on {}",
+                notification.topic, cfg.base_url
+            )
+        })
 }
 
 #[cfg(test)]
@@ -429,6 +437,42 @@ mod tests {
         let mut partial = cfg();
         partial.aurora_topic = None;
         assert_eq!(partial.topics(), vec!["apod", "space-weather", "sky"]);
+    }
+
+    #[test]
+    fn every_sky_event_sends_people_to_the_front_page_that_lists_them() {
+        let mut seen = 0;
+        for day in 0..400 {
+            for found in sky(&cfg(), "sky", at(2026, 1, 1) + TimeDelta::days(day)) {
+                assert_eq!(
+                    found.click.as_deref(),
+                    Some("https://apod.example/"),
+                    "showers, eclipses and the moon are on the front page, \
+                     not behind /space-weather: {}",
+                    found.key
+                );
+                seen += 1;
+            }
+        }
+
+        assert!(seen > 0, "a year should hold some sky events");
+    }
+
+    #[test]
+    fn a_geomagnetic_alert_still_sends_people_to_the_space_weather_page() {
+        let found = route(
+            &cfg(),
+            &report(
+                vec![alert("Geomagnetic K-index of 6", Some("G2"), Notice::Alert)],
+                1.0,
+            ),
+            at(2026, 3, 5),
+        );
+
+        assert_eq!(
+            found[0].click.as_deref(),
+            Some("https://apod.example/space-weather")
+        );
     }
 
     fn alert(headline: &str, scale: Option<&str>, notice: Notice) -> Alert {
@@ -566,10 +610,5 @@ mod tests {
         );
 
         assert!(found.is_empty(), "no topic, no message: {found:?}");
-    }
-
-    #[test]
-    fn a_topic_url_is_the_base_plus_the_name() {
-        assert_eq!(cfg().url_for("apod"), "https://ntfy.example/apod");
     }
 }

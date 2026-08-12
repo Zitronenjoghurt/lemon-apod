@@ -94,6 +94,7 @@ impl Sky {
 
 struct Held {
     built: Instant,
+    ttl: Duration,
     body: Arc<str>,
     etag: Arc<str>,
 }
@@ -128,7 +129,7 @@ impl Cached {
 
     fn fresh(&self, held: &Option<Held>) -> Option<Fresh> {
         let held = held.as_ref()?;
-        self.ttl
+        held.ttl
             .checked_sub(held.built.elapsed())
             .filter(|left| !left.is_zero())
             .map(|max_age| Fresh {
@@ -143,6 +144,14 @@ impl Cached {
         B: FnOnce() -> F,
         F: Future<Output = Result<String, E>>,
     {
+        self.get_or_build_capped(Duration::MAX, build).await
+    }
+
+    pub async fn get_or_build_capped<B, F, E>(&self, cap: Duration, build: B) -> Result<Fresh, E>
+    where
+        B: FnOnce() -> F,
+        F: Future<Output = Result<String, E>>,
+    {
         if let Some(cached) = self.fresh(&*self.held.read().await) {
             return Ok(cached);
         }
@@ -152,10 +161,12 @@ impl Cached {
             return Ok(cached);
         }
 
+        let ttl = self.ttl.min(cap);
         let body: Arc<str> = build().await?.into();
         let etag = etag_for(&body);
         *held = Some(Held {
             built: Instant::now(),
+            ttl,
             body: Arc::clone(&body),
             etag: Arc::clone(&etag),
         });
@@ -163,7 +174,7 @@ impl Cached {
         Ok(Fresh {
             body,
             etag,
-            max_age: self.ttl,
+            max_age: ttl,
         })
     }
 }
@@ -233,6 +244,57 @@ mod tests {
     #[tokio::test]
     async fn a_different_body_gets_a_different_validator() {
         assert_ne!(etag_for("<urlset/>"), etag_for("<urlset><url/></urlset>"));
+    }
+
+    #[tokio::test]
+    async fn a_cap_shorter_than_the_ttl_is_the_one_that_counts() {
+        let cache = Cached::new(Duration::from_secs(3600));
+        let builds = AtomicUsize::new(0);
+
+        let built = cache
+            .get_or_build_capped(Duration::from_secs(30), counting(&builds))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            built.max_age,
+            Duration::from_secs(30),
+            "a feed built half a minute before an entry is due must not be offered for an hour"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_cap_longer_than_the_ttl_changes_nothing() {
+        let cache = Cached::new(Duration::from_secs(3600));
+        let builds = AtomicUsize::new(0);
+
+        let built = cache
+            .get_or_build_capped(Duration::from_secs(86_400), counting(&builds))
+            .await
+            .unwrap();
+
+        assert_eq!(built.max_age, Duration::from_secs(3600));
+    }
+
+    #[tokio::test]
+    async fn a_capped_body_is_dropped_when_its_cap_runs_out_not_when_the_ttl_would() {
+        let cache = Cached::new(Duration::from_secs(3600));
+        let builds = AtomicUsize::new(0);
+
+        cache
+            .get_or_build_capped(Duration::ZERO, counting(&builds))
+            .await
+            .unwrap();
+        cache
+            .get_or_build_capped(Duration::ZERO, counting(&builds))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            builds.load(Ordering::SeqCst),
+            2,
+            "the hour-long TTL must not keep a body alive past the publication that stales it"
+        );
     }
 
     #[tokio::test]

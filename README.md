@@ -19,6 +19,10 @@ A service for archiving and serving NASAs Astronomy Picture Of the Day in a mode
   puzzle to everybody each day (but also offers a free play mode).
 - **What the sky is up to**, on the front page: the moon's phase, which planets are up and when, the next meteor shower
   and whether the moon will ruin it, the next eclipse, and the next few rocket launches.
+- **Feeds and push notifications**. The latest entries with their explanations as Atom at `/atom.xml` or RSS at
+  `/feed.xml`, both linked from the page head so a reader can find them on its own. Optionally, four
+  [ntfy](https://ntfy.sh) topics: the picture of the day, aurora alerts, the rest of NOAA's space weather, and sky
+  events a day or so ahead. See [/notifications](https://apod.lemon.industries/notifications) for how to subscribe.
 
 ## Running it in containers
 
@@ -55,7 +59,8 @@ html/YYYY/MM/YYYY-MM-DD.html   raw bytes, exactly as served
 thumbs/YYYY/MM/YYYY-MM-DD.webp grid thumbnails
 archive.db                     fetch state, NOT derived, do not delete
 apod.db                        parsed entries, search index, catalogue, word counts, picture hashes
-sky.db                         upcoming launches and space weather, refetched every few hours
+sky.db                         upcoming launches and space weather, refetched hourly
+notify.db                      which notifications have already gone out
 ```
 
 The raw HTML on disk is the source of truth. `apod.db` is derived from it and can be deleted and
@@ -67,6 +72,16 @@ missing.
 Losing it means re-fetching the whole archive at whatever delay configured.
 
 `sky.db` holds the two things the front page cannot work out for itself, upcoming rocket launches and the current
-geomagnetic activity. The archiver refreshes it every six hours, and `make sky` does one pass now and prints what it
-got. Deleting it costs one poll. Everything else on those panels, the moon and the planets and the showers and the
+geomagnetic activity. The archiver refreshes it hourly by default (`APOD_SKY_INTERVAL_HOURS`), and `make sky` does one
+pass now and prints what it got. Deleting it costs one poll. Everything else on those panels, the moon and the planets and the showers and the
 eclipses, is computed on the spot and needs neither this file nor a network.
+
+`notify.db` records every notification already sent, which is what stops the same eclipse being announced on every
+pass. Deleting it re-announces everything currently inside its lead window, so on an archive that has been running a
+while, seed it instead:
+
+```bash
+make notify SEED=1
+```
+
+`make notify DRY=1` lists what is due, with the link each message would open, and touches nothing.

@@ -445,7 +445,12 @@ watch(
           </div>
 
           <aside class="shot">
-            <GamePicture :picture="puzzle" alt="The picture the entry is about" />
+            <GamePicture
+              :alt="reveal ? reveal.title : 'The picture the entry is about'"
+              :date="reveal?.date"
+              :full="reveal?.media.url"
+              :picture="puzzle"
+            />
             <p v-if="repeats.size && !over" class="muted key">
               Blanks sharing a colour are the same word, one colour each.
             </p>
@@ -594,13 +599,24 @@ watch(
 
 @media (min-width: 58rem) {
   .layout {
-    grid-template-columns: minmax(0, 1fr) minmax(13rem, 19rem);
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
     gap: 1.6rem;
   }
 
   .shot {
     position: sticky;
     top: calc(var(--header-h) + 0.8rem);
+  }
+}
+
+/* Once there is room for it, the picture is the reward for solving the text: give it some. */
+@media (min-width: 80rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 30rem);
+  }
+
+  .shot {
+    --cap: 52vh;
   }
 }
 

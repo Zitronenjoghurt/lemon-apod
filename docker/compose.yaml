@@ -11,6 +11,7 @@ services:
     volumes:
       - ${APOD_DATA:-../data}:/data
     environment:
+      APOD_PUBLIC_URL: ${APOD_PUBLIC_URL:-http://localhost:51995}
       APOD_BACKFILL_ENABLED: "false"
       APOD_BACKFILL_DELAY_MIN_SECS: 10
       APOD_BACKFILL_DELAY_MAX_SECS: 30

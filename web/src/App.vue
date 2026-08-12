@@ -1,18 +1,24 @@
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
+import {computed, onMounted, onUnmounted, ref} from 'vue'
+import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router'
 import ExternalLinkNotice from '@/components/ExternalLinkNotice.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
-import { throttled } from '@/api/client'
-import { useExternalLinks } from '@/composables/useExternalLinks'
-import { useFavorites } from '@/composables/useFavorites'
-import { useTheme } from '@/composables/useTheme'
+import {throttled} from '@/api/client'
+import {useExternalLinks} from '@/composables/useExternalLinks'
+import {useFavorites} from '@/composables/useFavorites'
+import {useTheme} from '@/composables/useTheme'
+import {MASTODON_URL, REPO_URL} from '@/utils/links'
 
 const route = useRoute()
 const router = useRouter()
-const { theme, cycle } = useTheme()
-const { count } = useFavorites()
-const { intercept } = useExternalLinks()
+const {theme, cycle} = useTheme()
+const {count} = useFavorites()
+const {intercept} = useExternalLinks()
+
+const playingAGame = computed(() => {
+  const play = route.query.play
+  return String(route.name ?? '').startsWith('game-') && (play === 'daily' || play === 'free')
+})
 
 const menuOpen = ref(false)
 const settingsOpen = ref(false)
@@ -24,21 +30,21 @@ railQuery.addEventListener('change', (event) => (rail.value = event.matches))
 onMounted(() => document.addEventListener('click', intercept, true))
 onUnmounted(() => document.removeEventListener('click', intercept, true))
 
-const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
-const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
+const themeIcon = {dark: 'pi-moon', light: 'pi-sun'}
+const themeLabel = {auto: 'Auto', dark: 'Dark', light: 'Light'}
 
 const links = [
-  { to: '/', label: 'Today', icon: 'pi pi-sparkles', exact: true },
-  { to: '/feed', label: 'Feed', icon: 'pi pi-bars' },
-  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
-  { to: '/search', label: 'Search', icon: 'pi pi-search' },
-  { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
-  { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
-  { to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt' },
-  { to: '/notifications', label: 'Notifications', icon: 'pi pi-bell' },
-  { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
-  { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
-  { to: '/random', label: 'Random', icon: 'pi pi-sync' },
+  {to: '/', label: 'Today', icon: 'pi pi-sparkles', exact: true},
+  {to: '/feed', label: 'Feed', icon: 'pi pi-bars'},
+  {to: '/archive', label: 'Archive', icon: 'pi pi-calendar'},
+  {to: '/search', label: 'Search', icon: 'pi pi-search'},
+  {to: '/resources', label: 'Resources', icon: 'pi pi-link'},
+  {to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar'},
+  {to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt'},
+  {to: '/notifications', label: 'Notifications', icon: 'pi pi-bell'},
+  {to: '/games', label: 'Games', icon: 'pi pi-play-circle'},
+  {to: '/favorites', label: 'Favorites', icon: 'pi pi-star'},
+  {to: '/random', label: 'Random', icon: 'pi pi-sync'},
 ]
 
 function isActive(link: (typeof links)[number]): boolean {
@@ -59,54 +65,54 @@ router.afterEach(() => (menuOpen.value = false))
       <RouterLink class="brand" to="/">
         <svg aria-hidden="true" class="mark" viewBox="0 0 24 24">
           <ellipse
-            cx="12"
-            cy="12"
-            fill="none"
-            rx="11"
-            ry="4.2"
-            stroke="currentColor"
-            stroke-width="1.6"
-            transform="rotate(-22 12 12)"
+              cx="12"
+              cy="12"
+              fill="none"
+              rx="11"
+              ry="4.2"
+              stroke="currentColor"
+              stroke-width="1.6"
+              transform="rotate(-22 12 12)"
           />
-          <circle cx="12" cy="12" fill="var(--bg)" r="6.2" />
-          <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2" />
-          <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="12" fill="var(--bg)" r="6.2"/>
+          <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2"/>
+          <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6"/>
         </svg>
         <span>APOD Archive</span>
       </RouterLink>
 
       <div class="row trailing">
         <Button
-          v-tooltip.bottom="{ value: `Theme: ${themeLabel[theme]}`, class: 'tip-tight' }"
-          :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
-          rounded
-          severity="secondary"
-          text
-          @click="cycle"
+            v-tooltip.bottom="{ value: `Theme: ${themeLabel[theme]}`, class: 'tip-tight' }"
+            :aria-label="`Theme: ${themeLabel[theme]}. Activate to change.`"
+            rounded
+            severity="secondary"
+            text
+            @click="cycle"
         >
-          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true" />
+          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true"/>
           <svg v-else aria-hidden="true" class="auto-mark" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5" />
-            <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor" />
+            <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/>
           </svg>
         </Button>
         <Button
-          v-tooltip.bottom="{ value: 'Settings', class: 'tip-tight' }"
-          aria-label="Settings"
-          icon="pi pi-cog"
-          rounded
-          severity="secondary"
-          text
-          @click="settingsOpen = true"
+            v-tooltip.bottom="{ value: 'Settings', class: 'tip-tight' }"
+            aria-label="Settings"
+            icon="pi pi-cog"
+            rounded
+            severity="secondary"
+            text
+            @click="settingsOpen = true"
         />
         <Button
-          aria-label="Open menu"
-          class="narrow-only"
-          icon="pi pi-bars"
-          rounded
-          severity="secondary"
-          text
-          @click="menuOpen = true"
+            aria-label="Open menu"
+            class="narrow-only"
+            icon="pi pi-bars"
+            rounded
+            severity="secondary"
+            text
+            @click="menuOpen = true"
         />
       </div>
     </div>
@@ -115,15 +121,15 @@ router.afterEach(() => (menuOpen.value = false))
   <Drawer v-model:visible="menuOpen" header="Menu" position="right">
     <nav aria-label="Main" class="menu">
       <RouterLink
-        v-for="link in links"
-        :key="link.to"
-        :class="{ on: isActive(link) }"
-        :to="link.to"
-        active-class=""
-        class="nav-link"
-        exact-active-class=""
+          v-for="link in links"
+          :key="link.to"
+          :class="{ on: isActive(link) }"
+          :to="link.to"
+          active-class=""
+          class="nav-link"
+          exact-active-class=""
       >
-        <i :class="link.icon" aria-hidden="true" />
+        <i :class="link.icon" aria-hidden="true"/>
         <span class="label">{{ link.label }}</span>
         <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
       </RouterLink>
@@ -132,7 +138,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   <Transition name="fade">
     <div v-if="throttled" class="throttle" role="status">
-      <i aria-hidden="true" class="pi pi-clock" /> Slowing down for a moment…
+      <i aria-hidden="true" class="pi pi-clock"/> Slowing down for a moment…
     </div>
   </Transition>
 
@@ -140,16 +146,16 @@ router.afterEach(() => (menuOpen.value = false))
     <aside class="sidebar">
       <nav aria-label="Main" class="menu">
         <RouterLink
-          v-for="link in links"
-          :key="link.to"
-          v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
-          :class="{ on: isActive(link) }"
-          :to="link.to"
-          active-class=""
-          class="nav-link"
-          exact-active-class=""
+            v-for="link in links"
+            :key="link.to"
+            v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
+            :class="{ on: isActive(link) }"
+            :to="link.to"
+            active-class=""
+            class="nav-link"
+            exact-active-class=""
         >
-          <i :class="link.icon" aria-hidden="true" />
+          <i :class="link.icon" aria-hidden="true"/>
           <span class="label">{{ link.label }}</span>
           <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
         </RouterLink>
@@ -157,11 +163,11 @@ router.afterEach(() => (menuOpen.value = false))
     </aside>
 
     <div class="column">
-      <main id="main" class="container page">
+      <main id="main" :class="['container', 'page', { wide: playingAGame }]">
         <RouterView v-slot="{ Component }">
           <Transition mode="out-in" name="fade">
             <KeepAlive :include="['FeedView']" :max="1">
-              <component :is="Component" />
+              <component :is="Component"/>
             </KeepAlive>
           </Transition>
         </RouterView>
@@ -173,24 +179,14 @@ router.afterEach(() => (menuOpen.value = false))
         <div class="container stack foot">
           <nav aria-label="Elsewhere" class="row foot-links">
             <RouterLink to="/contact"
-              ><i aria-hidden="true" class="pi pi-envelope" />Contact
+            ><i aria-hidden="true" class="pi pi-envelope"/>Contact
             </RouterLink>
-            <a
-              data-ours
-              href="https://github.com/Zitronenjoghurt/lemon-apod"
-              rel="noopener"
-              target="_blank"
-            >
-              <i aria-hidden="true" class="pi pi-github" />
+            <a :href="REPO_URL" data-ours rel="noopener" target="_blank">
+              <i aria-hidden="true" class="pi pi-github"/>
               Source
             </a>
-            <a
-              data-ours
-              href="https://mastodon.social/@zitronenjoghurt"
-              rel="me noopener"
-              target="_blank"
-            >
-              <i aria-hidden="true" class="pi pi-at" />
+            <a :href="MASTODON_URL" data-ours rel="me noopener" target="_blank">
+              <i aria-hidden="true" class="pi pi-at"/>
               Mastodon
             </a>
           </nav>
@@ -207,11 +203,11 @@ router.afterEach(() => (menuOpen.value = false))
     </div>
   </div>
 
-  <SettingsDialog v-model:visible="settingsOpen" />
-  <ExternalLinkNotice />
+  <SettingsDialog v-model:visible="settingsOpen"/>
+  <ExternalLinkNotice/>
 
-  <Toast position="bottom-center" />
-  <ConfirmDialog />
+  <Toast position="bottom-center"/>
+  <ConfirmDialog/>
 </template>
 
 <style scoped>
@@ -430,6 +426,10 @@ router.afterEach(() => (menuOpen.value = false))
 .page {
   padding-block: 2rem 3rem;
   flex: 1 0 auto;
+}
+
+.page.wide {
+  --page-max: 86rem;
 }
 
 .site-footer {

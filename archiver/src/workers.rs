@@ -296,7 +296,7 @@ pub fn jitter(min: Duration, max: Duration) -> Duration {
     Duration::from_millis(rand::rng().random_range(min.as_millis() as u64..=max.as_millis() as u64))
 }
 
-fn window_on(daily: &Daily, date: chrono::NaiveDate) -> Option<DateTime<Tz>> {
+pub fn window_on(daily: &Daily, date: chrono::NaiveDate) -> Option<DateTime<Tz>> {
     let naive = date.and_hms_opt(daily.start_hour, daily.start_minute, 0)?;
     daily.timezone.from_local_datetime(&naive).earliest()
 }

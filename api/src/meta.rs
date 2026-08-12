@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::web::escape;
 use anyhow::{Context, Result};
 use apod_core::ApodEntry;
 
@@ -111,13 +112,6 @@ fn split(html: &str) -> (String, String) {
 
     tracing::warn!("index.html has no {MARKER} and no </head>; link previews will be generic");
     (html.to_owned(), String::new())
-}
-
-fn escape(raw: &str) -> String {
-    raw.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
 
 pub fn entry_path(path: &str) -> Option<apod_core::ApodDate> {

@@ -1,15 +1,15 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
-import { useStatus } from '@/composables/useStatus'
+import {computed} from 'vue'
+import {useStatus} from '@/composables/useStatus'
 
-defineOptions({ name: 'NotificationsView' })
+defineOptions({name: 'NotificationsView'})
 
 const NTFY_ANDROID = 'https://play.google.com/store/apps/details?id=io.heckel.ntfy'
 const NTFY_IOS = 'https://apps.apple.com/us/app/ntfy/id1625396347'
 const NTFY_FDROID = 'https://f-droid.org/en/packages/io.heckel.ntfy/'
 const NTFY_DOCS = 'https://docs.ntfy.sh/subscribe/phone/'
 
-const { notify, loaded } = useStatus()
+const {notify, loaded} = useStatus()
 
 const base = computed(() => notify.value?.base_url ?? '')
 
@@ -75,6 +75,10 @@ function topicUrl(topic: string): string {
   return `${base.value}/${topic}`
 }
 
+function feedUrl(path: string): string {
+  return `${window.location.origin}${path}`
+}
+
 function appLink(topic: string): string {
   return `${base.value.replace(/^https?:\/\//, 'ntfy://')}/${topic}`
 }
@@ -93,20 +97,18 @@ function appLink(topic: string): string {
     <section class="card panel">
       <h2 class="muted">Feeds</h2>
       <p class="note">
-        The last 25 APOD entries with their explanations. You can point any feed reader at these, or
-        give it
-        <code>{{ base }}</code> and let it find the feeds itself.
+        The last 25 APOD entries with their explanations. You can point any feed reader at these.
       </p>
 
       <ul class="items">
         <li v-for="feed in feeds" :key="feed.href">
           <a :href="feed.href">
-            <i :class="feed.icon" aria-hidden="true" />
+            <i :class="feed.icon" aria-hidden="true"/>
             <span class="text">
               <span class="value">{{ feed.label }}</span>
               <span class="muted label">{{ feed.hint }}</span>
             </span>
-            <code class="url">{{ feed.href }}</code>
+            <code class="url">{{ feedUrl(feed.href) }}</code>
           </a>
         </li>
       </ul>
@@ -116,8 +118,8 @@ function appLink(topic: string): string {
       <h2 class="muted">NTFY Push</h2>
 
       <div v-if="!loaded" class="stack">
-        <Skeleton height="3rem" />
-        <Skeleton height="3rem" />
+        <Skeleton height="3rem"/>
+        <Skeleton height="3rem"/>
       </div>
 
       <p v-else-if="!anyTopic" class="note">
@@ -132,14 +134,14 @@ function appLink(topic: string): string {
 
         <ul class="topics">
           <li v-for="entry in topics" :key="entry.key">
-            <i :class="entry.icon" aria-hidden="true" />
+            <i :class="entry.icon" aria-hidden="true"/>
             <span class="text">
               <span class="value">{{ entry.label }}</span>
               <span class="muted label">{{ entry.hint }}</span>
             </span>
             <span class="foot">
               <a v-if="isAndroid" :href="appLink(entry.topic)" class="plain">
-                <Button icon="pi pi-mobile" label="Open in app" size="small" />
+                <Button icon="pi pi-mobile" label="Open in app" size="small"/>
               </a>
               <code class="url">{{ topicUrl(entry.topic) }}</code>
               <span class="muted cadence">{{ entry.cadence }}</span>

@@ -367,9 +367,11 @@ onUnmounted(stopTicking)
       <div class="stage">
         <GamePicture
           v-if="shot"
+          :alt="locked ? locked.reveal.title : 'The picture to date'"
           :blur="locked ? 0 : STAGES[stage].blur"
+          :date="locked?.reveal.date"
+          :full="locked?.reveal.media.url"
           :picture="shot"
-          alt="The picture to date"
         />
 
         <div v-if="!locked" class="controls">

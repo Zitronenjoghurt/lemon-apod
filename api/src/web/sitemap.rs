@@ -22,7 +22,7 @@ pub async fn get_sitemap(
     headers: HeaderMap,
 ) -> ApiResult<Response> {
     let xml = state.sitemap.get_or_build(|| build(&state)).await?;
-    Ok(super::cached_xml(
+    Ok(crate::api::response::revalidated(
         &headers,
         &xml,
         "application/xml; charset=utf-8",

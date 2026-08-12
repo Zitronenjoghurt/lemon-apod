@@ -3,6 +3,7 @@ use crate::api::response;
 use crate::state::ServerState;
 use axum::Router;
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::get;
 
@@ -13,7 +14,7 @@ async fn get_stats(State(state): State<ServerState>) -> ApiResult<Response> {
     ))
 }
 
-async fn get_timeline(State(state): State<ServerState>) -> ApiResult<Response> {
+async fn get_timeline(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
     let timeline = state
         .timeline
         .get_or_build(|| async {
@@ -22,13 +23,10 @@ async fn get_timeline(State(state): State<ServerState>) -> ApiResult<Response> {
         })
         .await?;
 
-    Ok(response::cached_json(
-        timeline.max_age.as_secs(),
-        &timeline.body,
-    ))
+    Ok(response::revalidated(&headers, &timeline, response::JSON))
 }
 
-async fn get_coverage(State(state): State<ServerState>) -> ApiResult<Response> {
+async fn get_coverage(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
     let coverage = state
         .coverage
         .get_or_build(|| async {
@@ -37,10 +35,7 @@ async fn get_coverage(State(state): State<ServerState>) -> ApiResult<Response> {
         })
         .await?;
 
-    Ok(response::cached_json(
-        coverage.max_age.as_secs(),
-        &coverage.body,
-    ))
+    Ok(response::revalidated(&headers, &coverage, response::JSON))
 }
 
 pub fn router() -> Router<ServerState> {

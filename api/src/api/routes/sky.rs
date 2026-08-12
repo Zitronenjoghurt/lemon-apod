@@ -6,6 +6,7 @@ use apod_core::sky::weather::WeatherSummary;
 use apod_core::sky::{self, SkyNow};
 use axum::Router;
 use axum::extract::State;
+use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::get;
 use chrono::Utc;
@@ -21,10 +22,10 @@ struct Sky {
     feeds: Vec<FeedState>,
 }
 
-async fn get_sky(State(state): State<ServerState>) -> ApiResult<Response> {
+async fn get_sky(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
     let sky = state.sky.cached.get_or_build(|| build(&state)).await?;
 
-    Ok(response::cached_json(sky.max_age.as_secs(), &sky.body))
+    Ok(response::revalidated(&headers, &sky, response::JSON))
 }
 
 async fn build(state: &ServerState) -> ApiResult<String> {

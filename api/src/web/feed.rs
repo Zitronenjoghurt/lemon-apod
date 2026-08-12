@@ -1,4 +1,5 @@
 use crate::api::error::ApiResult;
+use crate::api::response;
 use crate::config::Publish;
 use crate::schedule;
 use crate::state::ServerState;
@@ -8,8 +9,10 @@ use axum::http::HeaderMap;
 use axum::response::Response;
 use chrono::{DateTime, NaiveTime, SecondsFormat, Utc};
 
-const ATOM_TYPE: &str = "application/atom+xml; charset=utf-8";
-const RSS_TYPE: &str = "application/rss+xml; charset=utf-8";
+const ATOM_HTTP_TYPE: &str = "application/atom+xml; charset=utf-8";
+const RSS_HTTP_TYPE: &str = "application/rss+xml; charset=utf-8";
+const ATOM_MEDIA_TYPE: &str = "application/atom+xml";
+const RSS_MEDIA_TYPE: &str = "application/rss+xml";
 
 const TITLE: &str = "APOD Archive";
 const DESCRIPTION: &str =
@@ -17,13 +20,25 @@ const DESCRIPTION: &str =
 const SUMMARY_CHARS: usize = 400;
 
 pub async fn get_atom(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
-    let xml = state.atom.get_or_build(|| build_atom(&state)).await?;
-    Ok(super::cached_xml(&headers, &xml, ATOM_TYPE))
+    let life = until_next_entry(&state);
+    let xml = state
+        .atom
+        .get_or_build_capped(life, || build_atom(&state))
+        .await?;
+    Ok(response::revalidated(&headers, &xml, ATOM_HTTP_TYPE))
 }
 
 pub async fn get_rss(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
-    let xml = state.rss.get_or_build(|| build_rss(&state)).await?;
-    Ok(super::cached_xml(&headers, &xml, RSS_TYPE))
+    let life = until_next_entry(&state);
+    let xml = state
+        .rss
+        .get_or_build_capped(life, || build_rss(&state))
+        .await?;
+    Ok(response::revalidated(&headers, &xml, RSS_HTTP_TYPE))
+}
+
+fn until_next_entry(state: &ServerState) -> std::time::Duration {
+    schedule::until_next(&state.config.publish, Utc::now())
 }
 
 async fn latest(state: &ServerState) -> ApiResult<Vec<ApodEntry>> {
@@ -72,7 +87,13 @@ async fn build_atom(state: &ServerState) -> ApiResult<String> {
     push(&mut xml, 1, "subtitle", DESCRIPTION);
     push(&mut xml, 1, "id", &format!("{base}/atom.xml"));
     push(&mut xml, 1, "updated", &rfc3339(updated));
-    push_link(&mut xml, 1, "self", ATOM_TYPE, &format!("{base}/atom.xml"));
+    push_link(
+        &mut xml,
+        1,
+        "self",
+        ATOM_MEDIA_TYPE,
+        &format!("{base}/atom.xml"),
+    );
     push_link(&mut xml, 1, "alternate", "text/html", &format!("{base}/"));
     xml.push_str("  <author>\n    <name>NASA APOD</name>\n  </author>\n");
     push(&mut xml, 1, "generator", "lemon-apod");
@@ -121,7 +142,7 @@ async fn build_rss(state: &ServerState) -> ApiResult<String> {
     push(&mut xml, 2, "language", "en");
     push(&mut xml, 2, "lastBuildDate", &built.to_rfc2822());
     xml.push_str(&format!(
-        "    <atom:link href=\"{}/feed.xml\" rel=\"self\" type=\"{RSS_TYPE}\"/>\n",
+        "    <atom:link href=\"{}/feed.xml\" rel=\"self\" type=\"{RSS_MEDIA_TYPE}\"/>\n",
         super::escape(base)
     ));
 

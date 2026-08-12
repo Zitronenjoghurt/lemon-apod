@@ -172,6 +172,9 @@ async fn notify_once(cfg: Config, seed: bool, dry_run: bool) -> Result<()> {
             );
             if !sent {
                 println!("        {}", notification.title);
+                if let Some(click) = &notification.click {
+                    println!("        -> {click}");
+                }
                 pending += 1;
             }
         }

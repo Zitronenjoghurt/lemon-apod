@@ -442,10 +442,16 @@ watch(
             </button>
             <GamePicture
               v-else
+              :alt="
+                choice.picture === settled.answer.picture
+                  ? settled.answer.title
+                  : 'One of the pictures to choose from'
+              "
+              :date="choice.picture === settled.answer.picture ? settled.answer.date : ''"
               :frame="FRAME"
+              :full="choice.picture === settled.answer.picture ? settled.answer.media.url : null"
               :picture="choice"
               :state="state(choice.picture)"
-              alt="One of the pictures to choose from"
             />
           </li>
         </ul>
@@ -532,6 +538,20 @@ watch(
 
   .explanation {
     max-height: min(46vh, 26rem);
+  }
+}
+
+/* Six pictures to tell apart. Past this width the text column has all it needs, so the rest of
+   the room goes to the thing the player is actually squinting at. */
+@media (min-width: 80rem) {
+  .round {
+    grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
+    gap: 2rem;
+  }
+
+  .choices {
+    --cap: 34vh;
+    gap: 1rem;
   }
 }
 

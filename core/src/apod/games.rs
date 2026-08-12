@@ -1,5 +1,5 @@
 use super::model::{Cloze, ClozePiece, PictureSummary};
-use super::read::{ApodReader, ApodResult, to_dates};
+use super::read::{to_dates, ApodReader, ApodResult};
 use crate::date::ApodDate;
 use crate::entry::ApodSummary;
 use crate::text;
@@ -29,14 +29,15 @@ impl ApodReader {
     }
 
     pub async fn text_pool(&self, before: Option<ApodDate>) -> ApodResult<Vec<ApodDate>> {
-        let days: Vec<i64> = sqlx::query_scalar(
+        let days: Vec<i64> = sqlx::query_scalar(AssertSqlSafe(format!(
             "SELECT entries.date_id FROM entries
              JOIN entry_stats ON entry_stats.date_id = entries.date_id
              WHERE entry_stats.word_count BETWEEN ?1 AND ?2
                AND entries.thumb_path IS NOT NULL
+               AND entries.media_kind IN ({PICTURE_KINDS})
                AND (?3 IS NULL OR entries.date_id < ?3)
-             ORDER BY entries.date_id",
-        )
+             ORDER BY entries.date_id"
+        )))
         .bind(WORDS_MIN)
         .bind(WORDS_MAX)
         .bind(before.map(ApodDate::days))

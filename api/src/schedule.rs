@@ -32,6 +32,15 @@ impl Schedule {
     }
 }
 
+pub fn until_next(publish: &Publish, now: DateTime<Utc>) -> std::time::Duration {
+    let next = next_after(
+        publish,
+        now,
+        now.with_timezone(&publish.timezone).date_naive(),
+    );
+    (next - now).to_std().unwrap_or(std::time::Duration::ZERO)
+}
+
 fn next_after(publish: &Publish, now: DateTime<Utc>, today: NaiveDate) -> DateTime<Utc> {
     let mut day = today;
 
@@ -125,5 +134,18 @@ mod tests {
     fn a_later_hour_works_the_same_way() {
         let schedule = Schedule::at(&eastern(17, 30), utc("2026-01-15T12:00:00Z"));
         assert_eq!(schedule.next_at, utc("2026-01-15T22:30:00Z"));
+    }
+
+    #[test]
+    fn the_wait_for_the_next_entry_never_reaches_past_it() {
+        assert_eq!(
+            until_next(&eastern(0, 0), utc("2026-07-16T03:50:00Z")),
+            std::time::Duration::from_secs(600)
+        );
+
+        assert_eq!(
+            until_next(&eastern(0, 0), utc("2026-07-16T04:00:01Z")),
+            std::time::Duration::from_secs(24 * 3600 - 1)
+        );
     }
 }

@@ -375,8 +375,10 @@ watch(
       <div class="pair">
         <div class="side">
           <GamePicture
+            :alt="settled ? settled.a.title : 'The picture you are measuring against'"
+            :date="settled?.a.date"
+            :full="settled?.a.media.url"
             :picture="settled ? settled.pair.a : pair.a"
-            alt="The picture you are measuring against"
           />
           <GameReveal v-if="settled" :reveal="settled.a" />
           <p v-else-if="held" class="caption">
@@ -395,9 +397,11 @@ watch(
 
         <div class="side">
           <GamePicture
+            :alt="settled ? settled.b.title : 'The picture to place'"
+            :date="settled?.b.date"
+            :full="settled?.b.media.url"
             :picture="settled ? settled.pair.b : pair.b"
             :state="settled ? (settled.right ? 'right' : 'wrong') : 'plain'"
-            alt="The picture to place"
           />
           <GameReveal v-if="settled" :reveal="settled.b" />
           <div v-else class="row choices">
