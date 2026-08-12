@@ -1,9 +1,16 @@
 <script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
-import type {OrderPair, Reveal} from '@/api/types'
-import {api} from '@/api/client'
-import {type Band, type GameResult, shareText, useGame, useGameMode, useProgress,} from '@/composables/useGames'
-import {daysBetween, formatDate} from '@/utils/date'
+import { computed, ref, watch } from 'vue'
+import type { OrderPair, Reveal } from '@/api/types'
+import { api } from '@/api/client'
+import {
+  type Band,
+  type GameResult,
+  shareText,
+  useGame,
+  useGameMode,
+  useProgress,
+} from '@/composables/useGames'
+import { daysBetween, formatDate } from '@/utils/date'
 
 const HOW = [
   'You start with one picture and the day it appeared on APOD.',

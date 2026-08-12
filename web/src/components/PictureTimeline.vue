@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import {computed} from 'vue'
-import {RouterLink} from 'vue-router'
-import type {Appearance, Changed} from '@/api/types'
-import {formatDate} from '@/utils/date'
+import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import type { Appearance, Changed } from '@/api/types'
+import { formatDate } from '@/utils/date'
 
 const props = defineProps<{
   appearances: Appearance[]

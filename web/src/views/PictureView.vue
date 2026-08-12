@@ -1,11 +1,11 @@
 <script lang="ts" setup>
-import {computed, watch} from 'vue'
-import {RouterLink, useRoute} from 'vue-router'
+import { computed, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import PictureTimeline from '@/components/PictureTimeline.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import {api} from '@/api/client'
-import {useAsync} from '@/composables/useAsync'
-import {formatDate} from '@/utils/date'
+import { api } from '@/api/client'
+import { useAsync } from '@/composables/useAsync'
+import { formatDate } from '@/utils/date'
 
 const route = useRoute()
 const date = computed(() => String(route.params.date ?? ''))
@@ -74,7 +74,8 @@ const years = computed(() => Math.max(1, Math.round((picture.value?.span_days ??
             <h1>{{ picture.title }}</h1>
             <p class="muted lede">
               APOD has come back to this picture {{ picture.appearances }} times across {{ years }}
-              {{ years === 1 ? 'year' : 'years' }}. You can see below what exactly has changed over time.
+              {{ years === 1 ? 'year' : 'years' }}. You can see below what exactly has changed over
+              time.
             </p>
 
             <dl class="facts">

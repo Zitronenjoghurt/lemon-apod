@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import {computed} from 'vue'
-import {RouterLink} from 'vue-router'
-import {type ApodSummary, isVideo, type SearchHit} from '@/api/types'
-import {useRead} from '@/composables/useRead'
-import {formatDate} from '@/utils/date'
+import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
+import { type ApodSummary, isVideo, type SearchHit } from '@/api/types'
+import { useRead } from '@/composables/useRead'
+import { formatDate } from '@/utils/date'
 
 const props = defineProps<{
   entry: ApodSummary

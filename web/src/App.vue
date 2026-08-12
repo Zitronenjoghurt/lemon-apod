@@ -1,13 +1,13 @@
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref} from 'vue'
-import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import ExternalLinkNotice from '@/components/ExternalLinkNotice.vue'
 import SettingsDialog from '@/components/SettingsDialog.vue'
-import {throttled} from '@/api/client'
-import {useExternalLinks} from '@/composables/useExternalLinks'
-import {useFavorites} from '@/composables/useFavorites'
-import {useTheme} from '@/composables/useTheme'
-import {MASTODON_URL, REPO_URL} from '@/utils/links'
+import { throttled } from '@/api/client'
+import { useExternalLinks } from '@/composables/useExternalLinks'
+import { useFavorites } from '@/composables/useFavorites'
+import { useTheme } from '@/composables/useTheme'
+import { MASTODON_URL, REPO_URL } from '@/utils/links'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,7 +54,7 @@ const groups = [
       { to: '/pictures', label: 'Encores', icon: 'pi pi-replay' },
       { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
       { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
-      { to: '/games', label: 'Games', icon: 'pi pi-play-circle' }
+      { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
     ],
   },
   {

@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
-import {RouterLink, useRoute} from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import EntryGrid from '@/components/EntryGrid.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import {api} from '@/api/client'
-import {useAsync} from '@/composables/useAsync'
-import {useNarrow} from '@/composables/useNarrow'
-import {formatDate} from '@/utils/date'
+import { api } from '@/api/client'
+import { useAsync } from '@/composables/useAsync'
+import { useNarrow } from '@/composables/useNarrow'
+import { formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 30
 

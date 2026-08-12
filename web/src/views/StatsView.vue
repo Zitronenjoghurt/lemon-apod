@@ -1,14 +1,14 @@
 <script lang="ts" setup>
-import {computed, onMounted, ref} from 'vue'
-import {RouterLink, useRoute, useRouter} from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RetryNotice from '@/components/RetryNotice.vue'
 import WordDetail from '@/components/WordDetail.vue'
 import YearChart from '@/components/YearChart.vue'
-import {api} from '@/api/client'
-import type {SortOrder, Word, WordSort} from '@/api/types'
-import {useAsync} from '@/composables/useAsync'
-import {useNarrow} from '@/composables/useNarrow'
-import {formatDate} from '@/utils/date'
+import { api } from '@/api/client'
+import type { SortOrder, Word, WordSort } from '@/api/types'
+import { useAsync } from '@/composables/useAsync'
+import { useNarrow } from '@/composables/useNarrow'
+import { formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 50
 const DEBOUNCE_MS = 250
