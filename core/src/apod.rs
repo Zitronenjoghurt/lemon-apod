@@ -5,15 +5,17 @@ pub mod model;
 pub mod pictures;
 pub mod query;
 pub mod read;
+pub mod reuse;
 #[cfg(feature = "data-write")]
 pub mod write;
 
 pub use games::Deal;
 pub use model::{
-    Cloze, ClozePiece, Coverage, EntryLength, Filters, HostCount, KindCount, Listing, MonthCount,
-    Order, Page, PictureSummary, Resource, ResourceFilters, ResourceOrder, ResourceRef,
-    ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary, Timeline, Word, WordEntry,
-    WordFilters, WordOrder, WordUse, YearCount, YearStats,
+    AnchorCount, Appearance, Changed, Cloze, ClozePiece, Coverage, EntryLength, Filters, HostCount,
+    KindCount, LengthBucket, Listing, MonthCount, Order, Page, Picture, PictureAppearances,
+    PictureFilters, PictureOrder, PictureSummary, Resource, ResourceFilters, ResourceOrder,
+    ResourceRef, ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary, Timeline, Word,
+    WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
 };
 pub use pictures::{Fingerprint, PictureGroup};
 pub use read::{ApodError, ApodReader, ApodResult, Snippet};
@@ -27,10 +29,11 @@ pub(crate) const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_h
                                         explanation_text, credits, has_copyright, license_url, \
                                         tomorrow_teaser, keywords, media_kind, media_url, \
                                         media_hd_url, thumb_path, thumb_width, thumb_height, \
-                                        source_url";
+                                        source_url, picture_group";
 
 pub(crate) const SUMMARY_COLUMNS: &str = "date_id, title, has_copyright, media_kind, media_url, \
-                                          media_hd_url, thumb_path, thumb_width, thumb_height";
+                                          media_hd_url, thumb_path, thumb_width, thumb_height, \
+                                          picture_group";
 
 #[derive(Debug, thiserror::Error)]
 pub enum SchemaError {

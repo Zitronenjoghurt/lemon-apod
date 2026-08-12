@@ -321,7 +321,6 @@ h3 {
 p {
   margin: 0;
   font-size: 0.9rem;
-  max-width: 60ch;
   text-wrap: pretty;
 }
 

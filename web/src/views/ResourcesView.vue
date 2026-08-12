@@ -227,6 +227,17 @@ h1 {
   flex: 1 1 16rem;
 }
 
+/* Keep the field the same height as the selects beside it. */
+.controls :deep(.p-inputtext),
+.controls :deep(.p-select) {
+  height: 2.75rem;
+}
+
+.controls :deep(.p-select-label) {
+  display: flex;
+  align-items: center;
+}
+
 .host {
   min-width: 12rem;
 }

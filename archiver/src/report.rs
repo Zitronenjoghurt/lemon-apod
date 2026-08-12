@@ -1,11 +1,13 @@
 use crate::archive::ArchiveStore;
 use crate::config::Config;
+use crate::progress;
 use crate::{reparse, workers};
 use anyhow::Result;
 use apod_core::{ApodDate, ApodReader, ApodWriter, PARSER_VERSION, quality};
 use std::collections::BTreeMap;
 
 pub async fn quality(
+    cfg: &Config,
     index: &ApodReader,
     date: Option<ApodDate>,
     warning: Option<&str>,
@@ -20,12 +22,21 @@ pub async fn quality(
     let mut shown = 0;
     let mut affected = 0;
 
+    let bar = progress::bar("checking", dates.len());
     for date in &dates {
+        bar.inc(1);
         let Some(entry) = index.entry(*date).await? else {
             continue;
         };
 
-        let issues: Vec<_> = quality::quality_control(&entry)
+        let attributed = entry
+            .credits
+            .is_empty()
+            .then(|| std::fs::read(cfg.html_path(*date)).ok())
+            .flatten()
+            .map(|bytes| apod_core::parse::bytes_attribute_anyone(&bytes));
+
+        let issues: Vec<_> = quality::quality_control(&entry, attributed)
             .into_iter()
             .filter(|issue| warning.is_none_or(|want| issue.warning.to_string() == want))
             .collect();
@@ -41,18 +52,19 @@ pub async fn quality(
 
         if shown < limit {
             shown += 1;
-            println!(
-                "{date}  {}",
+            progress::println(&format!(
+                "{date}  {}\n          {}\n          {}",
                 issues
                     .iter()
                     .map(ToString::to_string)
                     .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            println!("          {}", entry.title);
-            println!("          {}", entry.source_url);
+                    .join(", "),
+                entry.title,
+                entry.source_url,
+            ));
         }
     }
+    bar.finish_and_clear();
 
     if affected > shown {
         println!("... and {} more entries", affected - shown);
@@ -67,10 +79,12 @@ pub async fn quality(
 }
 
 pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) -> Result<()> {
+    let scan = progress::spinner("reading", "counting the archive");
     let today = workers::today_in(cfg.daily.timezone);
     let publishable = today.iter_desc().count();
     let counts = archive.counts().await?;
     let on_disk = reparse::archived_dates(&cfg.html_dir)?.len();
+    scan.finish_and_clear();
 
     println!("today ({})       {today}", cfg.daily.timezone);
     println!("publishable dates {publishable}");
@@ -106,7 +120,7 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!("  thumbnails      {thumbnails}");
     println!("  hashed          {}", pictures.hashed);
     println!(
-        "  reruns          {} pictures across {} entries",
+        "  encores         {} pictures across {} entries",
         pictures.pictures, pictures.entries
     );
     println!("  parser version  {PARSER_VERSION}");

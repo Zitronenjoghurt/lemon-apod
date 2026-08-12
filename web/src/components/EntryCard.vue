@@ -1,14 +1,16 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
-import { type ApodSummary, isVideo } from '@/api/types'
-import { useRead } from '@/composables/useRead'
-import { formatDate } from '@/utils/date'
+import {computed} from 'vue'
+import {RouterLink} from 'vue-router'
+import {type ApodSummary, isVideo, type SearchHit} from '@/api/types'
+import {useRead} from '@/composables/useRead'
+import {formatDate} from '@/utils/date'
 
 const props = defineProps<{
   entry: ApodSummary
   snippet?: string
   query?: string
+  /** Present on search results, and only then. */
+  hit?: SearchHit
 }>()
 
 const { isRead, dimmed } = useRead()
@@ -16,8 +18,16 @@ const { isRead, dimmed } = useRead()
 const unread = computed(() => !isRead(props.entry.date))
 const faded = computed(() => dimmed(props.entry.date))
 
+const elsewhere = computed(() => {
+  const m = props.hit?.matched
+  if (!m || m.explanation || m.title) return null
+  if (props.hit?.credit) return { label: 'Credit', html: props.hit.credit }
+  if (props.hit?.keywords) return { label: 'Keywords', html: props.hit.keywords }
+  return null
+})
+
 const target = computed(() =>
-  props.query?.trim()
+  props.query?.trim() && !elsewhere.value
     ? { path: `/${props.entry.date}`, query: { q: props.query } }
     : `/${props.entry.date}`,
 )
@@ -41,6 +51,10 @@ const target = computed(() =>
       <span v-if="isVideo(entry.media.kind)" aria-label="Video" class="badge">
         <i aria-hidden="true" class="pi pi-play" />
       </span>
+      <span v-if="entry.picture" class="badge encore" title="APOD came back to this picture">
+        <i aria-hidden="true" class="pi pi-replay" />
+        <span class="sr-only">APOD came back to this picture</span>
+      </span>
     </div>
 
     <div class="body">
@@ -50,7 +64,11 @@ const target = computed(() =>
         <span class="sr-only">{{ unread ? 'Unread' : 'Read' }}</span>
       </p>
       <h3 class="title">{{ entry.title }}</h3>
-      <p v-if="snippet" class="snippet muted" v-html="snippet" />
+      <p v-if="elsewhere" class="matched muted">
+        <span class="where">{{ elsewhere.label }}</span>
+        <span v-html="elsewhere.html" />
+      </p>
+      <p v-else-if="snippet" class="snippet muted" v-html="snippet" />
     </div>
   </RouterLink>
 </template>
@@ -111,6 +129,12 @@ const target = computed(() =>
   padding-left: 0.15rem;
 }
 
+.badge.encore {
+  bottom: auto;
+  top: 0.6rem;
+  padding-left: 0;
+}
+
 .unread-dot {
   display: inline-block;
   width: 0.4rem;
@@ -154,6 +178,25 @@ const target = computed(() =>
 .title {
   font-size: 1.02rem;
   font-weight: 600;
+}
+
+.matched {
+  font-size: 0.85rem;
+  margin: 0.25rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: baseline;
+}
+
+.matched .where {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex: none;
 }
 
 .snippet {

@@ -156,6 +156,7 @@ mod tests {
             ),
             extra_media: Vec::new(),
             source_url: date.source_url(),
+            picture: None,
         }
     }
 

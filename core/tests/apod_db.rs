@@ -1,7 +1,8 @@
 #![cfg(feature = "data-write")]
 
 use apod_core::apod::{
-    Filters, Order, ResourceFilters, ResourceOrder, SCHEMA_VERSION, Snippet, WordFilters, WordOrder,
+    Changed, Filters, Order, PictureFilters, PictureOrder, ResourceFilters, ResourceOrder,
+    SCHEMA_VERSION, Snippet, WordFilters, WordOrder,
 };
 use apod_core::db::DbConfig;
 use apod_core::{
@@ -45,6 +46,7 @@ fn entry(date: &str, title: &str, explanation: &str) -> ApodEntry {
         ),
         extra_media: Vec::new(),
         source_url: date.source_url(),
+        picture: None,
     }
 }
 
@@ -414,6 +416,53 @@ async fn search_marks_the_match_in_the_snippet() {
         bold.items[0].snippet
     );
     assert!(!bold.items[0].snippet.contains("<mark>"));
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn search_says_when_the_hit_was_somewhere_the_snippet_cannot_show() {
+    // The fixture credits "Jane Doe" and keeps "nebula" in its keywords, neither of which the
+    // explanation snippet can mark.
+    let (writer, path) = seeded(&[("2024-03-05", "Saturn", "The ringed planet.")]).await;
+    let reader = writer.reader();
+
+    let by_credit = reader
+        .search("Doe", &Filters::default(), false, 0, 30, 32)
+        .await
+        .unwrap();
+    let hit = &by_credit.items[0];
+    assert!(hit.matched.credit, "the query only appears in the credit");
+    assert!(!hit.matched.explanation && !hit.matched.title);
+    assert!(
+        hit.matched.only_beyond_the_prose(),
+        "so the reader has to be told where it did match"
+    );
+    assert_eq!(hit.credit.as_deref(), Some("Jane <mark>Doe</mark>"));
+    assert!(!hit.snippet.contains("<mark>"), "nothing to mark in there");
+
+    let by_keyword = reader
+        .search("nebula", &Filters::default(), false, 0, 30, 32)
+        .await
+        .unwrap();
+    let hit = &by_keyword.items[0];
+    assert!(hit.matched.keywords);
+    assert_eq!(
+        hit.keywords.as_deref(),
+        Some("<mark>nebula</mark>"),
+        "keywords arrive as a readable list, not as the JSON they are stored in"
+    );
+
+    let by_prose = reader
+        .search("ringed", &Filters::default(), false, 0, 30, 32)
+        .await
+        .unwrap();
+    let hit = &by_prose.items[0];
+    assert!(hit.matched.explanation);
+    assert!(!hit.matched.only_beyond_the_prose());
+    assert_eq!(hit.credit, None, "no need to explain a visible match");
+    assert_eq!(hit.keywords, None);
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
@@ -1142,6 +1191,196 @@ async fn a_rerun_picture_is_findable_from_any_of_its_dates() {
         vec![alone],
         "the entry that was never a rerun is still not one"
     );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn an_encore_reports_what_each_appearance_changed() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    // Same picture four times: republished untouched, then retitled, then rewritten onto a
+    // rescanned file. A fifth entry is a different picture and must stay out of the group.
+    let shown = [
+        (
+            "2001-03-04",
+            "Saturn at Night",
+            "The ringed planet.",
+            "a.jpg",
+        ),
+        (
+            "2005-06-07",
+            "Saturn at Night",
+            "The ringed planet.",
+            "a.jpg",
+        ),
+        (
+            "2011-08-09",
+            "Saturn After Dark",
+            "The ringed planet.",
+            "a.jpg",
+        ),
+        (
+            "2019-10-11",
+            "Saturn After Dark",
+            "Rewritten prose.",
+            "b.jpg",
+        ),
+    ];
+    for (date, title, prose, file) in shown {
+        let mut row = entry(date, title, prose);
+        row.media = Media::new(MediaKind::ImageJpg, Some(file.to_owned()), None);
+        row.credits = vec![Credit {
+            role: "Image Credit".into(),
+            html: "NASA".into(),
+            text: "NASA".into(),
+        }];
+        writer.upsert(&row).await.unwrap();
+        writer.set_phash(row.date, Some(&[3u8; 32])).await.unwrap();
+    }
+
+    let mut other = entry("2020-01-01", "Orion", "A different picture.");
+    other.media = Media::new(MediaKind::ImageJpg, Some("orion.jpg".to_owned()), None);
+    writer.upsert(&other).await.unwrap();
+    writer
+        .set_phash(other.date, Some(&[200u8; 32]))
+        .await
+        .unwrap();
+
+    writer.regroup_pictures().await.unwrap();
+    let reader = writer.reader();
+
+    let listing = reader
+        .pictures(
+            &PictureFilters::default(),
+            PictureOrder::Appearances,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        listing.total, 1,
+        "only one picture was shown more than once"
+    );
+    let picture = &listing.items[0];
+    assert_eq!(picture.id.to_string(), "2001-03-04");
+    assert_eq!(picture.appearances, 4);
+    assert_eq!(picture.titles, 2, "it appeared under two titles");
+    assert_eq!(picture.first.to_string(), "2001-03-04");
+    assert_eq!(picture.last.to_string(), "2019-10-11");
+    assert_eq!(
+        picture.title, "Saturn at Night",
+        "a picture is named after its first appearance"
+    );
+
+    // Any of the dates addresses the picture, not only the one it is named after.
+    for date in ["2001-03-04", "2011-08-09", "2019-10-11"] {
+        let shown = reader
+            .picture_appearances(date.parse().unwrap())
+            .await
+            .unwrap()
+            .unwrap_or_else(|| panic!("{date} should reach its picture"));
+        assert_eq!(shown.picture.id.to_string(), "2001-03-04");
+        assert_eq!(shown.items.len(), 4);
+    }
+
+    let shown = reader
+        .picture_appearances("2001-03-04".parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        shown.items[0].changed,
+        Changed::default(),
+        "the first appearance changed nothing, there was nothing to change from"
+    );
+    assert_eq!(shown.items[0].since_previous_days, None);
+
+    assert_eq!(
+        shown.items[1].changed,
+        Changed::default(),
+        "a straight republication changed nothing"
+    );
+    assert_eq!(shown.items[1].since_previous_days, Some(1556));
+
+    assert_eq!(
+        shown.items[2].changed,
+        Changed {
+            title: true,
+            ..Changed::default()
+        },
+        "only the title moved"
+    );
+
+    assert_eq!(
+        shown.items[3].changed,
+        Changed {
+            title: false,
+            explanation: true,
+            credit: false,
+            file: true,
+        },
+        "new prose on a new file, under the title it already had"
+    );
+
+    assert!(
+        reader
+            .picture_appearances("2020-01-01".parse().unwrap())
+            .await
+            .unwrap()
+            .is_none(),
+        "a picture shown once is not an encore"
+    );
+
+    let retitled = reader
+        .pictures(
+            &PictureFilters {
+                retitled: Some(false),
+                ..PictureFilters::default()
+            },
+            PictureOrder::Appearances,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        retitled.total, 0,
+        "this one was retitled, so it filters out"
+    );
+
+    let searched = reader
+        .pictures(
+            &PictureFilters {
+                query: Some("after dark".into()),
+                ..PictureFilters::default()
+            },
+            PictureOrder::Appearances,
+            Order::Desc,
+            0,
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        searched.total, 1,
+        "searching reaches the titles of every appearance, not only the first"
+    );
+
+    // The marker a listing badges on, and what the entry page decides with.
+    let summary = reader.entry("2011-08-09".parse().unwrap()).await.unwrap();
+    assert_eq!(
+        summary.unwrap().picture.map(|d| d.to_string()).as_deref(),
+        Some("2001-03-04")
+    );
+    let single = reader.entry("2020-01-01".parse().unwrap()).await.unwrap();
+    assert_eq!(single.unwrap().picture, None);
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());

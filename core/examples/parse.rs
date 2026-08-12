@@ -46,7 +46,8 @@ fn main() {
                 println!("  expl text  {}", entry.summary_text(220));
                 println!("  expl html  {}", truncate(&entry.explanation_html, 260));
 
-                let issues = quality::quality_control(&entry);
+                let attributed = parse::bytes_attribute_anyone(&bytes);
+                let issues = quality::quality_control(&entry, Some(attributed));
                 if issues.is_empty() {
                     println!("  quality    clean");
                 } else {

@@ -16,6 +16,10 @@ withDefaults(
 function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
   return 'snippet' in entry ? entry.snippet : undefined
 }
+
+function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
+  return 'matched' in entry ? entry : undefined
+}
 </script>
 
 <template>
@@ -36,6 +40,7 @@ function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
       v-for="entry in entries"
       :key="entry.date"
       :entry="entry"
+      :hit="hitOf(entry)"
       :query="query"
       :snippet="snippetOf(entry)"
     />

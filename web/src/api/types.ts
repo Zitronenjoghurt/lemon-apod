@@ -38,6 +38,8 @@ export interface ApodEntry {
   media: Media
   extra_media?: Media[]
   source_url: string
+  /** Set when this picture ran on more than one date. The value is the date it first ran. */
+  picture?: string
 }
 
 export interface ApodSummary {
@@ -45,10 +47,25 @@ export interface ApodSummary {
   title: string
   media: Media
   has_copyright: boolean
+  /** See {@link ApodEntry.picture}. */
+  picture?: string
+}
+
+export interface Matched {
+  title: boolean
+  explanation: boolean
+  credit: boolean
+  keywords: boolean
 }
 
 export interface SearchHit extends ApodSummary {
   snippet: string
+  /** Which indexed fields the query hit. Search reaches the credit and keywords too. */
+  matched: Matched
+  /** The credit with the match marked, present only when that is where the hit was. */
+  credit?: string
+  /** The keywords with the match marked, on the same terms. */
+  keywords?: string
 }
 
 export interface Page<T> {
@@ -78,6 +95,8 @@ export interface TextSummary {
   distinct_words: number
   avg_words: number
   median_words: number
+  p25_words: number
+  p75_words: number
   min_words: number
   max_words: number
   avg_unique_words: number
@@ -86,8 +105,15 @@ export interface TextSummary {
   avg_words_per_sentence: number
   avg_links: number
   used_once: number
+  lengths?: LengthBucket[]
   shortest?: EntryLength
   longest?: EntryLength
+}
+
+export interface LengthBucket {
+  from: number
+  to?: number
+  entries: number
 }
 
 export interface ResourceSummary {
@@ -104,8 +130,19 @@ export interface Stats {
   latest: string | null
   by_media_kind: { kind: MediaKind; count: number }[]
   copyright: number
+  licensed: number
+  gaps: number
   text: TextSummary
   resources: ResourceSummary
+  pictures: PictureSummary
+}
+
+export interface PictureSummary {
+  hashed: number
+  pictures: number
+  entries: number
+  most_shown?: string
+  most_shown_times: number
 }
 
 export interface YearStats {
@@ -189,11 +226,47 @@ export interface ResourceRef extends ApodSummary {
   count: number
 }
 
+export interface AnchorCount {
+  anchor: string
+  entries: number
+}
+
 export interface ResourceRefs {
   resource: Resource
   items: ResourceRef[]
   total: number
+  anchors: AnchorCount[]
 }
+
+export interface Picture {
+  id: string
+  title: string
+  media: Media
+  appearances: number
+  first: string
+  last: string
+  titles: number
+  span_days: number
+}
+
+export interface Changed {
+  title: boolean
+  explanation: boolean
+  credit: boolean
+  file: boolean
+}
+
+export interface Appearance extends ApodSummary {
+  changed: Changed
+  since_previous_days?: number
+}
+
+export interface PictureAppearances {
+  picture: Picture
+  items: Appearance[]
+}
+
+export type PictureSort = 'appearances' | 'first' | 'last' | 'span' | 'title'
 
 export interface HostCount {
   host: string

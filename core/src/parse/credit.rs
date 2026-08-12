@@ -66,6 +66,25 @@ fn role_run() -> String {
     format!(r"\b(?:{words})(?:[\s&/,-]+(?:and[\s]+)?(?:{words})\b){{0,4}}")
 }
 
+pub(super) fn is_all_role_words(text: &str) -> bool {
+    let mut counted = false;
+
+    for word in text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty() && !word.eq_ignore_ascii_case("and"))
+    {
+        if !ROLE_WORDS
+            .iter()
+            .any(|role| word.eq_ignore_ascii_case(role))
+        {
+            return false;
+        }
+        counted = true;
+    }
+
+    counted
+}
+
 static LABEL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(&format!(
         r"(?i){}(?:\s*\([^)]*\))?(?:\s*:\s*|\s+{DASH}\s+)",
@@ -130,6 +149,11 @@ impl Label {
 
 pub fn parse(doc: &Html, base: &Url, title: &str) -> Option<Credits> {
     labelled(doc, base).or_else(|| after_title(doc, base, title))
+}
+
+pub fn attributes_anyone(doc: &Html) -> bool {
+    let text = doc.root_element().text().collect::<String>();
+    labels(&text).iter().any(Label::is_credit)
 }
 
 fn labelled(doc: &Html, base: &Url) -> Option<Credits> {

@@ -12,15 +12,13 @@ const { dismissed, dismiss } = useWelcome()
       <p>
         NASA has published a piece of astronomy media with a short explanation every day since June
         1995. This is an unofficial archive of all of them, aimed at displaying them in a modern way
-        and offering neat little features that derive data from every entry:
-        <RouterLink to="/search">search</RouterLink>
-        through every texts,
-        <RouterLink to="/archive">browse</RouterLink>
-        by month,
-        <RouterLink to="/stats">view statistics</RouterLink>
-        , or
-        <RouterLink to="/games">play some minigames</RouterLink>
-        .
+        and offering neat little features that derive data from every entry, such as:
+        <RouterLink to="/search">a full-text search</RouterLink>,
+        <RouterLink to="/archive">a browser</RouterLink>,
+        <RouterLink to="/stats">statistics</RouterLink>,
+        <RouterLink to="/resources">a resource overview</RouterLink>
+        and even
+        <RouterLink to="/games">some minigames</RouterLink>.
       </p>
     </div>
 
@@ -60,7 +58,6 @@ h2 {
 p {
   margin: 0;
   font-size: 0.92rem;
-  max-width: 72ch;
   text-wrap: pretty;
   color: var(--text-muted);
 }

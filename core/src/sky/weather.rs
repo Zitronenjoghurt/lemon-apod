@@ -16,9 +16,9 @@ impl Band {
 
     pub const fn letter(self) -> &'static str {
         match self {
-            Self::R => "R",
-            Self::S => "S",
             Self::G => "G",
+            Self::S => "S",
+            Self::R => "R",
         }
     }
 

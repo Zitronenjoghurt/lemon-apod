@@ -279,7 +279,7 @@ async fn regroup(index: &ApodWriter) {
     match index.regroup_pictures().await {
         Ok(groups) => tracing::info!(
             pictures = groups.len(),
-            "grouped the pictures that have run more than once"
+            "grouped the pictures that have been shown more than once"
         ),
         Err(error) => tracing::warn!("could not group pictures: {error:#}"),
     }

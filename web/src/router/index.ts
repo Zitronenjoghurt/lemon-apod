@@ -38,6 +38,7 @@ const router = createRouter({
       component: () => import('@/views/games/MatchView.vue'),
     },
     { path: '/resources', name: 'resources', component: () => import('@/views/ResourcesView.vue') },
+    { path: '/pictures', name: 'pictures', component: () => import('@/views/PicturesView.vue') },
     {
       path: '/notifications',
       name: 'notifications',
@@ -48,6 +49,11 @@ const router = createRouter({
       path: '/resources/:id(\\d+)',
       name: 'resource',
       component: () => import('@/views/ResourceView.vue'),
+    },
+    {
+      path: `/pictures/:date(${DATE})`,
+      name: 'picture',
+      component: () => import('@/views/PictureView.vue'),
     },
     {
       path: '/archive/:year(\\d{4})?/:month(\\d{2})?',
@@ -68,7 +74,10 @@ const router = createRouter({
   scrollBehavior(to, from, saved) {
     if (to.name === 'feed') return false
     if (saved) return saved
-    if (to.name === from.name && ['search', 'resources', 'stats'].includes(String(to.name))) {
+    if (
+      to.name === from.name &&
+      ['search', 'resources', 'pictures', 'stats'].includes(String(to.name))
+    ) {
       return {}
     }
     return { top: 0 }

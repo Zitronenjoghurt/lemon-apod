@@ -167,6 +167,7 @@ mod tests {
             media: Media::new(MediaKind::ImageJpg, None, None),
             extra_media: Vec::new(),
             source_url: ApodDate::START.source_url(),
+            picture: None,
         }
     }
 

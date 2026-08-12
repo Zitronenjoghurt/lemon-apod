@@ -69,6 +69,8 @@ watch(date, run, { immediate: true })
   font-size: 1.4rem;
 }
 
+/* Centred, so it needs a measure of its own. Left-aligned prose must never be capped
+   narrower than the box it sits in: it reads as text that got cut off. */
 .notice p {
   max-width: 40ch;
   margin: 0;

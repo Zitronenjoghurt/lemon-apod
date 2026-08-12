@@ -12,6 +12,9 @@ import type {
   MatchRound,
   OrderPair,
   Page,
+  Picture,
+  PictureAppearances,
+  PictureSort,
   Puzzle,
   Resource,
   ResourceRefs,
@@ -166,6 +169,16 @@ export interface ResourceOptions {
   limit?: number
 }
 
+export interface PictureOptions {
+  q?: string
+  min_appearances?: number
+  retitled?: boolean
+  sort?: PictureSort
+  order?: SortOrder
+  offset?: number
+  limit?: number
+}
+
 export interface PuzzleOptions {
   day?: string
   rounds?: number
@@ -219,6 +232,13 @@ export const api = {
 
   resource: (id: number, offset = 0, limit = 30, signal?: AbortSignal) =>
     request<ResourceRefs>(`/api/resources/${id}${query({ offset, limit })}`, signal),
+
+  pictures: (options: PictureOptions = {}, signal?: AbortSignal) =>
+    request<Listing<Picture>>(`/api/pictures${query({ ...options })}`, signal),
+
+  /** Any of the picture's dates addresses it, not only the one it is named after. */
+  picture: (date: string, signal?: AbortSignal) =>
+    request<PictureAppearances>(`/api/pictures/${encodeURIComponent(date)}`, signal),
 
   words: (options: WordOptions = {}, signal?: AbortSignal) =>
     request<Listing<Word>>(`/api/words${query({ ...options })}`, signal),

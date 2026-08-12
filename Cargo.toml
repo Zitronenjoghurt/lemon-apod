@@ -30,3 +30,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 codegen-units = 1
 lto = true
 strip = true
+
+[profile.cli]
+inherits = "release"
+codegen-units = 16
+lto = false
+strip = false

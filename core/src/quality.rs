@@ -10,6 +10,8 @@ const MAX_ROLE_WORDS: usize = 4;
 
 static LOOKS_LIKE_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<\s*/?[a-zA-Z]").unwrap());
 static HREF: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"href="([^"]*)""#).unwrap());
+static TEASER_LABEL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^tomorrow['\u{2019}]s\s+picture\b").unwrap());
 
 fn has_relative_link(html: &str) -> bool {
     HREF.captures_iter(html).any(|caps| {
@@ -31,6 +33,7 @@ pub enum QualityWarning {
     MultiWhitespace,
     NoMedia,
     NonAbsoluteLink,
+    TitleIsTeaserLabel,
     TitleMultiline,
     TitleSuspiciouslyLong,
     TrailingWhitespace,
@@ -49,6 +52,7 @@ impl fmt::Display for QualityWarning {
             Self::MultiWhitespace => "multi_whitespace",
             Self::NoMedia => "no_media",
             Self::NonAbsoluteLink => "non_absolute_link",
+            Self::TitleIsTeaserLabel => "title_is_teaser_label",
             Self::TitleMultiline => "title_multiline",
             Self::TitleSuspiciouslyLong => "title_suspiciously_long",
             Self::TrailingWhitespace => "trailing_whitespace",
@@ -70,10 +74,13 @@ impl fmt::Display for QualityIssue {
     }
 }
 
-pub fn quality_control(entry: &ApodEntry) -> Vec<QualityIssue> {
+pub fn quality_control(entry: &ApodEntry, attributed: Option<bool>) -> Vec<QualityIssue> {
     let mut issues = Vec::new();
 
     check_string(&mut issues, "title", &entry.title);
+    if TEASER_LABEL.is_match(&entry.title) {
+        push(&mut issues, QualityWarning::TitleIsTeaserLabel, "title");
+    }
     if entry.title.lines().count() > 1 {
         push(&mut issues, QualityWarning::TitleMultiline, "title");
     }
@@ -95,7 +102,7 @@ pub fn quality_control(entry: &ApodEntry) -> Vec<QualityIssue> {
         push(&mut issues, QualityWarning::NonAbsoluteLink, "explanation");
     }
 
-    if entry.credits.is_empty() {
+    if entry.credits.is_empty() && attributed.unwrap_or(true) {
         push(&mut issues, QualityWarning::CreditMissing, "credit");
     }
     for credit in &entry.credits {
@@ -184,11 +191,12 @@ mod tests {
             media: Media::new(MediaKind::ImageJpg, Some("https://x/y.jpg".into()), None),
             extra_media: Vec::new(),
             source_url: ApodDate::START.source_url(),
+            picture: None,
         }
     }
 
     fn warnings(entry: &ApodEntry) -> Vec<QualityWarning> {
-        quality_control(entry)
+        quality_control(entry, None)
             .into_iter()
             .map(|i| i.warning)
             .collect()
@@ -196,7 +204,30 @@ mod tests {
 
     #[test]
     fn a_clean_entry_has_no_warnings() {
-        assert!(quality_control(&entry()).is_empty());
+        assert!(quality_control(&entry(), None).is_empty());
+    }
+
+    #[test]
+    fn a_page_that_credits_nobody_is_not_a_missing_credit() {
+        let mut entry = entry();
+        entry.credits.clear();
+
+        assert!(
+            warnings(&entry).contains(&QualityWarning::CreditMissing),
+            "with no page to consult, an absent credit is still worth reporting"
+        );
+        assert!(
+            quality_control(&entry, Some(true))
+                .iter()
+                .any(|issue| issue.warning == QualityWarning::CreditMissing),
+            "the page attributes somebody, so the parser missed it"
+        );
+        assert!(
+            !quality_control(&entry, Some(false))
+                .iter()
+                .any(|issue| issue.warning == QualityWarning::CreditMissing),
+            "the page attributes nobody, so there is nothing to find"
+        );
     }
 
     #[test]
@@ -204,6 +235,22 @@ mod tests {
         let mut entry = entry();
         entry.explanation_text = "Too short.".into();
         assert!(warnings(&entry).contains(&QualityWarning::ExplanationSuspiciouslyShort));
+    }
+
+    #[test]
+    fn flags_a_title_that_is_only_the_next_days_teaser_label() {
+        let mut entry = entry();
+        entry.title = "Tomorrow's picture:".into();
+        assert!(warnings(&entry).contains(&QualityWarning::TitleIsTeaserLabel));
+
+        entry.title = "Tomorrow\u{2019}s Picture".into();
+        assert!(warnings(&entry).contains(&QualityWarning::TitleIsTeaserLabel));
+
+        entry.title = "Tomorrow at the Observatory".into();
+        assert!(
+            !warnings(&entry).contains(&QualityWarning::TitleIsTeaserLabel),
+            "a title that merely starts with the word is still a title"
+        );
     }
 
     #[test]

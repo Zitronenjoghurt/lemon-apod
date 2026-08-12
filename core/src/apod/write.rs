@@ -109,6 +109,24 @@ impl ApodWriter {
         Ok(())
     }
 
+    pub async fn set_phashes(&self, hashes: &[(ApodDate, Vec<u8>)]) -> ApodResult<()> {
+        if hashes.is_empty() {
+            return Ok(());
+        }
+
+        let mut tx = self.db().writer()?.begin().await?;
+        for (date, phash) in hashes {
+            sqlx::query("UPDATE entries SET phash = ?2 WHERE date_id = ?1")
+                .bind(date.days())
+                .bind(phash.as_slice())
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+
+        Ok(())
+    }
+
     pub async fn fingerprints(&self) -> ApodResult<Vec<Fingerprint>> {
         let rows: Vec<(i64, Option<String>, Option<Vec<u8>>)> =
             sqlx::query_as("SELECT date_id, media_url, phash FROM entries ORDER BY date_id")

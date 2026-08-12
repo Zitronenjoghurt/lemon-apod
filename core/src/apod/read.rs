@@ -3,7 +3,7 @@ use super::query::fts_query;
 use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbError};
-use crate::entry::{ApodEntry, ApodSummary, SearchHit};
+use crate::entry::{ApodEntry, ApodSummary, Matched, SearchHit};
 use crate::media::{KindFilter, Media, MediaKind, Thumb};
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Arguments, AssertSqlSafe, Row};
@@ -235,9 +235,15 @@ impl ApodReader {
             .collect();
         let snippet_column = columns.len();
 
+        // The three short columns come back highlighted whole, which is how a hit in the credit
+        // or the keywords becomes something the reader can be shown rather than a result that
+        // looks unrelated to what they typed.
         let sql = format!(
             "SELECT {columns},
-                    snippet(entries_fts, 1, char(2), char(3), '…', {tokens})
+                    snippet(entries_fts, 1, char(2), char(3), '…', {tokens}),
+                    highlight(entries_fts, 0, char(2), char(3)),
+                    highlight(entries_fts, 2, char(2), char(3)),
+                    highlight(entries_fts, 3, char(2), char(3))
              FROM entries_fts JOIN entries ON entries.date_id = entries_fts.rowid
              {where_clause}
              ORDER BY {ordering} LIMIT ? OFFSET ?",
@@ -255,11 +261,33 @@ impl ApodReader {
         let items = rows
             .iter()
             .map(|row| {
+                let snippet: String = row.try_get(snippet_column)?;
+                let title: String = row.try_get(snippet_column + 1)?;
+                let credit: Option<String> = row.try_get(snippet_column + 2)?;
+                let keywords: Option<String> = row.try_get(snippet_column + 3)?;
+
+                let hit = |text: &Option<String>| {
+                    text.as_deref()
+                        .is_some_and(|text| text.contains(MATCH_OPEN))
+                };
+                let matched = Matched {
+                    title: title.contains(MATCH_OPEN),
+                    explanation: snippet.contains(MATCH_OPEN),
+                    credit: hit(&credit),
+                    keywords: hit(&keywords),
+                };
+
                 Ok(SearchHit {
                     entry: self.summary(row)?,
-                    snippet: self
-                        .snippet
-                        .render(&row.try_get::<String, _>(snippet_column)?),
+                    snippet: self.snippet.render(&snippet),
+                    credit: matched
+                        .credit
+                        .then(|| self.snippet.render(credit.as_deref().unwrap_or_default())),
+                    keywords: matched.keywords.then(|| {
+                        self.snippet
+                            .render(&keyword_list(keywords.as_deref().unwrap_or_default()))
+                    }),
+                    matched,
                 })
             })
             .collect::<ApodResult<Vec<_>>>()?;
@@ -284,10 +312,16 @@ impl ApodReader {
         .map(|(kind, count)| KindCount { kind, count })
         .collect();
 
-        let copyright: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM entries WHERE has_copyright = 1")
-                .fetch_one(self.db.reader())
-                .await?;
+        let (copyright, licensed): (i64, i64) = sqlx::query_as(
+            "SELECT COALESCE(SUM(has_copyright), 0), COUNT(license_url) FROM entries",
+        )
+        .fetch_one(self.db.reader())
+        .await?;
+
+        let gaps = match (first, latest) {
+            (Some(first), Some(latest)) => (latest - first + 1) - entries,
+            _ => 0,
+        };
 
         Ok(Stats {
             entries,
@@ -296,8 +330,11 @@ impl ApodReader {
             latest: latest.map(|days| ApodDate::from_days(days as i32)),
             by_media_kind,
             copyright,
+            licensed,
+            gaps,
             text: self.text_summary().await?,
             resources: self.resource_summary().await?,
+            pictures: self.picture_summary().await?,
         })
     }
 
@@ -370,6 +407,7 @@ impl ApodReader {
                 row.try_get(5)?,
                 read_thumb(row, 6)?,
             ),
+            picture: read_picture(row, 9)?,
         })
     }
 
@@ -393,11 +431,18 @@ impl ApodReader {
             ),
             extra_media: Vec::new(),
             source_url: row.try_get(16)?,
+            picture: read_picture(row, 17)?,
         })
     }
 }
 
-fn read_thumb(row: &SqliteRow, at: usize) -> ApodResult<Option<Thumb>> {
+fn read_picture(row: &SqliteRow, at: usize) -> ApodResult<Option<ApodDate>> {
+    Ok(row
+        .try_get::<Option<i64>, _>(at)?
+        .map(|days| ApodDate::from_days(days as i32)))
+}
+
+pub(super) fn read_thumb(row: &SqliteRow, at: usize) -> ApodResult<Option<Thumb>> {
     let Some(path) = row.try_get::<Option<String>, _>(at)? else {
         return Ok(None);
     };
@@ -417,6 +462,19 @@ pub(crate) fn to_dates(days: Vec<i64>) -> Vec<ApodDate> {
     days.into_iter()
         .map(|days| ApodDate::from_days(days as i32))
         .collect()
+}
+
+/// Keywords are stored as a JSON array, and FTS highlights that text verbatim. Readers want the
+/// list, not its punctuation, and the match markers sit inside the values so they survive this.
+fn keyword_list(raw: &str) -> String {
+    raw.trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .split("\",\"")
+        .map(|word| word.trim().trim_matches('"'))
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 async fn check_schema(db: &Db, path: &str) -> ApodResult<()> {

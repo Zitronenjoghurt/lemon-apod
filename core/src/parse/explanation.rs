@@ -19,17 +19,16 @@ const STOPS: &[&str] = &[
 ];
 
 pub fn parse(doc: &Html, base: &Url) -> Option<Fragment> {
-    let container = super::find_container(doc, |text| MARKER.is_match(text))?;
-    let fragment = html::sanitize(
-        container,
-        base,
-        &Options {
-            start_after: Some(&MARKER),
-            stop_at: STOPS,
-        },
-    )?;
+    let options = Options {
+        start_after: Some(&MARKER),
+        stop_at: STOPS,
+    };
 
-    (!fragment.is_empty()).then_some(fragment)
+    super::containers(doc, |text| MARKER.is_match(text))
+        .into_iter()
+        .find_map(|container| {
+            html::sanitize(container, base, &options).filter(|fragment| !fragment.is_empty())
+        })
 }
 
 #[cfg(test)]
@@ -64,6 +63,30 @@ mod tests {
         );
 
         assert_eq!(parse(&doc, &base()).unwrap().text, "Old prose here.");
+    }
+
+    #[test]
+    fn reaches_prose_that_sits_beside_the_marker_rather_than_under_it() {
+        let doc = Html::parse_document(
+            r#"<body><center><b>Conjunction Haiku</b></center>
+               <p> <b> Explanation: </b>
+               <center><i>Sister planet stands<br>together with sister stars.</i></center>
+               <p> <center><b>Tomorrow's picture: </b>moon with a view</center></body>"#,
+        );
+
+        let out = parse(&doc, &base()).unwrap();
+        assert_eq!(out.text, "Sister planet stands together with sister stars.");
+        assert!(out.html.contains("<br>"), "the line breaks are the poem");
+    }
+
+    #[test]
+    fn still_prefers_the_tightest_container_that_holds_the_prose() {
+        let doc = Html::parse_document(
+            r#"<body><center><b>Title</b></center>
+               <p><b>Explanation:</b> The real prose.</p>
+               <p>Unrelated trailing paragraph.</p></body>"#,
+        );
+        assert_eq!(parse(&doc, &base()).unwrap().text, "The real prose.");
     }
 
     #[test]

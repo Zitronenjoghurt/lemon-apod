@@ -4,6 +4,7 @@ mod config;
 mod fetch;
 mod notify;
 mod pictures;
+mod progress;
 mod reparse;
 mod report;
 mod shutdown;
@@ -114,6 +115,7 @@ enum Command {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
+        .with_writer(progress::LogWriter)
         .init();
 
     let cli = Cli::parse();
@@ -132,7 +134,7 @@ async fn main() -> Result<()> {
             limit,
         } => {
             let index = ApodWriter::open(&cfg.index_db).await?;
-            report::quality(index.reader(), date, warning.as_deref(), limit).await
+            report::quality(&cfg, index.reader(), date, warning.as_deref(), limit).await
         }
         Command::Sky => sky::poll(&cfg).await,
         Command::Notify { seed, dry_run } => notify_once(cfg, seed, dry_run).await,
@@ -214,6 +216,11 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     let index = ApodWriter::open(&cfg.index_db).await?;
     let today = workers::today_in(cfg.daily.timezone);
 
+    let bar = match limit {
+        Some(limit) => progress::bar("backfill", limit),
+        None => progress::spinner("backfill", "fetching until the archive is complete"),
+    };
+
     let mut done = 0;
     while limit.is_none_or(|limit| done < limit) {
         let Some(date) = archive.next_target(today).await? else {
@@ -221,8 +228,10 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
             break;
         };
 
+        bar.set_message(date.to_string());
         workers::step(&cfg, &client, &archive, &index, date).await;
         done += 1;
+        bar.inc(1);
 
         if limit.is_none_or(|limit| done < limit) {
             tokio::time::sleep(workers::jitter(
@@ -233,7 +242,7 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
         }
     }
 
-    tracing::info!(fetched = done, "backfill finished");
+    progress::done(&bar, format!("fetched {done} pages"));
     Ok(())
 }
 
@@ -268,19 +277,22 @@ async fn reparse_range(
 ) -> Result<()> {
     let index = ApodWriter::open(&cfg.index_db).await?;
 
+    let scan = progress::spinner("scanning", "looking for pages to reparse");
     let mut dates = if stale {
         index.stale_dates().await?
     } else {
         reparse::archived_dates(&cfg.html_dir)?
     };
     dates.retain(|date| from.is_none_or(|from| *date >= from) && to.is_none_or(|to| *date <= to));
+    scan.finish_and_clear();
 
-    println!("reparsing {} entries...", dates.len());
     let report = reparse::run(&cfg, &index, &dates).await?;
     println!("parsed {}", report.parsed);
 
+    let grouping = progress::spinner("grouping", "comparing every picture against every other");
     let pictures = index.regroup_pictures().await?;
-    println!("{} pictures have run more than once", pictures.len());
+    grouping.finish_and_clear();
+    println!("{} pictures have been shown more than once", pictures.len());
 
     if !report.failed.is_empty() {
         println!("failed {}:", report.failed.len());
@@ -316,7 +328,7 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
         None => &targets[..],
     };
 
-    println!("generating up to {} thumbnails...", targets.len());
+    let bar = progress::bar("thumbs", targets.len());
     let (mut written, mut adopted, mut skipped, mut failed) = (0, 0, 0, 0);
     let mut pace = false;
 
@@ -325,13 +337,14 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
             tokio::time::sleep(workers::jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
         }
 
+        bar.set_message(date.to_string());
         let outcome = thumbs::generate(&cfg, &client, &index, *date, media, force).await?;
         pace = outcome.fetched();
 
         match outcome {
             thumbs::Generated::Written => {
                 written += 1;
-                tracing::info!(%date, "thumbnail written");
+                tracing::debug!(%date, "thumbnail written");
             }
             thumbs::Generated::Adopted => {
                 adopted += 1;
@@ -343,14 +356,19 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
                 tracing::warn!(%date, %reason, "thumbnail failed");
             }
         }
+        bar.inc(1);
     }
 
-    println!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}");
+    progress::done(
+        &bar,
+        format!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}"),
+    );
 
     let report = pictures::refresh(&cfg, &index, false).await?;
     println!(
-        "hashed {} more thumbnails, {} pictures have run more than once",
+        "hashed {} more thumbnails, {} failed, {} pictures have been shown more than once",
         report.hashed,
+        report.failed,
         report.groups.len()
     );
     Ok(())
@@ -359,17 +377,10 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
 async fn group_pictures(cfg: Config, force: bool, show: usize) -> Result<()> {
     let index = ApodWriter::open(&cfg.index_db).await?;
 
-    let pending = if force {
-        index.stored_thumbs().await?.len()
-    } else {
-        index.unhashed_thumbs().await?.len()
-    };
-    println!("hashing {pending} thumbnails...");
-
     let report = pictures::refresh(&cfg, &index, force).await?;
     println!("hashed {}, failed {}", report.hashed, report.failed);
     println!(
-        "{} pictures have run more than once, across {} entries",
+        "{} pictures have been shown more than once, across {} entries",
         report.groups.len(),
         report.entries()
     );
@@ -382,7 +393,7 @@ async fn group_pictures(cfg: Config, force: bool, show: usize) -> Result<()> {
             Some(entry) => entry.title,
             None => String::from("?"),
         };
-        println!("  {} runs  {title}", group.dates.len());
+        println!("  shown {}x  {title}", group.dates.len());
         println!(
             "            {}",
             group
@@ -397,10 +408,17 @@ async fn group_pictures(cfg: Config, force: bool, show: usize) -> Result<()> {
     Ok(())
 }
 async fn measure_existing(cfg: &Config, index: &ApodWriter) -> Result<usize> {
+    let pending = index.unmeasured_thumbs().await?;
+    if pending.is_empty() {
+        return Ok(0);
+    }
+
+    let bar = progress::bar("measuring", pending.len());
     let mut done = 0;
 
-    for (date, stored_path) in index.unmeasured_thumbs().await? {
+    for (date, stored_path) in pending {
         let thumb = thumbs::measured(&stored_path, &cfg.thumb_dir.join(&stored_path));
+        bar.inc(1);
         if thumb.width.is_none() {
             continue;
         }
@@ -409,5 +427,6 @@ async fn measure_existing(cfg: &Config, index: &ApodWriter) -> Result<usize> {
         done += 1;
     }
 
+    bar.finish_and_clear();
     Ok(done)
 }

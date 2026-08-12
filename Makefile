@@ -1,5 +1,5 @@
 DATA ?= $(CURDIR)/data
-ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-archiver --
+ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q --profile cli -p apod-archiver --
 API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p apod-api
 COMPOSE = docker compose -f docker/compose.yaml
 
@@ -46,7 +46,7 @@ reparse: ## Rebuild the index from the HTML on disk
 thumbs: ## Generate any missing thumbnails
 	$(ARCHIVER) thumbs
 
-pictures: ## Hash thumbnails and group the pictures the archive has run more than once
+pictures: ## Hash thumbnails and group the pictures the archive has shown more than once
 	$(ARCHIVER) pictures
 
 sky: ## Poll the launch and space weather feeds once into ./data/sky.db

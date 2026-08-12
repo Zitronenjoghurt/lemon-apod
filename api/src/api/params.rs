@@ -1,5 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use apod_core::{ApodDate, Filters, KindFilter, Order, ResourceOrder, WordOrder};
+use apod_core::{ApodDate, Filters, KindFilter, Order, PictureOrder, ResourceOrder, WordOrder};
 use std::str::FromStr;
 
 pub fn date(raw: &str) -> ApiResult<ApodDate> {
@@ -54,6 +54,17 @@ pub fn resource_order(raw: Option<&str>) -> ApiResult<ResourceOrder> {
         Some("last") => Ok(ResourceOrder::Last),
         Some("label") => Ok(ResourceOrder::Label),
         Some("address") => Ok(ResourceOrder::Address),
+        Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
+    }
+}
+
+pub fn picture_order(raw: Option<&str>) -> ApiResult<PictureOrder> {
+    match raw {
+        None | Some("appearances") => Ok(PictureOrder::Appearances),
+        Some("first") => Ok(PictureOrder::First),
+        Some("last") => Ok(PictureOrder::Last),
+        Some("span") => Ok(PictureOrder::Span),
+        Some("title") => Ok(PictureOrder::Title),
         Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
     }
 }

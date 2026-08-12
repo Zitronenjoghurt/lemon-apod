@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::progress;
 use anyhow::{Context, Result};
 use apod_core::{ApodDate, ApodEntry, ApodWriter, parse};
 use std::path::Path;
@@ -13,7 +14,11 @@ pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result
     let mut entries: Vec<ApodEntry> = Vec::with_capacity(dates.len());
     let mut report = Report::default();
 
+    let bar = progress::bar("parsing", dates.len());
     for &date in dates {
+        bar.set_message(date.to_string());
+        bar.inc(1);
+
         let path = cfg.html_path(date);
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => bytes,
@@ -30,12 +35,16 @@ pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result
             Err(error) => report.failed.push((date, error.to_string())),
         }
     }
+    bar.finish_and_clear();
 
     report.parsed = entries.len();
+
+    let writing = progress::spinner("indexing", format!("writing {} entries", entries.len()));
     index
         .upsert_all(&entries)
         .await
         .context("writing the reparsed index")?;
+    writing.finish_and_clear();
 
     Ok(report)
 }

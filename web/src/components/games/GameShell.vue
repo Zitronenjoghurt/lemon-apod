@@ -151,7 +151,6 @@ h1 {
 
 .blurb {
   margin: 0;
-  max-width: 62ch;
   text-wrap: pretty;
 }
 

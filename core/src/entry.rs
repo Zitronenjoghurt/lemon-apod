@@ -32,6 +32,11 @@ pub struct ApodEntry {
     pub extra_media: Vec<Media>,
     /// The page on apod.nasa.gov this was archived from.
     pub source_url: String,
+    /// Set when this entry's picture ran on more than one date. The value is the date it first
+    /// ran, which is also how the picture is addressed. Filled in by readers, not by the parser:
+    /// whether a picture is a rerun is a fact about the archive, not about the page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<ApodDate>,
 }
 
 /// One labelled line of an entry's attribution block, such as `Image Credit & Copyright` or
@@ -70,6 +75,7 @@ impl ApodEntry {
             title: self.title.clone(),
             media: self.media.clone(),
             has_copyright: self.has_copyright,
+            picture: self.picture,
         }
     }
 }
@@ -80,6 +86,9 @@ pub struct ApodSummary {
     pub title: String,
     pub media: Media,
     pub has_copyright: bool,
+    /// See [`ApodEntry::picture`]. What lets a listing mark a rerun without asking per card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<ApodDate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +96,25 @@ pub struct SearchHit {
     #[serde(flatten)]
     pub entry: ApodSummary,
     pub snippet: String,
+    pub matched: Matched,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keywords: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Matched {
+    pub title: bool,
+    pub explanation: bool,
+    pub credit: bool,
+    pub keywords: bool,
+}
+
+impl Matched {
+    pub fn only_beyond_the_prose(&self) -> bool {
+        !self.explanation && !self.title && (self.credit || self.keywords)
+    }
 }
 
 fn truncate_on_word_boundary(text: &str, max_chars: usize) -> String {

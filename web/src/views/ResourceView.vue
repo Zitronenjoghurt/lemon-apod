@@ -1,12 +1,12 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import {computed, ref, watch} from 'vue'
+import {RouterLink, useRoute} from 'vue-router'
 import EntryGrid from '@/components/EntryGrid.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import { api } from '@/api/client'
-import { useAsync } from '@/composables/useAsync'
-import { useNarrow } from '@/composables/useNarrow'
-import { formatDate } from '@/utils/date'
+import {api} from '@/api/client'
+import {useAsync} from '@/composables/useAsync'
+import {useNarrow} from '@/composables/useNarrow'
+import {formatDate} from '@/utils/date'
 
 const PAGE_SIZE = 30
 
@@ -35,19 +35,9 @@ function onPage(event: { page: number }) {
 }
 
 const resource = computed(() => data.value?.resource)
-
 const address = computed(() => resource.value?.key ?? '')
-
 const name = computed(() => resource.value?.label?.trim() || address.value)
-
-const anchors = computed(() => {
-  const counts = new Map<string, number>()
-  for (const item of data.value?.items ?? []) {
-    const anchor = item.anchor.trim()
-    if (anchor) counts.set(anchor, (counts.get(anchor) ?? 0) + 1)
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
-})
+const anchors = computed(() => data.value?.anchors ?? [])
 </script>
 
 <template>
@@ -106,8 +96,8 @@ const anchors = computed(() => {
         <div v-if="anchors.length > 1" class="stack anchors">
           <h2>Called</h2>
           <ul class="row">
-            <li v-for="[anchor, times] in anchors" :key="anchor">
-              {{ anchor }}<span v-if="times > 1" class="muted times"> &times;{{ times }}</span>
+            <li v-for="{ anchor, entries } in anchors" :key="anchor">
+              {{ anchor }}<span v-if="entries > 1" class="muted times"> &times;{{ entries }}</span>
             </li>
           </ul>
         </div>
@@ -125,9 +115,9 @@ const anchors = computed(() => {
       <EntryGrid :entries="data.items" :loading="loading" empty="Nothing references this." />
 
       <Paginator
-        :page-link-size="pageLinks"
         v-if="data.total > PAGE_SIZE"
         :first="(page - 1) * PAGE_SIZE"
+        :page-link-size="pageLinks"
         :rows="PAGE_SIZE"
         :total-records="data.total"
         @page="onPage"

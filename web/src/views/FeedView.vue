@@ -370,7 +370,6 @@ h1 {
 .note {
   margin: 0;
   font-size: 0.85rem;
-  max-width: 34ch;
   text-wrap: pretty;
 }
 

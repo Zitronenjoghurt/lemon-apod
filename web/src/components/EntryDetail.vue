@@ -5,13 +5,13 @@ import { useToast } from 'primevue/usetoast'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
 import { api } from '@/api/client'
-import type { ApodEntry, ApodSummary } from '@/api/types'
+import type { ApodEntry, ApodSummary, PictureAppearances } from '@/api/types'
 import { useArrowKeys } from '@/composables/useArrowKeys'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
 import { withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
-import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay } from '@/utils/date'
+import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay, year } from '@/utils/date'
 import { highlightHtml, highlightText, HIT_CLASS } from '@/utils/highlight'
 import { queryTerms } from '@/utils/searchQuery'
 
@@ -26,6 +26,7 @@ const toast = useToast()
 const { isFavorite, toggle } = useFavorites()
 const { isRead, markRead, toggleRead } = useRead()
 const alsoOnThisDay = ref<ApodSummary[]>([])
+const encore = ref<PictureAppearances | null>(null)
 const prose = ref<HTMLElement>()
 
 const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
@@ -83,6 +84,17 @@ async function loadOnThisDay() {
     alsoOnThisDay.value = entries.filter((item) => item.date !== props.entry.date)
   } catch {
     alsoOnThisDay.value = []
+  }
+}
+
+async function loadEncore() {
+  encore.value = null
+  if (!props.entry.picture) return
+
+  try {
+    encore.value = await api.picture(props.entry.date)
+  } catch {
+    encore.value = null
   }
 }
 
@@ -147,6 +159,8 @@ useArrowKeys({
 
 watch(() => props.entry.date, loadOnThisDay, { immediate: true })
 
+watch(() => props.entry.date, loadEncore, { immediate: true })
+
 watch(
   () => props.entry.date,
   (date) => markRead(date),
@@ -195,6 +209,32 @@ watch([() => props.entry.date, hits], async () => {
       <h1 v-if="title" class="title" v-html="title" />
       <h1 v-else class="title">{{ entry.title }}</h1>
     </header>
+
+    <nav
+      v-if="encore && encore.items.length > 1"
+      aria-label="Other days this picture ran"
+      class="row encore"
+    >
+      <RouterLink :to="`/pictures/${encore.picture.id}`" class="lead">
+        <i aria-hidden="true" class="pi pi-replay" />
+        Shown {{ encore.picture.appearances }} times
+      </RouterLink>
+
+      <ol class="row stops">
+        <li v-for="item in encore.items" :key="item.date">
+          <span v-if="item.date === entry.date" aria-current="page" class="stop here">
+            {{ year(item.date) }}
+          </span>
+          <RouterLink v-else :title="formatDate(item.date)" :to="`/${item.date}`" class="stop">
+            {{ year(item.date) }}
+          </RouterLink>
+        </li>
+      </ol>
+
+      <RouterLink :to="`/pictures/${encore.picture.id}`" class="all">
+        What changed <i aria-hidden="true" class="pi pi-arrow-right" />
+      </RouterLink>
+    </nav>
 
     <div v-if="highlight" class="row hits">
       <i aria-hidden="true" class="pi pi-search" />
@@ -337,6 +377,77 @@ watch([() => props.entry.date, hits], async () => {
 </template>
 
 <style scoped>
+.encore {
+  gap: 0.5rem 0.7rem;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  font-size: 0.82rem;
+}
+
+.encore .lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.encore .lead:hover {
+  color: var(--text);
+}
+
+.encore .stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.encore .stop {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.encore a.stop:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.encore .stop.here {
+  color: var(--accent);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.encore .all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.encore .all:hover {
+  color: var(--accent);
+}
+
+.encore .all i {
+  font-size: 0.7em;
+}
+
 .entry {
   display: flex;
   flex-direction: column;

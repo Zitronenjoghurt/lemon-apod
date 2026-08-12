@@ -1,5 +1,5 @@
 use super::model::{Cloze, ClozePiece, PictureSummary};
-use super::read::{to_dates, ApodReader, ApodResult};
+use super::read::{ApodReader, ApodResult, to_dates};
 use crate::date::ApodDate;
 use crate::entry::ApodSummary;
 use crate::text;

@@ -420,7 +420,6 @@ h1 {
 
 .blurb {
   margin: 0;
-  max-width: 62ch;
   text-wrap: pretty;
 }
 
@@ -776,6 +775,5 @@ h1 {
   margin: 0;
   font-size: 0.8rem;
   text-wrap: pretty;
-  max-width: 70ch;
 }
 </style>

@@ -49,8 +49,11 @@ pub struct Stats {
     pub latest: Option<ApodDate>,
     pub by_media_kind: Vec<KindCount>,
     pub copyright: i64,
+    pub licensed: i64,
+    pub gaps: i64,
     pub text: TextSummary,
     pub resources: ResourceSummary,
+    pub pictures: PictureSummary,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -76,6 +79,8 @@ pub struct TextSummary {
     pub distinct_words: i64,
     pub avg_words: f64,
     pub median_words: i64,
+    pub p25_words: i64,
+    pub p75_words: i64,
     pub min_words: i64,
     pub max_words: i64,
     pub avg_unique_words: f64,
@@ -84,10 +89,20 @@ pub struct TextSummary {
     pub avg_words_per_sentence: f64,
     pub avg_links: f64,
     pub used_once: i64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lengths: Vec<LengthBucket>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shortest: Option<EntryLength>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub longest: Option<EntryLength>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct LengthBucket {
+    pub from: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub to: Option<i64>,
+    pub entries: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -182,6 +197,71 @@ pub struct ResourceRefs {
     pub resource: Resource,
     pub items: Vec<ResourceRef>,
     pub total: i64,
+    pub anchors: Vec<AnchorCount>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AnchorCount {
+    pub anchor: String,
+    pub entries: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Picture {
+    pub id: ApodDate,
+    pub title: String,
+    pub media: crate::media::Media,
+    pub appearances: i64,
+    pub first: ApodDate,
+    pub last: ApodDate,
+    pub titles: i64,
+    pub span_days: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PictureFilters {
+    pub query: Option<String>,
+    pub min_appearances: Option<i64>,
+    pub retitled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PictureOrder {
+    #[default]
+    Appearances,
+    First,
+    Last,
+    Span,
+    Title,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PictureAppearances {
+    pub picture: Picture,
+    pub items: Vec<Appearance>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Appearance {
+    #[serde(flatten)]
+    pub entry: crate::entry::ApodSummary,
+    pub changed: Changed,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since_previous_days: Option<i64>,
+}
+
+#[derive(Debug, Default, Serialize, PartialEq, Eq)]
+pub struct Changed {
+    pub title: bool,
+    pub explanation: bool,
+    pub credit: bool,
+    pub file: bool,
+}
+
+impl Changed {
+    pub fn any(&self) -> bool {
+        self.title || self.explanation || self.credit || self.file
+    }
 }
 
 #[derive(Debug, Serialize)]

@@ -257,14 +257,20 @@ impl Media {
 
     pub fn video_id(&self) -> Option<&str> {
         let url = self.url.as_deref()?;
-        let path = url.split(['?', '#']).next().unwrap_or(url);
+        let path = url.split(['?', '#', '&']).next().unwrap_or(url);
         let id = match self.kind {
             MediaKind::YouTube => path
                 .rsplit_once("/embed/")
                 .or_else(|| path.rsplit_once("youtu.be/"))
                 .or_else(|| path.rsplit_once("/v/"))
                 .map(|(_, id)| id),
-            MediaKind::Vimeo => path.rsplit_once("/video/").map(|(_, id)| id),
+            MediaKind::Vimeo => match path.rsplit_once("/video/") {
+                Some((_, id)) => Some(id),
+                None => url
+                    .split(['?', '&'])
+                    .skip(1)
+                    .find_map(|pair| pair.strip_prefix("clip_id=")),
+            },
             _ => None,
         }?;
 
@@ -381,6 +387,26 @@ mod tests {
             None,
         );
         assert_eq!(vimeo.video_id(), Some("12345678"));
+    }
+
+    #[test]
+    fn a_flash_era_embed_keeps_its_parameters_out_of_the_id() {
+        for url in [
+            "https://www.youtube.com/v/zlfKdbWwruY&hl=en_US&fs=1?rel=0&hd=1",
+            "https://www.youtube.com/v/zlfKdbWwruY&hl=en_US&fs=1&",
+            "https://www.youtube.com/v/zlfKdbWwruY?fs=1&hl=en_US",
+            "https://www.youtube.com/v/zlfKdbWwruY",
+        ] {
+            let media = Media::new(MediaKind::YouTube, Some(url.into()), None);
+            assert_eq!(media.video_id(), Some("zlfKdbWwruY"), "from {url}");
+        }
+
+        let vimeo = Media::new(
+            MediaKind::Vimeo,
+            Some("https://www.vimeo.com/moogaloop.swf?clip_id=1250929&server=www.vimeo.com".into()),
+            None,
+        );
+        assert_eq!(vimeo.video_id(), Some("1250929"));
     }
 
     #[test]

@@ -1,15 +1,15 @@
 <script lang="ts" setup>
-import {computed} from 'vue'
-import {useStatus} from '@/composables/useStatus'
+import { computed } from 'vue'
+import { useStatus } from '@/composables/useStatus'
 
-defineOptions({name: 'NotificationsView'})
+defineOptions({ name: 'NotificationsView' })
 
 const NTFY_ANDROID = 'https://play.google.com/store/apps/details?id=io.heckel.ntfy'
 const NTFY_IOS = 'https://apps.apple.com/us/app/ntfy/id1625396347'
 const NTFY_FDROID = 'https://f-droid.org/en/packages/io.heckel.ntfy/'
 const NTFY_DOCS = 'https://docs.ntfy.sh/subscribe/phone/'
 
-const {notify, loaded} = useStatus()
+const { notify, loaded } = useStatus()
 
 const base = computed(() => notify.value?.base_url ?? '')
 
@@ -103,7 +103,7 @@ function appLink(topic: string): string {
       <ul class="items">
         <li v-for="feed in feeds" :key="feed.href">
           <a :href="feed.href">
-            <i :class="feed.icon" aria-hidden="true"/>
+            <i :class="feed.icon" aria-hidden="true" />
             <span class="text">
               <span class="value">{{ feed.label }}</span>
               <span class="muted label">{{ feed.hint }}</span>
@@ -118,8 +118,8 @@ function appLink(topic: string): string {
       <h2 class="muted">NTFY Push</h2>
 
       <div v-if="!loaded" class="stack">
-        <Skeleton height="3rem"/>
-        <Skeleton height="3rem"/>
+        <Skeleton height="3rem" />
+        <Skeleton height="3rem" />
       </div>
 
       <p v-else-if="!anyTopic" class="note">
@@ -134,14 +134,14 @@ function appLink(topic: string): string {
 
         <ul class="topics">
           <li v-for="entry in topics" :key="entry.key">
-            <i :class="entry.icon" aria-hidden="true"/>
+            <i :class="entry.icon" aria-hidden="true" />
             <span class="text">
               <span class="value">{{ entry.label }}</span>
               <span class="muted label">{{ entry.hint }}</span>
             </span>
             <span class="foot">
               <a v-if="isAndroid" :href="appLink(entry.topic)" class="plain">
-                <Button icon="pi pi-mobile" label="Open in app" size="small"/>
+                <Button icon="pi pi-mobile" label="Open in app" size="small" />
               </a>
               <code class="url">{{ topicUrl(entry.topic) }}</code>
               <span class="muted cadence">{{ entry.cadence }}</span>
@@ -193,7 +193,6 @@ h1 {
 
 .lede {
   margin: 0;
-  max-width: 62ch;
   text-wrap: pretty;
 }
 
@@ -215,7 +214,6 @@ h1 {
   margin: 0;
   font-size: 0.85rem;
   text-wrap: pretty;
-  max-width: 62ch;
 }
 
 .items {

@@ -1,11 +1,17 @@
 use crate::config::Config;
+use crate::progress;
 use anyhow::{Context, Result};
 use apod_core::apod::pictures::{PHASH_BYTES, PictureGroup};
 use apod_core::{ApodDate, ApodWriter};
 use std::path::Path;
+use tokio::task::JoinSet;
 
 const ROWS: u32 = 16;
 const COLUMNS: u32 = ROWS + 1;
+
+fn workers() -> usize {
+    std::thread::available_parallelism().map_or(4, |cores| cores.get().saturating_sub(2).max(1))
+}
 
 pub struct Report {
     pub hashed: usize,
@@ -91,13 +97,51 @@ pub async fn refresh(cfg: &Config, index: &ApodWriter, force: bool) -> Result<Re
         index.unhashed_thumbs().await?
     };
 
-    let (mut hashed, mut failed) = (0, 0);
-    for (date, stored_path) in pending {
-        match phash(&cfg.thumb_dir.join(&stored_path)) {
-            Ok(phash) => {
-                index.set_phash(date, Some(&phash)).await?;
-                hashed += 1;
-            }
+    let (hashes, failed) = hash_all(cfg, pending).await?;
+    let hashed = hashes.len();
+
+    let writing = progress::spinner("storing", format!("{hashed} hashes"));
+    index.set_phashes(&hashes).await?;
+    writing.finish_and_clear();
+
+    let grouping = progress::spinner("grouping", "comparing every picture against every other");
+    let groups = index.regroup_pictures().await?;
+    grouping.finish_and_clear();
+
+    Ok(Report {
+        hashed,
+        failed,
+        groups,
+    })
+}
+
+async fn hash_all(
+    cfg: &Config,
+    pending: Vec<(ApodDate, String)>,
+) -> Result<(Vec<(ApodDate, Vec<u8>)>, usize)> {
+    let bar = progress::bar("hashing", pending.len());
+    let mut queued = pending.into_iter();
+    let mut running = JoinSet::new();
+    let mut hashes = Vec::new();
+    let mut failed = 0;
+    let limit = workers();
+
+    loop {
+        while running.len() < limit
+            && let Some((date, stored_path)) = queued.next()
+        {
+            let path = cfg.thumb_dir.join(&stored_path);
+            running.spawn_blocking(move || (date, phash(&path)));
+        }
+
+        let Some(finished) = running.join_next().await else {
+            break;
+        };
+
+        let (date, result) = finished.context("hashing a thumbnail")?;
+        bar.inc(1);
+        match result {
+            Ok(phash) => hashes.push((date, phash)),
             Err(error) => {
                 failed += 1;
                 tracing::warn!(%date, "could not hash the thumbnail: {error:#}");
@@ -105,11 +149,10 @@ pub async fn refresh(cfg: &Config, index: &ApodWriter, force: bool) -> Result<Re
         }
     }
 
-    Ok(Report {
-        hashed,
-        failed,
-        groups: index.regroup_pictures().await?,
-    })
+    bar.finish_and_clear();
+    hashes.sort_unstable_by_key(|(date, _)| *date);
+
+    Ok((hashes, failed))
 }
 
 #[cfg(test)]

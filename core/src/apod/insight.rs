@@ -1,13 +1,15 @@
 use super::catalogue::{contains, days, escape_like};
 use super::model::{
-    Coverage, EntryLength, Listing, MonthCount, Order, ResourceSummary, TextSummary, Timeline,
-    Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
+    Coverage, EntryLength, LengthBucket, Listing, MonthCount, Order, ResourceSummary, TextSummary,
+    Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
 };
 use super::read::{ApodReader, ApodResult, Param, arguments};
 use sqlx::{AssertSqlSafe, Row};
 
 const YEAR: &str = "CAST(substr(entries.date, 1, 4) AS INTEGER)";
 const MONTH: &str = "CAST(substr(entries.date, 6, 2) AS INTEGER)";
+
+const LENGTH_EDGES: &[i64] = &[50, 100, 150, 200, 300, 500];
 
 impl ApodReader {
     pub async fn text_summary(&self) -> ApodResult<TextSummary> {
@@ -39,12 +41,9 @@ impl ApodReader {
         .fetch_one(self.db().reader())
         .await?;
 
-        let median_words: i64 = sqlx::query_scalar(
-            "SELECT word_count FROM entry_stats ORDER BY word_count
-             LIMIT 1 OFFSET (SELECT COUNT(*) / 2 FROM entry_stats)",
-        )
-        .fetch_one(self.db().reader())
-        .await?;
+        let median_words = self.percentile_words(50).await?;
+        let p25_words = self.percentile_words(25).await?;
+        let p75_words = self.percentile_words(75).await?;
 
         let (distinct_words, used_once): (i64, i64) =
             sqlx::query_as("SELECT COUNT(*), COALESCE(SUM(total = 1), 0) FROM words")
@@ -57,6 +56,8 @@ impl ApodReader {
             distinct_words,
             avg_words,
             median_words,
+            p25_words,
+            p75_words,
             min_words,
             max_words,
             avg_unique_words: avg_unique,
@@ -65,9 +66,55 @@ impl ApodReader {
             avg_words_per_sentence: ratio(total_words, sentences),
             avg_links,
             used_once,
+            lengths: self.length_buckets().await?,
             shortest: self.extreme(Order::Asc).await?,
             longest: self.extreme(Order::Desc).await?,
         })
+    }
+
+    async fn percentile_words(&self, percent: i64) -> ApodResult<i64> {
+        sqlx::query_scalar(
+            "SELECT word_count FROM entry_stats ORDER BY word_count
+             LIMIT 1 OFFSET (SELECT COUNT(*) * ?1 / 100 FROM entry_stats)",
+        )
+        .bind(percent)
+        .fetch_one(self.db().reader())
+        .await
+        .map_err(Into::into)
+    }
+
+    async fn length_buckets(&self) -> ApodResult<Vec<LengthBucket>> {
+        let edges = LENGTH_EDGES;
+        let cases: String = edges
+            .iter()
+            .enumerate()
+            .map(|(index, edge)| format!("WHEN word_count < {edge} THEN {index} "))
+            .collect();
+
+        let counted: Vec<(i64, i64)> = sqlx::query_as(AssertSqlSafe(format!(
+            "SELECT CASE {cases}ELSE {} END AS band, COUNT(*)
+             FROM entry_stats GROUP BY band ORDER BY band",
+            edges.len()
+        )))
+        .fetch_all(self.db().reader())
+        .await?;
+
+        let mut bands: Vec<LengthBucket> = (0..=edges.len())
+            .map(|band| LengthBucket {
+                from: band.checked_sub(1).map_or(0, |below| edges[below]),
+                to: edges.get(band).map(|edge| edge - 1),
+                entries: counted
+                    .iter()
+                    .find(|(at, _)| *at == band as i64)
+                    .map_or(0, |(_, count)| *count),
+            })
+            .collect();
+
+        while bands.len() > 1 && bands.last().is_some_and(|band| band.entries == 0) {
+            bands.pop();
+        }
+
+        Ok(bands)
     }
 
     pub async fn resource_summary(&self) -> ApodResult<ResourceSummary> {

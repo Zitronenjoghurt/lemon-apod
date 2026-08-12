@@ -25,6 +25,15 @@ pub fn parse_bytes(date: ApodDate, bytes: &[u8]) -> Result<ApodEntry, ParseError
     parse_page(date, &text)
 }
 
+pub fn attributes_anyone(raw: &str) -> bool {
+    credit::attributes_anyone(&Html::parse_document(raw))
+}
+
+pub fn bytes_attribute_anyone(bytes: &[u8]) -> bool {
+    let (text, _) = decode::decode_html(bytes);
+    attributes_anyone(&text)
+}
+
 pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
     let doc = Html::parse_document(raw);
     let base = page_base(date);
@@ -48,6 +57,7 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
         media,
         extra_media,
         source_url: date.source_url(),
+        picture: None,
     })
 }
 
@@ -60,14 +70,19 @@ static CONTAINERS: LazyLock<Selector> = LazyLock::new(|| {
     Selector::parse("p, td, div, center, body").expect("static selector is valid")
 });
 
-/// The tightest element whose text satisfies `matches`. Tightest, because APOD's older pages
-/// wrap the whole entry in one table cell and the smallest match is the least surrounding noise.
 fn find_container(doc: &Html, matches: impl Fn(&str) -> bool) -> Option<ElementRef<'_>> {
-    doc.select(&CONTAINERS)
+    containers(doc, matches).into_iter().next()
+}
+
+fn containers(doc: &Html, matches: impl Fn(&str) -> bool) -> Vec<ElementRef<'_>> {
+    let mut found: Vec<(usize, ElementRef<'_>)> = doc
+        .select(&CONTAINERS)
         .filter_map(|el| {
             let text = el.text().collect::<String>();
             matches(&text).then_some((text.len(), el))
         })
-        .min_by_key(|(len, _)| *len)
-        .map(|(_, el)| el)
+        .collect();
+
+    found.sort_by_key(|(len, _)| *len);
+    found.into_iter().map(|(_, el)| el).collect()
 }

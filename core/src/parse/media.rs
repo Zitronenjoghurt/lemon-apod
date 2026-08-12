@@ -4,9 +4,14 @@ use scraper::{ElementRef, Html, Selector};
 use std::sync::LazyLock;
 use url::Url;
 
-static MEDIA: LazyLock<Selector> = LazyLock::new(|| Selector::parse("img, iframe, video").unwrap());
+static MEDIA: LazyLock<Selector> =
+    LazyLock::new(|| Selector::parse("img, iframe, video, embed, object").unwrap());
 static ANCHORS: LazyLock<Selector> = LazyLock::new(|| Selector::parse("a[href]").unwrap());
 static SOURCE: LazyLock<Selector> = LazyLock::new(|| Selector::parse("source[src]").unwrap());
+static EMBED: LazyLock<Selector> = LazyLock::new(|| Selector::parse("embed[src]").unwrap());
+static PLAYS: LazyLock<Selector> = LazyLock::new(|| {
+    Selector::parse(r#"param[name="movie" i][value], param[name="filename" i][value]"#).unwrap()
+});
 static TWEET: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(r#"blockquote.twitter-tweet a[href*="/status/"]"#).unwrap());
 
@@ -49,6 +54,14 @@ fn from_element(doc: &Html, el: ElementRef<'_>, base: &Url, primary: bool) -> Op
             })?;
             let url = http_url(base, &src)?;
             Some(Media::new(MediaKind::from_url(&url), Some(url), None))
+        }
+        "embed" => {
+            let url = http_url(base, el.value().attr("src")?)?;
+            Some(Media::new(MediaKind::from_embed_url(&url), Some(url), None))
+        }
+        "object" if el.select(&EMBED).next().is_none() => {
+            let url = http_url(base, el.select(&PLAYS).next()?.value().attr("value")?)?;
+            Some(Media::new(MediaKind::from_embed_url(&url), Some(url), None))
         }
         _ => None,
     }
@@ -192,6 +205,52 @@ mod tests {
             media.url.as_deref(),
             Some("https://apod.nasa.gov/apod/image/2403/clip.mp4")
         );
+    }
+
+    #[test]
+    fn reads_a_flash_era_youtube_embed_as_the_video_it_plays() {
+        let doc = Html::parse_document(
+            r#"<body><object width="900" height="536">
+               <param name="movie" value="http://www.youtube.com/v/fKTu6B4Rgek?fs=1&amp;rel=0">
+               <embed src="https://www.youtube.com/v/fKTu6B4Rgek?fs=1&amp;rel=0"
+               type="application/x-shockwave-flash"></embed></object></body>"#,
+        );
+
+        let (media, extra) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::YouTube);
+        assert_eq!(media.video_id(), Some("fKTu6B4Rgek"));
+        assert!(
+            extra.is_empty(),
+            "the <object> and its <embed> name one video, not two"
+        );
+    }
+
+    #[test]
+    fn an_object_with_no_embed_still_names_what_it_plays() {
+        let doc = Html::parse_document(
+            r#"<body><object width="900" height="536">
+               <param name="movie" value="image/1203/scaleofuniverse_huang.swf?border=white">
+               </object></body>"#,
+        );
+
+        let (media, _) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::Embed);
+        assert_eq!(
+            media.url.as_deref(),
+            Some("https://apod.nasa.gov/apod/image/1203/scaleofuniverse_huang.swf?border=white")
+        );
+    }
+
+    #[test]
+    fn a_flash_era_vimeo_embed_keeps_its_clip_id() {
+        let doc = Html::parse_document(
+            r#"<body><embed src="https://www.vimeo.com/moogaloop.swf?clip_id=1250929&amp;color="
+               type="application/x-shockwave-flash"></embed></body>"#,
+        );
+
+        let (media, _) = parse(&doc, &base());
+        assert_eq!(media.kind, MediaKind::Vimeo);
+        assert_eq!(media.video_id(), Some("1250929"));
     }
 
     #[test]

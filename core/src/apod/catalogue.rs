@@ -1,6 +1,7 @@
 use super::SUMMARY_COLUMNS;
 use super::model::{
-    HostCount, Listing, Order, Resource, ResourceFilters, ResourceOrder, ResourceRef, ResourceRefs,
+    AnchorCount, HostCount, Listing, Order, Resource, ResourceFilters, ResourceOrder, ResourceRef,
+    ResourceRefs,
 };
 use super::read::{ApodReader, ApodResult, Param, arguments};
 use crate::date::ApodDate;
@@ -10,6 +11,8 @@ use sqlx::{AssertSqlSafe, Row};
 
 const RESOURCE_COLUMNS: &str = "r.id, r.scheme, r.key, r.host, r.label, r.refs, r.entries, \
                                 r.credited, r.first_id, r.last_id";
+
+const ANCHOR_LIMIT: i64 = 12;
 
 impl ApodReader {
     pub async fn resources(
@@ -103,7 +106,26 @@ impl ApodReader {
             resource,
             items,
             total,
+            anchors: self.resource_anchors(id).await?,
         }))
+    }
+
+    async fn resource_anchors(&self, id: i64) -> ApodResult<Vec<AnchorCount>> {
+        let rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT anchor, COUNT(*) FROM entry_resources
+             WHERE resource_id = ?1 AND anchor <> ''
+             GROUP BY anchor ORDER BY COUNT(*) DESC, length(anchor) ASC, anchor ASC
+             LIMIT ?2",
+        )
+        .bind(id)
+        .bind(ANCHOR_LIMIT)
+        .fetch_all(self.db().reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(anchor, entries)| AnchorCount { anchor, entries })
+            .collect())
     }
 
     pub async fn resource_hosts(&self, limit: usize) -> ApodResult<Vec<HostCount>> {

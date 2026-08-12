@@ -143,7 +143,7 @@ const onlyExclusions = computed(
         aria-label="Search entries"
         autofocus
         fluid
-        placeholder="Search 30 years of explanations, titles and credits…"
+        placeholder="Search..."
         size="large"
         type="search"
         @input="search(true)"
@@ -228,9 +228,9 @@ const onlyExclusions = computed(
     />
 
     <Paginator
-      :page-link-size="pageLinks"
       v-if="results && results.total > PAGE_SIZE"
       :first="(page - 1) * PAGE_SIZE"
+      :page-link-size="pageLinks"
       :rows="PAGE_SIZE"
       :total-records="results.total"
       @page="onPage"

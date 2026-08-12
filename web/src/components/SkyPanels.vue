@@ -491,12 +491,16 @@ h2 {
   overflow: visible;
 }
 
+.orbit .fill {
+  border-radius: 999px 0 0 999px;
+}
+
 .pin {
   position: absolute;
   top: 50%;
-  width: 0.55rem;
-  height: 0.55rem;
-  margin-left: -0.275rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: -0.25rem;
   transform: translateY(-50%);
   border-radius: 999px;
   background: var(--bg-elevated);

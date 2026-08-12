@@ -319,7 +319,6 @@ h1 {
 
 .lede {
   margin: 0;
-  max-width: 60ch;
   text-wrap: pretty;
 }
 

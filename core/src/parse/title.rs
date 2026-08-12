@@ -7,9 +7,11 @@ static CENTER: LazyLock<Selector> = LazyLock::new(|| Selector::parse("center").u
 static BOLD: LazyLock<Selector> = LazyLock::new(|| Selector::parse("b").unwrap());
 static TITLE_TAG: LazyLock<Selector> = LazyLock::new(|| Selector::parse("title").unwrap());
 
-static CREDIT_MARKER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\bcredits?\b").unwrap());
 static TRAILING_CREDIT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\s*\bcredits?\b.*$").unwrap());
+
+static TEASER_LABEL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^tomorrow['\u{2019}]s\s+picture\b").unwrap());
 
 const BOILERPLATE: &[&str] = &[
     "astronomy picture of the day",
@@ -43,13 +45,7 @@ fn from_center(doc: &Html) -> Option<String> {
         };
 
         for bold in center.select(&BOLD) {
-            let raw = bold.text().collect::<String>();
-
-            if CREDIT_MARKER.is_match(&raw) {
-                continue;
-            }
-
-            let candidate = clean(&raw);
+            let candidate = clean(&bold.text().collect::<String>());
             if is_plausible(&candidate) {
                 return Some(candidate);
             }
@@ -69,6 +65,8 @@ fn is_plausible(candidate: &str) -> bool {
     !candidate.is_empty()
         && candidate.chars().count() < 300
         && !BOILERPLATE.contains(&candidate.to_ascii_lowercase().as_str())
+        && !TEASER_LABEL.is_match(candidate)
+        && !super::credit::is_all_role_words(candidate)
 }
 
 fn clean(raw: &str) -> String {
@@ -113,6 +111,48 @@ mod tests {
             "<center><b>Astronomy Picture of the Day</b></center><center><b>Real Title</b></center>",
         );
         assert_eq!(parse(&doc).as_deref(), Some("Real Title"));
+    }
+
+    #[test]
+    fn recovers_a_title_from_a_bold_that_never_closed_before_its_credit() {
+        let doc = Html::parse_document(
+            r#"<center>banner</center>
+               <center>September 16, 1996 <br>
+               <b>The Sun Erupts <br>
+               <b>Credit:</b></b> <a href="http://www.nasa.gov/">NASA</a></center>
+               <center><b>Tomorrow's picture: </b>Comet Hale-Bopp Fades</center>
+               <center>nav</center>"#,
+        );
+        assert_eq!(parse(&doc).as_deref(), Some("The Sun Erupts"));
+    }
+
+    #[test]
+    fn never_mistakes_the_next_days_teaser_for_a_title() {
+        let doc = Html::parse_document(
+            r#"<title>APOD: October 3, 1996 - Barnard's Loop</title>
+               <center>banner</center><center>no bold here</center>
+               <center><b>Tomorrow's picture: </b>Something Else</center>"#,
+        );
+        assert_eq!(
+            parse(&doc).as_deref(),
+            Some("Barnard's Loop"),
+            "the teaser label should be skipped in favour of the title tag"
+        );
+    }
+
+    #[test]
+    fn a_bold_that_is_only_a_label_is_never_a_title() {
+        for label in [
+            "Image Credit & Copyright:",
+            "Video Credit:",
+            "Credit:",
+            "Image and Video Credit & Copyright:",
+        ] {
+            let doc = Html::parse_document(&format!(
+                "<center>x</center><center><b>{label}</b> Someone</center><center>y</center>"
+            ));
+            assert_eq!(parse(&doc), None, "{label} is a label, not a title");
+        }
     }
 
     #[test]

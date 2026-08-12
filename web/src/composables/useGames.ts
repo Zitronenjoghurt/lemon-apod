@@ -1,7 +1,7 @@
-import { computed, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import type { GameSlug } from '@/api/types'
-import { useStatus } from './useStatus'
+import {computed, ref} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import type {GameSlug} from '@/api/types'
+import {useStatus} from './useStatus'
 
 export interface GameResult {
   /** `d:2026-08-08` for a daily, `f:1770000000000` for free play. Daily ids are what stop a day
@@ -50,28 +50,12 @@ export interface GameStats {
 export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; blurb: string }[] =
   [
     {
-      slug: 'date',
-      name: 'Guess the Date',
-      path: '/games/date',
-      icon: 'pi pi-calendar-clock',
-      blurb:
-        'A picture will come into focus step by step. Guess the date it appeared at as fast as possible',
-    },
-    {
-      slug: 'words',
-      name: 'Fill the Words',
-      path: '/games/words',
-      icon: 'pi pi-align-left',
-      blurb:
-        'An explanation with its words blacked out. Fill them in one at a time and clear the title to win.',
-    },
-    {
       slug: 'order',
       name: 'Older or Newer',
       path: '/games/order',
       icon: 'pi pi-sort-alt',
       blurb:
-        'One picture with its date, one without. Say whether the new one appeared before or after it, and keep the run going.',
+          'One picture with its date, one without. Say whether the new one appeared before or after it, and keep the run going.',
     },
     {
       slug: 'match',
@@ -79,7 +63,23 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
       path: '/games/match',
       icon: 'pi pi-images',
       blurb:
-        'One blurred out explanation and six pictures. Uncover as little of the text as you can and still pick right.',
+          'One blurred out explanation and six pictures. Uncover as little of the text as you can and still pick right.',
+    },
+    {
+      slug: 'words',
+      name: 'Fill the Words',
+      path: '/games/words',
+      icon: 'pi pi-align-left',
+      blurb:
+          'An explanation with its words blacked out. Fill them in one at a time and clear the title to win.',
+    },
+    {
+      slug: 'date',
+      name: 'Guess the Date',
+      path: '/games/date',
+      icon: 'pi pi-calendar-clock',
+      blurb:
+        'A picture will come into focus step by step. Guess the date it appeared at as fast as possible',
     },
   ]
 

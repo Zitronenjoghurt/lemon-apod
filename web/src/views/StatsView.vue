@@ -1,14 +1,14 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import {computed, onMounted, ref} from 'vue'
+import {RouterLink, useRoute, useRouter} from 'vue-router'
 import RetryNotice from '@/components/RetryNotice.vue'
 import WordDetail from '@/components/WordDetail.vue'
 import YearChart from '@/components/YearChart.vue'
-import { api } from '@/api/client'
-import type { SortOrder, Word, WordSort } from '@/api/types'
-import { useAsync } from '@/composables/useAsync'
-import { useNarrow } from '@/composables/useNarrow'
-import { formatDate } from '@/utils/date'
+import {api} from '@/api/client'
+import type {SortOrder, Word, WordSort} from '@/api/types'
+import {useAsync} from '@/composables/useAsync'
+import {useNarrow} from '@/composables/useNarrow'
+import {formatDate} from '@/utils/date'
 
 const PAGE_SIZE = 50
 const DEBOUNCE_MS = 250
@@ -101,6 +101,16 @@ function series(pick: (year: (typeof years.value)[number]) => number) {
   return years.value.map((year) => ({ year: year.year, value: pick(year) }))
 }
 
+const lengthBands = computed(() => {
+  const bands = stats.value?.text.lengths ?? []
+  const peak = Math.max(...bands.map((band) => band.entries), 1)
+  return bands.map((band) => ({
+    label: band.to === undefined ? `${band.from}+` : `${band.from}–${band.to}`,
+    entries: band.entries,
+    width: band.entries === 0 ? 0 : Math.max((band.entries / peak) * 100, 1.5),
+  }))
+})
+
 const kindShare = computed(() => {
   const rows = stats.value?.by_media_kind ?? []
   const total = rows.reduce((sum, row) => sum + row.count, 0)
@@ -159,6 +169,13 @@ function count(value: number | undefined): string {
         <span class="muted foot">{{ count(text?.distinct_words) }} different ones</span>
       </div>
       <div class="card tile">
+        <span class="muted name">Pictures</span>
+        <strong class="value">{{ count(stats.thumbnails) }}</strong>
+        <span class="muted foot">
+          thumbnailed, {{ count(stats.entries - stats.thumbnails) }} could not be
+        </span>
+      </div>
+      <div class="card tile">
         <span class="muted name">Resources linked</span>
         <strong class="value">{{ count(catalogue?.resources) }}</strong>
         <span class="muted foot">
@@ -168,35 +185,87 @@ function count(value: number | undefined): string {
       </div>
       <div class="card tile">
         <span class="muted name">Under copyright</span>
-        <strong class="value">{{ count(stats.copyright) }}</strong>
+        <strong class="value">
+          {{ round((stats.copyright / Math.max(stats.entries, 1)) * 100, 0) }}%
+        </strong>
         <span class="muted foot">
-          {{ round((stats.copyright / Math.max(stats.entries, 1)) * 100, 0) }}% of entries
+          {{ count(stats.copyright) }} entries, {{ count(stats.licensed) }} naming a licence
+        </span>
+      </div>
+      <div class="card tile">
+        <span class="muted name">Encores</span>
+        <strong class="value">{{ count(stats.pictures.pictures) }}</strong>
+        <span class="muted foot">
+          shown again across {{ count(stats.pictures.entries) }} entries,
+          <RouterLink to="/pictures">browse them</RouterLink>
+        </span>
+      </div>
+      <div v-if="stats.pictures.most_shown" class="card tile">
+        <span class="muted name">Most repeated</span>
+        <strong class="value">{{ count(stats.pictures.most_shown_times) }}&times;</strong>
+        <span class="muted foot">
+          one picture, from
+          <RouterLink :to="`/pictures/${stats.pictures.most_shown}`">
+            {{ formatDate(stats.pictures.most_shown) }}
+          </RouterLink>
+        </span>
+      </div>
+      <div class="card tile">
+        <span class="muted name">Days missed</span>
+        <strong class="value">{{ count(stats.gaps) }}</strong>
+        <span class="muted foot">
+          {{ stats.gaps === 0 ? 'a picture every single day' : 'days APOD published nothing' }}
         </span>
       </div>
     </section>
 
     <section v-if="text && text.measured" class="card panel">
-      <h2>A typical explanation</h2>
+      <h2>Length distribution between all APODs</h2>
+      <p class="muted lede">
+        Half of them are between <strong>{{ count(text.p25_words) }}</strong> and
+        <strong>{{ count(text.p75_words) }}</strong> words, with the median at
+        <strong>{{ count(text.median_words) }}</strong
+        >. The shortest is {{ count(text.min_words) }} and the longest {{ count(text.max_words) }}.
+      </p>
+
+      <ul v-if="lengthBands.length" class="bands">
+        <li v-for="band in lengthBands" :key="band.label">
+          <span class="band-name">{{ band.label }}</span>
+          <span class="meter" role="presentation">
+            <span :style="{ width: `${band.width}%` }" class="fill" />
+          </span>
+          <span class="tabular band-count">{{ count(band.entries) }}</span>
+        </li>
+      </ul>
+
+      <div class="row extremes">
+        <p v-if="text.shortest" class="muted">
+          Shortest:
+          <RouterLink :to="`/${text.shortest.date}`">{{ text.shortest.title }}</RouterLink>
+          <span class="tabular"> ({{ count(text.shortest.word_count) }} words)</span>
+        </p>
+        <p v-if="text.longest" class="muted">
+          Longest:
+          <RouterLink :to="`/${text.longest.date}`">{{ text.longest.title }}</RouterLink>
+          <span class="tabular"> ({{ count(text.longest.word_count) }} words)</span>
+        </p>
+      </div>
+    </section>
+
+    <section v-if="text && text.measured" class="card panel">
+      <h2>What an average APOD consists of</h2>
       <dl class="facts">
         <div>
           <dt>Words</dt>
           <dd>{{ round(text.avg_words) }}</dd>
         </div>
         <div>
-          <dt>Median</dt>
-          <dd>{{ count(text.median_words) }}</dd>
-        </div>
-        <div>
-          <dt>Shortest</dt>
-          <dd>{{ count(text.min_words) }}</dd>
-        </div>
-        <div>
-          <dt>Longest</dt>
-          <dd>{{ count(text.max_words) }}</dd>
-        </div>
-        <div>
-          <dt>Different words</dt>
+          <dt>Of them different</dt>
           <dd>{{ round(text.avg_unique_words) }}</dd>
+        </div>
+        <div>
+          <dt>Characters</dt>
+          <dd>{{ round(text.avg_chars, 0) }}</dd>
         </div>
         <div>
           <dt>Sentences</dt>
@@ -207,23 +276,10 @@ function count(value: number | undefined): string {
           <dd>{{ round(text.avg_words_per_sentence) }}</dd>
         </div>
         <div>
-          <dt>Links</dt>
+          <dt>Links out</dt>
           <dd>{{ round(text.avg_links) }}</dd>
         </div>
       </dl>
-
-      <div class="row extremes">
-        <p v-if="text.shortest" class="muted">
-          Shortest:
-          <RouterLink :to="`/${text.shortest.date}`">{{ text.shortest.title }}</RouterLink>
-          <span class="tabular"> ({{ text.shortest.word_count }} words)</span>
-        </p>
-        <p v-if="text.longest" class="muted">
-          Longest:
-          <RouterLink :to="`/${text.longest.date}`">{{ text.longest.title }}</RouterLink>
-          <span class="tabular"> ({{ text.longest.word_count }} words)</span>
-        </p>
-      </div>
     </section>
 
     <section class="card panel">
@@ -353,9 +409,9 @@ function count(value: number | undefined): string {
       </ul>
 
       <Paginator
-        :page-link-size="pageLinks"
         v-if="words && words.total > PAGE_SIZE"
         :first="(page - 1) * PAGE_SIZE"
+        :page-link-size="pageLinks"
         :rows="PAGE_SIZE"
         :total-records="words.total"
         @page="onPage"
@@ -441,9 +497,46 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.lede {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.lede strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.bands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bands li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.band-name {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.band-count {
+  text-align: right;
+}
+
 .extremes {
   gap: 1.5rem;
   font-size: 0.88rem;
+  flex-wrap: wrap;
 }
 
 .extremes p {
@@ -505,6 +598,17 @@ h2 {
 
 .word-sort {
   min-width: 11rem;
+}
+
+/* Same field-and-select height agreement as the other catalogue pages. */
+.controls :deep(.p-inputtext),
+.controls :deep(.p-select) {
+  height: 2.75rem;
+}
+
+.controls :deep(.p-select-label) {
+  display: flex;
+  align-items: center;
 }
 
 .count {
@@ -586,8 +690,9 @@ code {
 }
 
 @media (max-width: 34rem) {
-  .kinds li {
-    grid-template-columns: 6.5rem 1fr 3.5rem;
+  .kinds li,
+  .bands li {
+    grid-template-columns: 5rem 1fr 3.5rem;
     gap: 0.5rem;
     font-size: 0.82rem;
   }
