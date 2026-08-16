@@ -5,6 +5,7 @@ use apod_core::{ApodDate, ApodEntry, PictureAppearances, Resource};
 
 const MARKER: &str = "<!--APOD_META-->";
 const DESCRIPTION_CHARS: usize = 200;
+const NAME: &str = "Astronomy Picture of the Day";
 const SITE: &str = "APOD Archive";
 const SITE_DESCRIPTION: &str = "An archive of every NASA Astronomy Picture of the Day since 1995.";
 
@@ -178,7 +179,10 @@ impl Shell {
     pub fn entry_page(&self, entry: &ApodEntry) -> String {
         let meta = Meta {
             title: format!("{} (APOD {})", entry.title, entry.date),
-            description: entry.summary_text(DESCRIPTION_CHARS),
+            description: format!(
+                "From NASA's {NAME}. {}",
+                entry.summary_text(DESCRIPTION_CHARS)
+            ),
             image: self.entry_image(entry),
             article: true,
         };
@@ -191,7 +195,7 @@ impl Shell {
         let (first, last) = (picture.first.format("%Y"), picture.last.format("%Y"));
 
         let description = format!(
-            "APOD has shown this picture {} times{}. Every date it appeared on, and what has changed.",
+            "NASA's {NAME} has shown this picture {} times{}. Every date it appeared on, and what has changed.",
             picture.appearances,
             if first == last {
                 format!(" in {first}")
@@ -455,6 +459,25 @@ mod tests {
         }
     }
 
+    fn appearances() -> PictureAppearances {
+        let mut media = Media::new(MediaKind::ImageJpg, None, None);
+        media.thumb_url = Some("/thumbs/1997/02/1997-02-14.webp".into());
+
+        PictureAppearances {
+            picture: Picture {
+                id: "1997-02-14".parse().unwrap(),
+                title: "The Pleiades".into(),
+                media,
+                appearances: 4,
+                first: "1997-02-14".parse().unwrap(),
+                last: "2019-11-02".parse().unwrap(),
+                titles: 2,
+                span_days: 8296,
+            },
+            items: Vec::new(),
+        }
+    }
+
     #[test]
     fn splits_on_the_marker() {
         let (head, tail) = split("<head>A<!--APOD_META-->B</head>");
@@ -467,6 +490,23 @@ mod tests {
         let (head, tail) = split("<html><head><title>x</title></head><body></body></html>");
         assert!(head.ends_with("</title>"));
         assert!(tail.starts_with("</head>"));
+    }
+
+    #[test]
+    fn every_page_that_carries_a_picture_spells_apod_out() {
+        let entry = shell().entry_page(&entry());
+        assert!(entry.contains("og:image"), "{entry}");
+        assert!(
+            entry.contains("From NASA&#39;s Astronomy Picture of the Day."),
+            "{entry}"
+        );
+
+        let picture = shell().picture_page("/pictures/2024-03-05", &appearances());
+        assert!(picture.contains("og:image"), "{picture}");
+        assert!(
+            picture.contains("NASA&#39;s Astronomy Picture of the Day has shown this picture"),
+            "{picture}"
+        );
     }
 
     #[test]
@@ -584,24 +624,7 @@ mod tests {
     #[test]
     fn a_picture_page_leads_with_the_picture_and_its_count() {
         let shell = shell();
-        let mut media = Media::new(MediaKind::ImageJpg, None, None);
-        media.thumb_url = Some("/thumbs/1997/02/1997-02-14.webp".into());
-
-        let found = PictureAppearances {
-            picture: Picture {
-                id: "1997-02-14".parse().unwrap(),
-                title: "The Pleiades".into(),
-                media,
-                appearances: 4,
-                first: "1997-02-14".parse().unwrap(),
-                last: "2019-11-02".parse().unwrap(),
-                titles: 2,
-                span_days: 8296,
-            },
-            items: Vec::new(),
-        };
-
-        let html = shell.picture_page("/pictures/1997-02-14", &found);
+        let html = shell.picture_page("/pictures/1997-02-14", &appearances());
         assert!(html.contains("<title>The Pleiades"));
         assert!(html.contains("shown this picture 4 times between 1997 and 2019"));
         assert!(
