@@ -7,6 +7,7 @@ import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
 import { useLatestDate } from '@/composables/useStatus'
 import { formatDate } from '@/utils/date'
+import { entryTitle, pageTitle, setTitle } from '@/utils/title'
 
 const route = useRoute()
 const latest = useLatestDate()
@@ -26,6 +27,11 @@ const {
 } = useAsync((signal) => api.entry(date.value, signal))
 
 watch(date, run, { immediate: true })
+
+watch([entry, notFound], ([found, missing]) => {
+  if (found) setTitle(entryTitle(found.title, found.date))
+  else if (missing) setTitle(pageTitle(`No entry for ${formatDate(date.value)}`))
+})
 </script>
 
 <template>
@@ -69,8 +75,6 @@ watch(date, run, { immediate: true })
   font-size: 1.4rem;
 }
 
-/* Centred, so it needs a measure of its own. Left-aligned prose must never be capped
-   narrower than the box it sits in: it reads as text that got cut off. */
 .notice p {
   max-width: 40ch;
   margin: 0;

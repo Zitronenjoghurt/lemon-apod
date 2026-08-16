@@ -7,6 +7,7 @@ import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
 import { useNarrow } from '@/composables/useNarrow'
 import { formatDate } from '@/utils/date'
+import { pageTitle, setTitle } from '@/utils/title'
 
 const PAGE_SIZE = 30
 
@@ -38,6 +39,11 @@ const resource = computed(() => data.value?.resource)
 const address = computed(() => resource.value?.key ?? '')
 const name = computed(() => resource.value?.label?.trim() || address.value)
 const anchors = computed(() => data.value?.anchors ?? [])
+
+watch([name, notFound], ([named, missing]) => {
+  if (named) setTitle(pageTitle(named))
+  else if (missing) setTitle(pageTitle('Resource not found'))
+})
 </script>
 
 <template>

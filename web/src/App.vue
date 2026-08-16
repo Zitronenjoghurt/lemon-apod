@@ -7,7 +7,7 @@ import { throttled } from '@/api/client'
 import { useExternalLinks } from '@/composables/useExternalLinks'
 import { useFavorites } from '@/composables/useFavorites'
 import { useTheme } from '@/composables/useTheme'
-import { MASTODON_URL, REPO_URL } from '@/utils/links'
+import { APOD_URL, MASTODON_URL, REPO_URL } from '@/utils/links'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,10 +33,15 @@ onUnmounted(() => document.removeEventListener('click', intercept, true))
 const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
 const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
 
-const groups = [
+type NavLink = { to: string; label: string; icon: string; exact?: boolean; away?: boolean }
+
+const groups: { name: string | null; links: NavLink[] }[] = [
   {
     name: null,
-    links: [{ to: '/', label: 'Home', icon: 'pi pi-home', exact: true }],
+    links: [
+      { to: '/', label: 'Home', icon: 'pi pi-home', exact: true },
+      { to: APOD_URL, label: 'APOD Website', icon: 'pi pi-external-link', away: true },
+    ],
   },
   {
     name: 'Read',
@@ -66,9 +71,8 @@ const groups = [
   },
 ]
 
-type NavLink = { to: string; label: string; icon: string; exact?: boolean }
-
 function isActive(link: NavLink): boolean {
+  if (link.away) return false
   if (link.exact) return route.path === link.to
   return route.path === link.to || route.path.startsWith(`${link.to}/`)
 }
@@ -143,19 +147,24 @@ router.afterEach(() => (menuOpen.value = false))
     <nav aria-label="Main" class="menu">
       <template v-for="group in groups" :key="group.name ?? 'top'">
         <p v-if="group.name" class="group">{{ group.name }}</p>
-        <RouterLink
-          v-for="link in group.links"
-          :key="link.to"
-          :class="{ on: isActive(link) }"
-          :to="link.to"
-          active-class=""
-          class="nav-link"
-          exact-active-class=""
-        >
-          <i :class="link.icon" aria-hidden="true" />
-          <span class="label">{{ link.label }}</span>
-          <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
-        </RouterLink>
+        <template v-for="link in group.links" :key="link.to">
+          <a v-if="link.away" :href="link.to" class="nav-link" rel="noopener" target="_blank">
+            <i :class="link.icon" aria-hidden="true" />
+            <span class="label">{{ link.label }}</span>
+          </a>
+          <RouterLink
+            v-else
+            :class="{ on: isActive(link) }"
+            :to="link.to"
+            active-class=""
+            class="nav-link"
+            exact-active-class=""
+          >
+            <i :class="link.icon" aria-hidden="true" />
+            <span class="label">{{ link.label }}</span>
+            <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
+          </RouterLink>
+        </template>
       </template>
     </nav>
   </Drawer>
@@ -171,20 +180,32 @@ router.afterEach(() => (menuOpen.value = false))
       <nav aria-label="Main" class="menu">
         <template v-for="group in groups" :key="group.name ?? 'top'">
           <p v-if="group.name" class="group">{{ group.name }}</p>
-          <RouterLink
-            v-for="link in group.links"
-            :key="link.to"
-            v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
-            :class="{ on: isActive(link) }"
-            :to="link.to"
-            active-class=""
-            class="nav-link"
-            exact-active-class=""
-          >
-            <i :class="link.icon" aria-hidden="true" />
-            <span class="label">{{ link.label }}</span>
-            <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
-          </RouterLink>
+          <template v-for="link in group.links" :key="link.to">
+            <a
+              v-if="link.away"
+              v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
+              :href="link.to"
+              class="nav-link"
+              rel="noopener"
+              target="_blank"
+            >
+              <i :class="link.icon" aria-hidden="true" />
+              <span class="label">{{ link.label }}</span>
+            </a>
+            <RouterLink
+              v-else
+              v-tooltip.right="{ value: link.label, disabled: !rail, class: 'tip-tight' }"
+              :class="{ on: isActive(link) }"
+              :to="link.to"
+              active-class=""
+              class="nav-link"
+              exact-active-class=""
+            >
+              <i :class="link.icon" aria-hidden="true" />
+              <span class="label">{{ link.label }}</span>
+              <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
+            </RouterLink>
+          </template>
         </template>
       </nav>
     </aside>

@@ -1,10 +1,145 @@
 use crate::config::Config;
 use crate::web::escape;
 use anyhow::{Context, Result};
-use apod_core::ApodEntry;
+use apod_core::{ApodDate, ApodEntry, PictureAppearances, Resource};
 
 const MARKER: &str = "<!--APOD_META-->";
 const DESCRIPTION_CHARS: usize = 200;
+const SITE: &str = "APOD Archive";
+const SITE_DESCRIPTION: &str = "An archive of every NASA Astronomy Picture of the Day since 1995.";
+
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+struct Fixed {
+    path: &'static str,
+    title: &'static str,
+    description: &'static str,
+}
+
+const FIXED: &[Fixed] = &[
+    Fixed {
+        path: "/feed",
+        title: "Feed",
+        description: "An endlessly scrolling feed of every NASA Astronomy Picture of the Day since 1995.",
+    },
+    Fixed {
+        path: "/search",
+        title: "Search",
+        description: "Search through thirty years of NASAs Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/favorites",
+        title: "Favorites",
+        description: "Your favorite entries of NASAs Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/random",
+        title: "Random APOD",
+        description: "A random entry from the full archive of NASAs Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/archive",
+        title: "Archive",
+        description: "Browse every NASA Astronomy Picture of the Day by year and month, as a grid of thumbnails or as a calendar.",
+    },
+    Fixed {
+        path: "/stats",
+        title: "Statistics",
+        description: "Detailed statistics about the full archive of NASAs Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/space-weather",
+        title: "Space weather",
+        description: "Solar activity and its influence on earth, as measured and forecast by NOAA's Space Weather Prediction Center.",
+    },
+    Fixed {
+        path: "/pictures",
+        title: "Encores",
+        description: "The NASA Astronomy Picture of the Day that have been published more than once, and what changed between their appearances",
+    },
+    Fixed {
+        path: "/resources",
+        title: "Resources",
+        description: "A comprehensive catalogue of every webpage NASAs Astronomy Picture of the Day has ever referenced.",
+    },
+    Fixed {
+        path: "/notifications",
+        title: "Notifications",
+        description: "Follow the archive by Atom, by RSS, or through ntfy push notifications.",
+    },
+    Fixed {
+        path: "/contact",
+        title: "Contact",
+        description: "Contact the creator of this NASA Astronomy Picture of the Day archive.",
+    },
+    Fixed {
+        path: "/games",
+        title: "Games",
+        description: "A minigame mashup of NASAs Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/games/date",
+        title: "Guess the Date",
+        description: "A minigame where you guess the date of a NASA Astronomy Picture of the Day.",
+    },
+    Fixed {
+        path: "/games/order",
+        title: "Older or Newer",
+        description: "A minigame where you guess whether a NASA Astronomy Picture of the Day was published before or after another.",
+    },
+    Fixed {
+        path: "/games/match",
+        title: "Match the Picture",
+        description: "A minigame where you guess which NASA Astronomy Picture of the Day a given description originates from.",
+    },
+    Fixed {
+        path: "/games/words",
+        title: "Fill the Words",
+        description: "A minigame where you have to fill in the words of a NASA Astronomy Picture of the Day to eventually uncover its title.",
+    },
+];
+
+pub enum Target {
+    Entry(ApodDate),
+    Picture(ApodDate),
+    Resource(i64),
+    Fixed,
+}
+
+struct Meta {
+    title: String,
+    description: String,
+    image: Option<String>,
+    article: bool,
+}
+
+impl Meta {
+    fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            description: description.into(),
+            image: None,
+            article: false,
+        }
+    }
+
+    fn titled(name: &str, description: impl Into<String>) -> Self {
+        Self::new(format!("{name} \u{b7} {SITE}"), description)
+    }
+}
 
 pub struct Shell {
     head: String,
@@ -32,16 +167,83 @@ impl Shell {
         format!("{}{}{}", self.head, self.default_tags, self.tail)
     }
 
-    pub fn entry_page(&self, entry: &ApodEntry) -> String {
-        format!("{}{}{}", self.head, self.entry_tags(entry), self.tail)
+    pub fn page(&self, path: &str) -> String {
+        let path = trimmed(path);
+        match fixed(path).or_else(|| archive(path)) {
+            Some(meta) => self.render(&meta, path),
+            None => self.default_page(),
+        }
     }
 
-    fn entry_tags(&self, entry: &ApodEntry) -> String {
-        let title = format!("{} (APOD {})", entry.title, entry.date);
-        let description = entry.summary_text(DESCRIPTION_CHARS);
-        let url = format!("{}/{}", self.public_url, entry.date);
+    pub fn entry_page(&self, entry: &ApodEntry) -> String {
+        let meta = Meta {
+            title: format!("{} (APOD {})", entry.title, entry.date),
+            description: entry.summary_text(DESCRIPTION_CHARS),
+            image: self.entry_image(entry),
+            article: true,
+        };
 
-        let image = entry
+        self.render(&meta, &format!("/{}", entry.date))
+    }
+
+    pub fn picture_page(&self, path: &str, found: &PictureAppearances) -> String {
+        let picture = &found.picture;
+        let (first, last) = (picture.first.format("%Y"), picture.last.format("%Y"));
+
+        let description = format!(
+            "APOD has shown this picture {} times{}. Every date it appeared on, and what has changed.",
+            picture.appearances,
+            if first == last {
+                format!(" in {first}")
+            } else {
+                format!(" between {first} and {last}")
+            }
+        );
+
+        let meta = Meta {
+            title: format!(
+                "{} \u{b7} Shown {}\u{d7}",
+                picture.title, picture.appearances
+            ),
+            description,
+            image: picture
+                .media
+                .thumb_url
+                .as_deref()
+                .map(|thumb| format!("{}{thumb}", self.public_url)),
+            article: false,
+        };
+
+        self.render(&meta, trimmed(path))
+    }
+
+    pub fn resource_page(&self, path: &str, resource: &Resource) -> String {
+        let name = resource
+            .label
+            .as_deref()
+            .map(str::trim)
+            .filter(|label| !label.is_empty())
+            .unwrap_or(&resource.key);
+
+        let meta = Meta::titled(
+            name,
+            format!(
+                "APOD has linked to {name} {} times across {} {}.",
+                resource.refs,
+                resource.entries,
+                if resource.entries == 1 {
+                    "entry"
+                } else {
+                    "entries"
+                }
+            ),
+        );
+
+        self.render(&meta, trimmed(path))
+    }
+
+    fn entry_image(&self, entry: &ApodEntry) -> Option<String> {
+        entry
             .media
             .url
             .as_deref()
@@ -53,32 +255,45 @@ impl Shell {
                     .thumb_url
                     .as_deref()
                     .map(|path| format!("{}{path}", self.public_url))
-            });
+            })
+    }
+
+    fn render(&self, meta: &Meta, path: &str) -> String {
+        format!("{}{}{}", self.head, self.tags(meta, path), self.tail)
+    }
+
+    fn tags(&self, meta: &Meta, path: &str) -> String {
+        let url = format!("{}{path}", self.public_url);
 
         let mut tags = format!(
             r#"<title>{title}</title>
 <meta name="description" content="{description}">
-<meta property="og:type" content="article">
+<meta property="og:type" content="{kind}">
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{description}">
 <meta property="og:url" content="{url}">
-<meta property="og:site_name" content="APOD Archive">
+<meta property="og:site_name" content="{SITE}">
 <link rel="canonical" href="{url}">
 "#,
-            title = escape(&title),
-            description = escape(&description),
+            kind = if meta.article { "article" } else { "website" },
+            title = escape(&meta.title),
+            description = escape(&meta.description),
             url = escape(&url),
         );
 
-        match image {
+        match &meta.image {
             Some(image) => tags.push_str(&format!(
                 r#"<meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="{image}">
 <meta name="twitter:image" content="{image}">
 "#,
-                image = escape(&image)
+                image = escape(image)
             )),
             None => tags.push_str("<meta name=\"twitter:card\" content=\"summary\">\n"),
+        }
+
+        if noindex(path) {
+            tags.push_str("<meta name=\"robots\" content=\"noindex, follow\">\n");
         }
 
         tags
@@ -87,17 +302,77 @@ impl Shell {
 
 fn default_tags(public_url: &str) -> String {
     format!(
-        r#"<title>APOD Archive</title>
-<meta name="description" content="An archive of every NASA Astronomy Picture of the Day since 1995.">
+        r#"<title>{SITE}</title>
+<meta name="description" content="{SITE_DESCRIPTION}">
 <meta property="og:type" content="website">
-<meta property="og:title" content="APOD Archive">
-<meta property="og:description" content="An archive of every NASA Astronomy Picture of the Day since 1995.">
+<meta property="og:title" content="{SITE}">
+<meta property="og:description" content="{SITE_DESCRIPTION}">
 <meta property="og:url" content="{url}">
-<meta property="og:site_name" content="APOD Archive">
+<meta property="og:site_name" content="{SITE}">
 <meta name="twitter:card" content="summary">
 "#,
         url = escape(public_url)
     )
+}
+
+fn fixed(path: &str) -> Option<Meta> {
+    FIXED
+        .iter()
+        .find(|page| page.path == path)
+        .map(|page| Meta::titled(page.title, page.description))
+}
+
+fn archive(path: &str) -> Option<Meta> {
+    let mut parts = path.strip_prefix("/archive/")?.split('/');
+
+    let year: i32 = parts.next()?.parse().ok()?;
+    if !(1995..=9999).contains(&year) {
+        return None;
+    }
+
+    let month = match parts.next() {
+        None => None,
+        Some(raw) => {
+            let value: usize = raw.parse().ok()?;
+            if !(1..=12).contains(&value) {
+                return None;
+            }
+            Some(MONTHS[value - 1])
+        }
+    };
+
+    if parts.next().is_some() {
+        return None;
+    }
+
+    Some(match month {
+        Some(name) => Meta::titled(
+            &format!("APOD in {name} {year}"),
+            format!("Every Astronomy Picture of the Day published in {name} {year}."),
+        ),
+        None => Meta::titled(
+            &format!("APOD in {year}"),
+            format!("Every Astronomy Picture of the Day published in {year}, month by month."),
+        ),
+    })
+}
+
+fn noindex(path: &str) -> bool {
+    matches!(path, "/random" | "/favorites")
+}
+
+pub fn indexable_paths() -> impl Iterator<Item = &'static str> {
+    FIXED
+        .iter()
+        .map(|page| page.path)
+        .filter(|path| !noindex(path))
+}
+
+fn trimmed(path: &str) -> &str {
+    match path.strip_suffix('/') {
+        Some("") | None => path,
+        Some(trimmed) => trimmed,
+    }
 }
 
 fn split(html: &str) -> (String, String) {
@@ -114,8 +389,28 @@ fn split(html: &str) -> (String, String) {
     (html.to_owned(), String::new())
 }
 
-pub fn entry_path(path: &str) -> Option<apod_core::ApodDate> {
-    let candidate = path.trim_start_matches('/').trim_end_matches('/');
+pub fn target(path: &str) -> Target {
+    let path = trimmed(path);
+
+    if let Some(date) = as_date(path.trim_start_matches('/')) {
+        return Target::Entry(date);
+    }
+
+    if let Some(date) = path.strip_prefix("/pictures/").and_then(as_date) {
+        return Target::Picture(date);
+    }
+
+    if let Some(id) = path
+        .strip_prefix("/resources/")
+        .and_then(|raw| raw.parse::<i64>().ok())
+    {
+        return Target::Resource(id);
+    }
+
+    Target::Fixed
+}
+
+fn as_date(candidate: &str) -> Option<ApodDate> {
     if candidate.len() != 10 {
         return None;
     }
@@ -125,7 +420,7 @@ pub fn entry_path(path: &str) -> Option<apod_core::ApodDate> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apod_core::{ApodDate, Media, MediaKind};
+    use apod_core::{Media, MediaKind, Picture};
 
     fn shell() -> Shell {
         Shell {
@@ -214,11 +509,126 @@ mod tests {
     }
 
     #[test]
-    fn recognises_entry_paths() {
-        assert!(entry_path("/2024-03-05").is_some());
-        assert!(entry_path("/2024-03-05/").is_some());
-        assert!(entry_path("/search").is_none());
-        assert!(entry_path("/archive/2024").is_none());
-        assert!(entry_path("/not-a-date").is_none());
+    fn recognises_what_each_path_needs_looked_up() {
+        assert!(matches!(target("/2024-03-05"), Target::Entry(_)));
+        assert!(matches!(target("/2024-03-05/"), Target::Entry(_)));
+        assert!(matches!(target("/pictures/2024-03-05"), Target::Picture(_)));
+        assert!(matches!(target("/resources/412"), Target::Resource(412)));
+
+        for plain in ["/search", "/archive/2024", "/pictures", "/resources/x", "/"] {
+            assert!(matches!(target(plain), Target::Fixed), "{plain}");
+        }
+    }
+
+    #[test]
+    fn every_fixed_page_carries_its_own_title_and_canonical() {
+        let shell = shell();
+
+        for page in FIXED {
+            let html = shell.page(page.path);
+            assert!(
+                html.contains(&format!("<title>{} \u{b7} {SITE}</title>", page.title)),
+                "{} kept the site-level title",
+                page.path
+            );
+            assert!(
+                html.contains(&format!(
+                    r#"<link rel="canonical" href="https://apod.lemon.industries{}">"#,
+                    page.path
+                )),
+                "{} has no canonical of its own",
+                page.path
+            );
+            assert!(html.contains("<div id=app>"), "{}", page.path);
+        }
+    }
+
+    #[test]
+    fn a_trailing_slash_addresses_the_same_page() {
+        assert_eq!(shell().page("/search/"), shell().page("/search"));
+    }
+
+    #[test]
+    fn a_year_and_a_month_name_themselves() {
+        let shell = shell();
+
+        assert!(shell.page("/archive/2024").contains("<title>APOD in 2024"));
+        assert!(
+            shell
+                .page("/archive/2024/03")
+                .contains("<title>APOD in March 2024")
+        );
+    }
+
+    #[test]
+    fn an_archive_path_that_makes_no_sense_keeps_the_site_tags() {
+        let shell = shell();
+
+        for nonsense in [
+            "/archive/1801",
+            "/archive/2024/13",
+            "/archive/2024/00",
+            "/archive/2024/03/05",
+            "/archive/nineteen",
+        ] {
+            assert_eq!(shell.page(nonsense), shell.default_page(), "{nonsense}");
+        }
+    }
+
+    #[test]
+    fn the_reader_s_own_pages_are_kept_out_of_the_index() {
+        assert!(shell().page("/favorites").contains(r#"content="noindex"#));
+        assert!(!shell().page("/feed").contains("noindex"));
+    }
+
+    #[test]
+    fn a_picture_page_leads_with_the_picture_and_its_count() {
+        let shell = shell();
+        let mut media = Media::new(MediaKind::ImageJpg, None, None);
+        media.thumb_url = Some("/thumbs/1997/02/1997-02-14.webp".into());
+
+        let found = PictureAppearances {
+            picture: Picture {
+                id: "1997-02-14".parse().unwrap(),
+                title: "The Pleiades".into(),
+                media,
+                appearances: 4,
+                first: "1997-02-14".parse().unwrap(),
+                last: "2019-11-02".parse().unwrap(),
+                titles: 2,
+                span_days: 8296,
+            },
+            items: Vec::new(),
+        };
+
+        let html = shell.picture_page("/pictures/1997-02-14", &found);
+        assert!(html.contains("<title>The Pleiades"));
+        assert!(html.contains("shown this picture 4 times between 1997 and 2019"));
+        assert!(
+            html.contains(
+                r#"content="https://apod.lemon.industries/thumbs/1997/02/1997-02-14.webp""#
+            )
+        );
+    }
+
+    #[test]
+    fn a_resource_page_names_the_site_it_stands_for() {
+        let shell = shell();
+        let resource = Resource {
+            id: 412,
+            url: "https://en.wikipedia.org/wiki/Orion".into(),
+            key: "en.wikipedia.org/wiki/Orion".into(),
+            host: "en.wikipedia.org".into(),
+            label: Some("Orion".into()),
+            refs: 9,
+            entries: 7,
+            credited: 0,
+            first: None,
+            last: None,
+        };
+
+        let html = shell.resource_page("/resources/412", &resource);
+        assert!(html.contains("<title>Orion \u{b7} APOD Archive</title>"));
+        assert!(html.contains("linked to Orion 9 times across 7 entries"));
     }
 }

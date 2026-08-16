@@ -19,6 +19,7 @@ declare module 'vue' {
     Drawer: typeof import('primevue/drawer')['default']
     EntryCard: typeof import('./src/components/EntryCard.vue')['default']
     EntryDetail: typeof import('./src/components/EntryDetail.vue')['default']
+    EntryDiff: typeof import('./src/components/EntryDiff.vue')['default']
     EntryGrid: typeof import('./src/components/EntryGrid.vue')['default']
     EntrySkeleton: typeof import('./src/components/EntrySkeleton.vue')['default']
     ExternalLinkNotice: typeof import('./src/components/ExternalLinkNotice.vue')['default']

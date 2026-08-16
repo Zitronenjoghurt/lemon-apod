@@ -20,6 +20,8 @@ pub use weather::{Alert, Band, Notice, WeatherReport, WeatherSummary};
 
 const TIMELINE_LENGTH: usize = 10;
 const TIMELINE_HORIZON_DAYS: i64 = 400;
+const TIMELINE_LOOKBACK_DAYS: i64 = 3;
+const TIMELINE_PAST: usize = 3;
 const SHOWERS_AHEAD: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -63,7 +65,7 @@ pub fn now(at: DateTime<Utc>) -> SkyNow {
         .collect();
     let eclipses = eclipse::upcoming(at);
 
-    let events = timeline(at, &moon, &next_turning, &planets, &showers, &eclipses);
+    let events = timeline(at);
 
     SkyNow {
         at,
@@ -77,29 +79,40 @@ pub fn now(at: DateTime<Utc>) -> SkyNow {
     }
 }
 
-fn timeline(
-    at: DateTime<Utc>,
-    moon: &MoonNow,
-    next_turning: &TurningEvent,
-    planets: &[PlanetNow],
-    showers: &[ShowerPeak],
-    eclipses: &[EclipseEvent],
-) -> Vec<SkyEvent> {
+/// The sky a few days back, rather than the sky right now, is what the timeline is built from: an
+/// event that has only just happened is still worth a line. Everything else in [`SkyNow`] speaks
+/// for the present, so this reaches for its own copies rather than sharing them.
+fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
+    let since = at - TimeDelta::days(TIMELINE_LOOKBACK_DAYS);
     let horizon = at + TimeDelta::days(TIMELINE_HORIZON_DAYS);
+
+    let next_turning = sun::next_turning(since);
+    let planets = planets::now(since);
+    let showers: Vec<ShowerPeak> = showers::upcoming(since)
+        .into_iter()
+        .take(SHOWERS_AHEAD)
+        .collect();
+    let eclipses = eclipse::upcoming(since);
+
     let mut events = Vec::new();
 
-    let eclipsed = |at: DateTime<Utc>| {
-        eclipses
-            .iter()
-            .any(|found| (found.at - at).abs() < TimeDelta::hours(1))
-    };
+    // Both phases at the dates they actually fall on. An eclipse is a syzygy, so a lunar one lands
+    // on a full moon and a solar one on a new moon; where that happens the two share a line rather
+    // than repeat each other, and the line is the eclipse with the phase named in its detail.
+    // Reaching past it for the lunation after would put a full moon six weeks out on the list while
+    // the real next one sat above it under another name.
+    let phases: [QuarterEvent; 2] = [Quarter::New, Quarter::Full].map(|quarter| QuarterEvent {
+        quarter,
+        label: quarter.label(),
+        at: moon::next_quarter(since, quarter),
+    });
 
-    for quarter in moon
-        .next_quarters
-        .iter()
-        .filter(|event| matches!(event.quarter, Quarter::New | Quarter::Full))
-        .filter(|event| !eclipsed(event.at))
-    {
+    let together =
+        |one: DateTime<Utc>, other: DateTime<Utc>| (one - other).abs() < TimeDelta::hours(1);
+    let eclipsed = |at: DateTime<Utc>| eclipses.iter().any(|found| together(found.at, at));
+    let phase_at = |at: DateTime<Utc>| phases.iter().find(|phase| together(phase.at, at));
+
+    for quarter in phases.iter().filter(|phase| !eclipsed(phase.at)) {
         let supermoon = quarter.quarter == Quarter::Full && moon::is_supermoon(quarter.at);
 
         events.push(SkyEvent {
@@ -135,7 +148,7 @@ fn timeline(
         at: next_turning.at,
     });
 
-    for shower in showers {
+    for shower in &showers {
         events.push(SkyEvent {
             kind: EventKind::Shower,
             title: format!("{} peak", shower.name),
@@ -147,15 +160,23 @@ fn timeline(
         });
     }
 
-    for found in eclipses {
+    for found in &eclipses {
+        // Whichever phase it swallowed is named here, so the night it falls on still answers the
+        // question the phase would have answered on a line of its own.
+        let detail = match (phase_at(found.at), found.solar) {
+            (Some(_), true) => "The new moon, crossing the sun along a track of its own".to_owned(),
+            (Some(_), false) => format!(
+                "The full moon, {} km away, inside Earth's shadow",
+                thousands(moon::distance_km(found.at).round() as i64)
+            ),
+            (None, true) => "Visible along its own track only".to_owned(),
+            (None, false) => "Visible from the whole night side of Earth".to_owned(),
+        };
+
         events.push(SkyEvent {
             kind: EventKind::Eclipse,
             title: found.label.to_owned(),
-            detail: Some(if found.solar {
-                "Visible along its own track only".to_owned()
-            } else {
-                "Visible from the whole night side of Earth".to_owned()
-            }),
+            detail: Some(detail),
             at: found.at,
         });
     }
@@ -181,9 +202,14 @@ fn timeline(
         });
     }
 
-    events.retain(|event| event.at > at && event.at <= horizon);
+    events.retain(|event| event.at > since && event.at <= horizon);
     events.sort_by_key(|event| event.at);
-    events.truncate(TIMELINE_LENGTH);
+
+    let behind = events.iter().take_while(|event| event.at <= at).count();
+    let surplus = behind.saturating_sub(TIMELINE_PAST);
+
+    events.drain(..surplus);
+    events.truncate(behind - surplus + TIMELINE_LENGTH);
     events
 }
 
@@ -230,15 +256,49 @@ mod tests {
     }
 
     #[test]
-    fn the_timeline_is_ordered_and_entirely_ahead_of_us() {
+    fn the_timeline_is_ordered_and_bounded_at_both_ends() {
         let at = utc(2026, 8, 8);
         let sky = now(at);
 
         for pair in sky.events.windows(2) {
             assert!(pair[0].at <= pair[1].at, "{:?}", sky.events);
         }
-        assert!(sky.events.iter().all(|event| event.at > at));
-        assert!(sky.events.len() <= TIMELINE_LENGTH);
+
+        let behind = sky.events.iter().filter(|event| event.at <= at).count();
+        assert!(behind <= TIMELINE_PAST, "{behind} events already gone by");
+        assert!(
+            sky.events
+                .iter()
+                .all(|event| event.at > at - TimeDelta::days(TIMELINE_LOOKBACK_DAYS))
+        );
+        assert!(sky.events.len() <= TIMELINE_PAST + TIMELINE_LENGTH);
+    }
+
+    #[test]
+    fn an_event_that_has_just_happened_is_still_on_the_timeline() {
+        // The Perseids peak on the 12th of August 2026.
+        let sky = now(utc(2026, 8, 13));
+
+        let peak = sky
+            .events
+            .iter()
+            .find(|event| event.title.starts_with("Perseids"))
+            .expect("a peak one day back is still worth showing");
+
+        assert!(peak.at < sky.at, "{peak:?} has not happened yet");
+    }
+
+    #[test]
+    fn an_event_falls_off_once_the_lookback_runs_out() {
+        let sky = now(utc(2026, 8, 12) + TimeDelta::days(TIMELINE_LOOKBACK_DAYS + 1));
+
+        assert!(
+            !sky.events
+                .iter()
+                .any(|event| event.title.starts_with("Perseids")),
+            "{:#?}",
+            sky.events
+        );
     }
 
     #[test]
@@ -282,7 +342,8 @@ mod tests {
             let at = start + TimeDelta::days(day);
             let sky = now(at);
 
-            assert!(sky.events.iter().all(|event| event.at > at), "{at}");
+            let lookback = at - TimeDelta::days(TIMELINE_LOOKBACK_DAYS);
+            assert!(sky.events.iter().all(|event| event.at > lookback), "{at}");
             assert!(sky.showers.iter().all(|peak| peak.peak > at), "{at}");
             assert!(sky.eclipses.iter().all(|found| found.at > at), "{at}");
             assert!(sky.moon.next_quarters.iter().all(|q| q.at > at), "{at}");
@@ -328,6 +389,42 @@ mod tests {
         if let Some(event) = full {
             let detail = event.detail.as_deref().unwrap_or_default();
             assert!(detail.contains("km away"), "{detail}");
+        }
+    }
+
+    /// Not that a line is titled "Full moon", but that the night the next one falls on is on the
+    /// list at all. An eclipse takes the title on the nights it lands on, and the phase is named in
+    /// its detail rather than pushed a lunation out to a date that is not the next one.
+    #[test]
+    fn the_next_full_moon_and_new_moon_are_on_the_timeline_at_their_own_dates() {
+        let start = utc(2026, 1, 1);
+
+        for day in 0..400 {
+            let at = start + TimeDelta::days(day);
+            let sky = now(at);
+            let since = at - TimeDelta::days(TIMELINE_LOOKBACK_DAYS);
+
+            for quarter in [Quarter::New, Quarter::Full] {
+                let due = moon::next_quarter(since, quarter);
+
+                let found = sky.events.iter().find(|event| {
+                    matches!(event.kind, EventKind::Moon | EventKind::Eclipse)
+                        && (event.at - due).abs() < TimeDelta::hours(1)
+                });
+
+                let event = found.unwrap_or_else(|| {
+                    panic!(
+                        "nothing at {due} for the {quarter:?} moon at {at}: {:#?}",
+                        sky.events
+                    )
+                });
+
+                let named = event.kind == EventKind::Moon
+                    || event.detail.as_deref().is_some_and(|detail| {
+                        detail.contains(quarter.label().to_lowercase().as_str())
+                    });
+                assert!(named, "{event:?} never says which phase it is");
+            }
         }
     }
 

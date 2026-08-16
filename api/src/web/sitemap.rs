@@ -38,10 +38,9 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     xml.push_str("<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n");
 
     push_url(&mut xml, &format!("{base}/"), Some("daily"));
-    push_url(&mut xml, &format!("{base}/resources"), Some("weekly"));
-    push_url(&mut xml, &format!("{base}/stats"), Some("weekly"));
-    push_url(&mut xml, &format!("{base}/notifications"), Some("yearly"));
-    push_url(&mut xml, &format!("{base}/contact"), Some("yearly"));
+    for path in crate::meta::indexable_paths() {
+        push_url(&mut xml, &format!("{base}{path}"), Some("weekly"));
+    }
 
     let years: BTreeSet<String> = dates.iter().map(|date| date.format("%Y")).collect();
     for year in years.iter().rev() {

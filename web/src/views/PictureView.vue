@@ -6,6 +6,7 @@ import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
 import { formatDate } from '@/utils/date'
+import { pageTitle, pictureTitle, setTitle } from '@/utils/title'
 
 const route = useRoute()
 const date = computed(() => String(route.params.date ?? ''))
@@ -29,6 +30,11 @@ const titles = computed(() => {
 })
 
 const years = computed(() => Math.max(1, Math.round((picture.value?.span_days ?? 0) / 365.25)))
+
+watch([picture, notFound], ([found, missing]) => {
+  if (found) setTitle(pictureTitle(found.title, found.appearances))
+  else if (missing) setTitle(pageTitle('This one only came round once'))
+})
 </script>
 
 <template>
@@ -263,8 +269,6 @@ h2.section {
   font-size: 1.4rem;
 }
 
-/* Centred, so it needs a measure of its own. Left-aligned prose must never be capped
-   narrower than the box it sits in: it reads as text that got cut off. */
 .notice p {
   max-width: 44ch;
   margin: 0;

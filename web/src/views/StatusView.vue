@@ -6,7 +6,7 @@ import RetryNotice from '@/components/RetryNotice.vue'
 import SkyPanels from '@/components/SkyPanels.vue'
 import WelcomeNote from '@/components/WelcomeNote.vue'
 import { api } from '@/api/client'
-import { type ApodSummary, isVideo } from '@/api/types'
+import { type ApodEntry, type ApodSummary, isVideo } from '@/api/types'
 import { useCoverage } from '@/composables/useCoverage'
 import { useRead } from '@/composables/useRead'
 import { useStatus } from '@/composables/useStatus'
@@ -125,6 +125,25 @@ const clockLabel = computed(() => {
 const archiveRead = computed(() => countIn())
 const archiveTotal = computed(() => coverage.total.value || entries.value)
 
+const featuredFull = ref<ApodEntry | null>(null)
+
+const credits = computed(() =>
+  (featuredFull.value?.credits ?? []).map((credit) => `${credit.role}: ${credit.text}`),
+)
+
+async function loadCredits() {
+  const date = featured.value?.date
+  featuredFull.value = null
+  if (!date) return
+
+  try {
+    const full = await api.entry(date)
+    if (featured.value?.date === date) featuredFull.value = full
+  } catch {
+    featuredFull.value = null
+  }
+}
+
 async function reload() {
   loading.value = true
   error.value = undefined
@@ -152,6 +171,8 @@ onUnmounted(() => {
 })
 
 watch([standing, localToday], loadLocalDay, { immediate: true })
+
+watch(() => featured.value?.date, loadCredits, { immediate: true })
 </script>
 
 <template>
@@ -199,6 +220,10 @@ watch([standing, localToday], loadLocalDay, { immediate: true })
               <span v-if="isRead(featured.date)" class="tag-read">
                 <i aria-hidden="true" class="pi pi-check" /> Read
               </span>
+            </p>
+
+            <p v-if="credits.length" class="muted credit">
+              <span v-for="line in credits" :key="line">{{ line }}</span>
             </p>
 
             <div class="row actions">
@@ -418,6 +443,15 @@ h1 {
 
 .tag-read i {
   font-size: 0.7em;
+}
+
+.credit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  font-size: 0.78rem;
+  text-wrap: pretty;
 }
 
 .actions {

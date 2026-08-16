@@ -323,6 +323,19 @@ impl ApodReader {
             _ => 0,
         };
 
+        let gap_dates: Vec<i64> = sqlx::query_scalar(
+            "WITH RECURSIVE span(day) AS (
+                 SELECT MIN(date_id) FROM entries
+                 UNION ALL
+                 SELECT day + 1 FROM span WHERE day < (SELECT MAX(date_id) FROM entries)
+             )
+             SELECT day FROM span
+             WHERE day NOT IN (SELECT date_id FROM entries)
+             ORDER BY day",
+        )
+        .fetch_all(self.db.reader())
+        .await?;
+
         Ok(Stats {
             entries,
             thumbnails,
@@ -332,6 +345,7 @@ impl ApodReader {
             copyright,
             licensed,
             gaps,
+            gap_dates: to_dates(gap_dates),
             text: self.text_summary().await?,
             resources: self.resource_summary().await?,
             pictures: self.picture_summary().await?,

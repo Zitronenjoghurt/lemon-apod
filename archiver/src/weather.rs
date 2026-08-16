@@ -130,7 +130,7 @@ async fn scales(cfg: &Sky, client: &Client) -> Result<(Option<ScaleDay>, Vec<Sca
 }
 
 fn day_from_scales(raw: &RawScales) -> Option<ScaleDay> {
-    let levels: Vec<Level> = [(Band::R, &raw.r), (Band::S, &raw.s), (Band::G, &raw.g)]
+    let levels: Vec<Level> = [(Band::G, &raw.g), (Band::S, &raw.s), (Band::R, &raw.r)]
         .into_iter()
         .filter_map(|(band, level)| {
             let level = level.as_ref()?;
@@ -382,15 +382,24 @@ mod tests {
         assert_eq!(today.levels.len(), 3);
         assert_eq!(today.worst().map(|level| level.band), Some(Band::G));
         assert!(!today.quiet());
+        assert_eq!(
+            today
+                .levels
+                .iter()
+                .map(|level| level.band)
+                .collect::<Vec<_>>(),
+            vec![Band::G, Band::S, Band::R],
+            "stored geomagnetic first, whichever way round NOAA sent it"
+        );
 
         let ahead = day_from_scales(raw.get("1").unwrap()).expect("tomorrow is there");
-        assert!(
+        assert_eq!(
             ahead
                 .levels
                 .iter()
                 .filter(|level| level.scale.is_none())
-                .count()
-                == 2,
+                .count(),
+            2,
             "a probability without a scale comes through as no scale rather than as zero"
         );
     }

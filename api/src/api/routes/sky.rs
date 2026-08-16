@@ -9,8 +9,10 @@ use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::response::Response;
 use axum::routing::get;
-use chrono::Utc;
+use chrono::{TimeDelta, Utc};
 use serde::Serialize;
+
+const LAUNCHES_BEHIND: i64 = 3;
 
 #[derive(Debug, Serialize)]
 struct Sky {
@@ -33,13 +35,25 @@ async fn build(state: &ServerState) -> ApiResult<String> {
 
     let (launches, space_weather, weather, feeds) = match state.sky.reader().await {
         Some(reader) => {
-            let launches = reader
-                .upcoming_launches(now, state.config.sky_launch_limit)
+            let since = now - TimeDelta::hours(apod_core::sky::store::LAUNCH_LOOKBACK_HOURS);
+
+            let mut launches = reader
+                .recent_launches(since, now, LAUNCHES_BEHIND)
                 .await
                 .unwrap_or_else(|error| {
-                    tracing::warn!("reading upcoming launches: {error}");
+                    tracing::warn!("reading the launches just behind us: {error}");
                     Vec::new()
                 });
+
+            launches.extend(
+                reader
+                    .upcoming_launches(now, state.config.sky_launch_limit)
+                    .await
+                    .unwrap_or_else(|error| {
+                        tracing::warn!("reading upcoming launches: {error}");
+                        Vec::new()
+                    }),
+            );
 
             let space_weather = reader.space_weather().await.unwrap_or_else(|error| {
                 tracing::warn!("reading space weather: {error}");

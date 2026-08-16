@@ -15,7 +15,10 @@
     --text: #131629;
     --text-muted: #5b6178;
     --accent: #4f46e5;
+    --diff-added: #16a34a;
+    --diff-removed: #dc2626;
     --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
+    --scroll-thumb: color-mix(in srgb, var(--accent) 45%, transparent);
   }
 
   html.app-dark {
@@ -25,6 +28,8 @@
     --text: #e9ebf5;
     --text-muted: #969db8;
     --accent: #818cf8;
+    --diff-added: #4ade80;
+    --diff-removed: #f87171;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
   }
 
@@ -32,6 +37,14 @@
   *::before,
   *::after {
     box-sizing: border-box;
+  }
+
+  * {
+    scrollbar-width: thin;
+  }
+
+  html {
+    scrollbar-color: var(--scroll-thumb) transparent;
   }
 
   body {

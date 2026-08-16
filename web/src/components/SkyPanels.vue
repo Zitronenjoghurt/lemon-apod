@@ -1,10 +1,11 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import MoonDial from './MoonDial.vue'
 import type { Launch, SkyEventKind } from '@/api/types'
 import { useSky } from '@/composables/useSky'
 import {
   BAND_NAMES,
+  BANDS,
   inForce,
   kpPercent,
   kpReading,
@@ -29,9 +30,17 @@ const ICONS: Record<SkyEventKind, string> = {
 }
 
 const FIRM = new Set(['SEC', 'MIN', 'HR', 'Second', 'Minute', 'Hour'])
+const TICK_MS = 30_000
+
+const clockNow = ref(Date.now())
+const ticking = setInterval(() => (clockNow.value = Date.now()), TICK_MS)
+onUnmounted(() => clearInterval(ticking))
 
 function launchDetail(launch: Launch): string {
-  return [launch.provider, launch.orbit].filter((part) => part && part !== 'Unknown').join(' · ')
+  const parts = passed(launch.net)
+    ? [launch.status, launch.provider]
+    : [launch.provider, launch.orbit]
+  return parts.filter((part) => part && part !== 'Unknown' && part !== 'TBD').join(' · ')
 }
 
 function when(iso: string): string {
@@ -44,21 +53,33 @@ function clock(iso: string): string {
   return Number.isNaN(at.getTime()) ? '' : TIME.format(at)
 }
 
+function passed(iso: string): boolean {
+  const at = new Date(iso).getTime()
+  return !Number.isNaN(at) && at < clockNow.value
+}
+
 function countdown(iso: string): string {
   const at = new Date(iso).getTime()
   if (Number.isNaN(at)) return ''
 
-  const ms = at - Date.now()
-  if (ms < 0) return 'now'
-  if (ms < 3_600_000) return `in ${Math.max(1, Math.round(ms / 60_000))} min`
-  if (ms < DAY_MS) return `in ${Math.round(ms / 3_600_000)} h`
+  const ms = at - clockNow.value
+  const away = Math.abs(ms)
+  const ago = ms < 0
 
-  const days = Math.round(ms / DAY_MS)
-  if (days === 1) return 'tomorrow'
-  if (days < 45) return `in ${days} days`
+  if (away < 60_000) return 'right now'
+  if (away < 3_600_000) return step(Math.round(away / 60_000), 'min', ago)
+  if (away < DAY_MS) return step(Math.round(away / 3_600_000), 'h', ago)
+
+  const days = Math.round(away / DAY_MS)
+  if (days === 1) return ago ? 'yesterday' : 'tomorrow'
+  if (days < 45) return step(days, 'days', ago)
 
   const months = Math.round(days / 30.44)
-  return `in ${months} month${months === 1 ? '' : 's'}`
+  return step(months, months === 1 ? 'month' : 'months', ago)
+}
+
+function step(count: number, unit: string, ago: boolean): string {
+  return ago ? `${count} ${unit} ago` : `in ${count} ${unit}`
 }
 
 const moon = computed(() => sky.value?.moon ?? null)
@@ -102,7 +123,12 @@ const stormy = computed(() => (weather.value?.kp ?? 0) >= 5 || !!raised.value)
 
 const dial = computed(() => (weather.value ? kpPercent(weather.value.kp) : 0))
 
-const levels = computed(() => report.value?.scales?.levels ?? [])
+const levels = computed(() => {
+  const stored = report.value?.scales?.levels ?? []
+  return BANDS.map((band) => stored.find((level) => level.band === band)).filter(
+    (level) => level !== undefined,
+  )
+})
 
 const observed = computed(() => {
   if (!weather.value) return ''
@@ -171,20 +197,27 @@ function magnitude(value: number): string {
       </section>
 
       <section class="card panel">
-        <h2 class="muted">Visible planets today</h2>
+        <h2 class="muted">Visible planets</h2>
 
         <ul v-if="visiblePlanets.length" class="planets">
-          <li v-for="planet in visiblePlanets" :key="planet.planet">
+          <li
+            v-for="planet in visiblePlanets"
+            :key="planet.planet"
+            :title="`${Math.round(planet.elongation)}° from the sun`"
+          >
             <span class="planet-name">{{ planet.name }}</span>
             <span aria-hidden="true" class="leader" />
-            <span class="muted where">{{
-              planet.visibility === 'evening' ? 'Evening' : 'Morning'
-            }}</span>
+            <span class="muted where">{{ planet.visibility_label }}</span>
             <span class="mag">{{ magnitude(planet.magnitude) }}</span>
           </li>
         </ul>
 
-        <p v-else class="muted note">No planets seem to be visible tonight.</p>
+        <p v-else class="muted note">All five currently appear too close to the sun.</p>
+
+        <p class="muted note foot">
+          Worked out from where each planet stands relative to the sun. Whether one of them clears
+          your own horizon, and how high it gets, depends on your location.
+        </p>
       </section>
 
       <section v-if="weather && activity" :class="{ stormy }" class="card panel">
@@ -236,7 +269,11 @@ function magnitude(value: number): string {
         <h2 class="muted">Events in the sky</h2>
 
         <ol class="events">
-          <li v-for="event in sky.events" :key="`${event.kind}-${event.at}`" :class="event.kind">
+          <li
+            v-for="event in sky.events"
+            :key="`${event.kind}-${event.at}`"
+            :class="[event.kind, { gone: passed(event.at) }]"
+          >
             <i :class="ICONS[event.kind]" aria-hidden="true" />
             <time :datetime="event.at" class="at">
               <span class="day">{{ when(event.at) }}</span>
@@ -261,8 +298,13 @@ function magnitude(value: number): string {
         <h2 class="muted">Rocket launches</h2>
 
         <ol class="events">
-          <li v-for="launch in sky.launches" :key="launch.id" class="launch">
-            <i aria-hidden="true" class="pi pi-send" />
+          <li
+            v-for="launch in sky.launches"
+            :key="launch.id"
+            :class="{ gone: passed(launch.net) }"
+            class="launch"
+          >
+            <i :class="passed(launch.net) ? 'pi pi-check' : 'pi pi-send'" aria-hidden="true" />
             <time :datetime="launch.net" class="at">
               <span class="day">{{ when(launch.net) }}</span>
               <span class="muted hour">{{
@@ -424,6 +466,12 @@ h2 {
 
 .where {
   font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.foot {
+  margin-top: auto;
+  font-size: 0.72rem;
 }
 
 .mag {
@@ -599,11 +647,12 @@ h2 {
   text-decoration: underline;
 }
 
+/* Stretched rather than set to start: the two lists never run to the same length, and the pair
+   reads as one thing only when the cards agree on where they end. */
 .columns {
   display: grid;
   gap: var(--gap);
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
 }
 
 .list {
@@ -623,9 +672,12 @@ h2 {
 .events {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0.35rem 0 0;
   display: flex;
   flex-direction: column;
+  max-height: 28rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .events li {
@@ -639,6 +691,23 @@ h2 {
 
 .events li:first-child {
   border-top: none;
+}
+
+.events li.gone {
+  opacity: 0.62;
+}
+
+.events li.gone:hover,
+.events li.gone:focus-within {
+  opacity: 1;
+}
+
+.events li.gone .day {
+  font-weight: 450;
+}
+
+.events li.gone .away {
+  font-style: italic;
 }
 
 .events i {

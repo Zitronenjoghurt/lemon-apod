@@ -51,6 +51,7 @@ pub struct Stats {
     pub copyright: i64,
     pub licensed: i64,
     pub gaps: i64,
+    pub gap_dates: Vec<ApodDate>,
     pub text: TextSummary,
     pub resources: ResourceSummary,
     pub pictures: PictureSummary,

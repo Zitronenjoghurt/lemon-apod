@@ -2,7 +2,10 @@ use super::time::{J2000, angle_difference, cos_deg, normalize_degrees, sin_deg, 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 
-const GLARE_DEGREES: f64 = 10.0;
+const ALL_NIGHT_DEGREES: f64 = 120.0;
+fn glare_degrees(magnitude: f64) -> f64 {
+    (18.0 + 2.0 * magnitude).clamp(10.0, 24.0)
+}
 
 const KEPLER_ITERATIONS: usize = 12;
 const KEPLER_TOLERANCE: f64 = 1e-9;
@@ -160,6 +163,7 @@ const EARTH: Elements = Elements {
 pub enum Visibility {
     Evening,
     Morning,
+    AllNight,
     Lost,
 }
 
@@ -168,6 +172,7 @@ impl Visibility {
         match self {
             Self::Evening => "Evening sky",
             Self::Morning => "Morning sky",
+            Self::AllNight => "Most of the night",
             Self::Lost => "Too close to the sun",
         }
     }
@@ -290,8 +295,12 @@ fn observe(planet: Planet, at: DateTime<Utc>) -> View {
     let planet_longitude = normalize_degrees(geocentric[1].atan2(geocentric[0]).to_degrees());
     let offset = angle_difference(sun_longitude, planet_longitude);
 
-    let visibility = if elongation < GLARE_DEGREES {
+    let magnitude = magnitude(planet, r, delta, phase_angle);
+
+    let visibility = if elongation < glare_degrees(magnitude) {
         Visibility::Lost
+    } else if elongation >= ALL_NIGHT_DEGREES {
+        Visibility::AllNight
     } else if offset > 0.0 {
         Visibility::Evening
     } else {
@@ -302,7 +311,7 @@ fn observe(planet: Planet, at: DateTime<Utc>) -> View {
         elongation,
         offset,
         visibility,
-        magnitude: magnitude(planet, r, delta, phase_angle),
+        magnitude,
         distance: delta,
     }
 }
@@ -796,5 +805,34 @@ mod tests {
         let found = next_milestone(Planet::Saturn, utc(2026, 1, 1)).unwrap();
         let view = observe(Planet::Saturn, found.at);
         assert_ne!(view.visibility, Visibility::Lost);
+    }
+
+    #[test]
+    fn a_planet_near_opposition_is_up_for_most_of_the_night() {
+        let found = next_milestone(Planet::Saturn, utc(2026, 1, 1)).unwrap();
+        let view = observe(Planet::Saturn, found.at);
+        assert_eq!(view.visibility, Visibility::AllNight);
+    }
+
+    #[test]
+    fn the_glare_a_planet_clears_follows_how_bright_it_is() {
+        assert!(glare_degrees(-4.3) < glare_degrees(0.7));
+        assert!(glare_degrees(-4.3) >= 10.0, "even Venus needs some sky");
+        assert!(
+            glare_degrees(5.7) <= 28.0,
+            "nothing may want more than Mercury's widest elongation"
+        );
+    }
+
+    #[test]
+    fn a_bright_planet_at_conjunction_is_still_lost() {
+        let view = observe(Planet::Jupiter, utc(2026, 8, 16));
+
+        assert!(
+            view.elongation < ALL_NIGHT_DEGREES,
+            "elongation came out at {}",
+            view.elongation
+        );
+        assert_eq!(view.visibility, Visibility::Lost);
     }
 }

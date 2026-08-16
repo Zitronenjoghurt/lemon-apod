@@ -11,7 +11,16 @@ import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
 import { withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
-import { FIRST_ENTRY, formatDate, monthDay, nextDay, previousDay, year } from '@/utils/date'
+import {
+  archivePath,
+  FIRST_ENTRY,
+  formatDate,
+  formatMonth,
+  monthDay,
+  nextDay,
+  previousDay,
+  year,
+} from '@/utils/date'
 import { highlightHtml, highlightText, HIT_CLASS } from '@/utils/highlight'
 import { queryTerms } from '@/utils/searchQuery'
 
@@ -27,6 +36,8 @@ const { isFavorite, toggle } = useFavorites()
 const { isRead, markRead, toggleRead } = useRead()
 const alsoOnThisDay = ref<ApodSummary[]>([])
 const encore = ref<PictureAppearances | null>(null)
+const encoreGroup = ref<string>()
+const encoreFailed = ref(false)
 const prose = ref<HTMLElement>()
 
 const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
@@ -88,13 +99,26 @@ async function loadOnThisDay() {
 }
 
 async function loadEncore() {
+  const group = props.entry.picture
+
+  if (!group) {
+    encore.value = null
+    encoreGroup.value = undefined
+    encoreFailed.value = false
+    return
+  }
+
+  if (encoreGroup.value === group) return
+
   encore.value = null
-  if (!props.entry.picture) return
+  encoreGroup.value = group
+  encoreFailed.value = false
 
   try {
-    encore.value = await api.picture(props.entry.date)
+    const found = await api.picture(group)
+    if (encoreGroup.value === group) encore.value = found
   } catch {
-    encore.value = null
+    if (encoreGroup.value === group) encoreFailed.value = true
   }
 }
 
@@ -159,7 +183,7 @@ useArrowKeys({
 
 watch(() => props.entry.date, loadOnThisDay, { immediate: true })
 
-watch(() => props.entry.date, loadEncore, { immediate: true })
+watch(() => props.entry.picture, loadEncore, { immediate: true })
 
 watch(
   () => props.entry.date,
@@ -180,7 +204,14 @@ watch([() => props.entry.date, hits], async () => {
   <article class="entry">
     <header class="head">
       <div class="row justify">
-        <time :datetime="entry.date" class="muted">{{ formatDate(entry.date) }}</time>
+        <RouterLink
+          v-tooltip.bottom="`Open ${formatMonth(entry.date)} in the archive`"
+          :to="archivePath(entry.date)"
+          class="muted when"
+        >
+          <time :datetime="entry.date">{{ formatDate(entry.date) }}</time>
+          <i aria-hidden="true" class="pi pi-calendar" />
+        </RouterLink>
         <nav aria-label="Adjacent days" class="row nav">
           <RouterLink v-if="previous" v-slot="{ navigate }" :to="`/${previous}`" custom>
             <Button
@@ -211,29 +242,36 @@ watch([() => props.entry.date, hits], async () => {
     </header>
 
     <nav
-      v-if="encore && encore.items.length > 1"
+      v-if="entry.picture && !encoreFailed"
       aria-label="Other days this picture ran"
       class="row encore"
     >
-      <RouterLink :to="`/pictures/${encore.picture.id}`" class="lead">
+      <template v-if="encore && encore.items.length > 1">
+        <RouterLink :to="`/pictures/${encore.picture.id}`" class="lead">
+          <i aria-hidden="true" class="pi pi-replay" />
+          Shown {{ encore.picture.appearances }} times
+        </RouterLink>
+
+        <ol class="row stops">
+          <li v-for="item in encore.items" :key="item.date">
+            <span v-if="item.date === entry.date" aria-current="page" class="stop here">
+              {{ year(item.date) }}
+            </span>
+            <RouterLink v-else :title="formatDate(item.date)" :to="`/${item.date}`" class="stop">
+              {{ year(item.date) }}
+            </RouterLink>
+          </li>
+        </ol>
+
+        <RouterLink :to="`/pictures/${encore.picture.id}`" class="all">
+          What changed <i aria-hidden="true" class="pi pi-arrow-right" />
+        </RouterLink>
+      </template>
+
+      <span v-else class="lead waiting">
         <i aria-hidden="true" class="pi pi-replay" />
-        Shown {{ encore.picture.appearances }} times
-      </RouterLink>
-
-      <ol class="row stops">
-        <li v-for="item in encore.items" :key="item.date">
-          <span v-if="item.date === entry.date" aria-current="page" class="stop here">
-            {{ year(item.date) }}
-          </span>
-          <RouterLink v-else :title="formatDate(item.date)" :to="`/${item.date}`" class="stop">
-            {{ year(item.date) }}
-          </RouterLink>
-        </li>
-      </ol>
-
-      <RouterLink :to="`/pictures/${encore.picture.id}`" class="all">
-        What changed <i aria-hidden="true" class="pi pi-arrow-right" />
-      </RouterLink>
+        Shown more than once
+      </span>
     </nav>
 
     <div v-if="highlight" class="row hits">
@@ -402,6 +440,11 @@ watch([() => props.entry.date, hits], async () => {
   color: var(--text);
 }
 
+.encore .waiting {
+  opacity: 0.7;
+  padding-block: 0.05rem;
+}
+
 .encore .stops {
   list-style: none;
   margin: 0;
@@ -464,6 +507,30 @@ watch([() => props.entry.date, hits], async () => {
   justify-content: space-between;
 }
 
+.when {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  text-decoration: none;
+  border-radius: 0.4rem;
+}
+
+.when i {
+  font-size: 0.8em;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.when:hover,
+.when:focus-visible {
+  color: var(--accent);
+}
+
+.when:hover i,
+.when:focus-visible i {
+  opacity: 0.75;
+}
+
 .title {
   font-size: clamp(1.6rem, 1.1rem + 2vw, 2.4rem);
   font-weight: 700;
@@ -478,13 +545,13 @@ watch([() => props.entry.date, hits], async () => {
 .layout {
   display: grid;
   gap: var(--gap);
-  align-items: start;
 }
 
 @media (min-width: 62rem) {
   .layout {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     gap: 2rem;
+    align-items: start;
   }
 
   .media-column {

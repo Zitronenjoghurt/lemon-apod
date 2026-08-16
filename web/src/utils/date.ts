@@ -29,6 +29,17 @@ export function month(date: string): number {
   return Number.parseInt(date.slice(5, 7), 10)
 }
 
+export function archivePath(date: string): string {
+  return `/archive/${date.slice(0, 4)}/${date.slice(5, 7)}`
+}
+
+const MONTH_YEAR = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long' })
+
+export function formatMonth(date: string): string {
+  const parsed = parse(date)
+  return parsed ? MONTH_YEAR.format(parsed) : date.slice(0, 7)
+}
+
 export const FIRST_ENTRY = '1995-06-16'
 
 export function daysBetween(from: string, to: string): number {

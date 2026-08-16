@@ -293,7 +293,7 @@ function explain(band: WeatherBand): void {
             unit=" sfu"
           />
           <p class="muted note">
-            Radio brightness at 10.7cm, a meassure of how busy the sun currently is. In quiet times
+            Radio brightness at 10.7cm, a measure of how busy the sun currently is. In quiet times
             around 70, past 200 at a solar maximum.
           </p>
         </section>
@@ -675,8 +675,6 @@ h1 {
   gap: 0.6rem 1rem;
 }
 
-/* A tab keeps its own width. Squeezed ones break their labels mid-word, and the row is the thing
-   that gives way: it drops under the heading, and below 38rem it is a dropdown instead. */
 .notices-head :deep(.p-togglebutton) {
   flex: none;
 }

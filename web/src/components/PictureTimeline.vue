@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import EntryDiff from './EntryDiff.vue'
 import type { Appearance, Changed } from '@/api/types'
 import { formatDate } from '@/utils/date'
 
@@ -12,7 +13,7 @@ const props = defineProps<{
 const LABELS: Array<[keyof Changed, string, string]> = [
   ['title', 'New title', 'pi-pencil'],
   ['explanation', 'Rewritten', 'pi-align-left'],
-  ['credit', 'New credit', 'pi-user-edit'],
+  ['credit', 'New credit', 'pi-user'],
   ['file', 'New image source', 'pi-image'],
 ]
 
@@ -33,6 +34,14 @@ const untouched = computed(
   () =>
     props.appearances.filter((item, index) => index > 0 && !changes(item.changed).length).length,
 )
+
+const opened = ref(new Set<string>())
+
+function toggle(date: string) {
+  const next = new Set(opened.value)
+  if (!next.delete(date)) next.add(date)
+  opened.value = next
+}
 </script>
 
 <template>
@@ -64,6 +73,32 @@ const untouched = computed(
           </li>
           <li v-if="!changes(item.changed).length" class="same">Exactly as before</li>
         </ul>
+
+        <template v-if="index > 0 && changes(item.changed).length">
+          <button
+            :aria-expanded="opened.has(item.date)"
+            class="reveal"
+            type="button"
+            @click="toggle(item.date)"
+          >
+            <i
+              :class="opened.has(item.date) ? 'pi-chevron-down' : 'pi-chevron-right'"
+              aria-hidden="true"
+              class="pi"
+            />
+            {{
+              opened.has(item.date)
+                ? 'Hide the differences'
+                : 'Compare with the previous appearance'
+            }}
+          </button>
+
+          <EntryDiff
+            v-if="opened.has(item.date)"
+            :after="item.date"
+            :before="appearances[index - 1].date"
+          />
+        </template>
       </div>
     </li>
   </ol>
@@ -83,13 +118,13 @@ const untouched = computed(
   flex-direction: column;
 }
 
-.timeline li {
+.timeline > li {
   position: relative;
   padding: 0 0 1.1rem 1.4rem;
   border-left: 2px solid var(--border);
 }
 
-.timeline li:last-child {
+.timeline > li:last-child {
   border-left-color: transparent;
   padding-bottom: 0;
 }
@@ -104,7 +139,7 @@ const untouched = computed(
   background: var(--border);
 }
 
-.timeline li.current > .marker {
+.timeline > li.current > .marker {
   background: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
@@ -160,20 +195,48 @@ const untouched = computed(
 .tags li {
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.05rem 0.55rem;
+  padding: 0.15rem 0.7rem;
   font-size: 0.75rem;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .tags i {
-  font-size: 0.7em;
+  font-size: 0.9em;
+  line-height: 1;
+  flex: none;
+  width: 1.45em;
+  text-align: center;
 }
 
 .tags .same {
   border-style: dashed;
+}
+
+.reveal {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.reveal:hover,
+.reveal:focus-visible {
+  color: var(--accent);
+}
+
+.reveal i {
+  font-size: 0.65em;
 }
 
 .footnote {

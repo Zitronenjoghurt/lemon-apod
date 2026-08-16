@@ -132,6 +132,7 @@ export interface Stats {
   copyright: number
   licensed: number
   gaps: number
+  gap_dates: string[]
   text: TextSummary
   resources: ResourceSummary
   pictures: PictureSummary
@@ -326,7 +327,7 @@ export interface Turning {
   opens_southern: string
 }
 
-export type PlanetVisibility = 'evening' | 'morning' | 'lost'
+export type PlanetVisibility = 'evening' | 'morning' | 'all_night' | 'lost'
 
 export interface PlanetMilestone {
   name: string

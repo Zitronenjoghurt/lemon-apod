@@ -113,7 +113,7 @@ async fn report(sky: &SkyWriter, feed: &str, outcome: Result<usize>) {
 
 async fn poll_launches(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Result<usize> {
     let url = format!(
-        "{}?limit={}&mode=normal&hide_recent_previous=true",
+        "{}?limit={}&mode=normal&hide_recent_previous=false",
         cfg.launches_url, cfg.launch_limit
     );
 
@@ -126,7 +126,8 @@ async fn poll_launches(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Result<us
         .into_iter()
         .filter_map(|raw| convert(raw, &cfg.launch_page_url))
         .collect();
-    let written = sky.replace_launches(&launches, Utc::now()).await?;
+    let keep_from = Utc::now() - TimeDelta::hours(store::LAUNCH_LOOKBACK_HOURS);
+    let written = sky.replace_launches(&launches, keep_from).await?;
 
     Ok(written as usize)
 }

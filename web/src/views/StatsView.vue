@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import RetryNotice from '@/components/RetryNotice.vue'
 import WordDetail from '@/components/WordDetail.vue'
@@ -8,7 +8,7 @@ import { api } from '@/api/client'
 import type { SortOrder, Word, WordSort } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
 import { useNarrow } from '@/composables/useNarrow'
-import { formatDate } from '@/utils/date'
+import { daysBetween, formatDate } from '@/utils/date'
 
 const PAGE_SIZE = 50
 const DEBOUNCE_MS = 250
@@ -37,6 +37,25 @@ const {
   loading: timelineLoading,
   run: loadTimeline,
 } = useAsync((signal) => api.timeline(signal))
+
+const gapsPopover = useTemplateRef<{ toggle: (event: Event) => void }>('gapsPopover')
+
+const gapRuns = computed(() => {
+  const runs: { from: string; to: string; days: number }[] = []
+
+  for (const day of stats.value?.gap_dates ?? []) {
+    const open = runs[runs.length - 1]
+
+    if (open && daysBetween(open.to, day) === 1) {
+      open.to = day
+      open.days += 1
+    } else {
+      runs.push({ from: day, to: day, days: 1 })
+    }
+  }
+
+  return runs
+})
 
 const query = ref('')
 const sort = ref<`${WordSort}:${SortOrder}`>('total:desc')
@@ -172,7 +191,7 @@ function count(value: number | undefined): string {
         <span class="muted name">Pictures</span>
         <strong class="value">{{ count(stats.thumbnails) }}</strong>
         <span class="muted foot">
-          thumbnailed, {{ count(stats.entries - stats.thumbnails) }} could not be
+          thumbnailed, {{ count(stats.entries - stats.thumbnails) }} failed
         </span>
       </div>
       <div class="card tile">
@@ -204,7 +223,7 @@ function count(value: number | undefined): string {
         <span class="muted name">Most repeated</span>
         <strong class="value">{{ count(stats.pictures.most_shown_times) }}&times;</strong>
         <span class="muted foot">
-          one picture, from
+          the same picture, from
           <RouterLink :to="`/pictures/${stats.pictures.most_shown}`">
             {{ formatDate(stats.pictures.most_shown) }}
           </RouterLink>
@@ -213,11 +232,36 @@ function count(value: number | undefined): string {
       <div class="card tile">
         <span class="muted name">Days missed</span>
         <strong class="value">{{ count(stats.gaps) }}</strong>
-        <span class="muted foot">
-          {{ stats.gaps === 0 ? 'a picture every single day' : 'days APOD published nothing' }}
+        <span v-if="!stats.gaps" class="muted foot">a picture every single day</span>
+        <span v-else class="muted foot">
+          days APOD published nothing,
+          <button
+            :aria-label="`Which ${stats.gaps} days APOD published nothing`"
+            class="which"
+            type="button"
+            @click="gapsPopover?.toggle($event)"
+          >
+            see which
+          </button>
         </span>
       </div>
     </section>
+
+    <Popover ref="gapsPopover">
+      <div class="gaps">
+        <ul>
+          <li v-for="run in gapRuns" :key="run.from">
+            <span class="when">
+              {{ formatDate(run.from) }}
+              <template v-if="run.to !== run.from"> to {{ formatDate(run.to) }}</template>
+            </span>
+            <span class="muted howmany">
+              {{ run.days }} {{ run.days === 1 ? 'day' : 'days' }}
+            </span>
+          </li>
+        </ul>
+      </div>
+    </Popover>
 
     <section v-if="text && text.measured" class="card panel">
       <h2>Length distribution between all APODs</h2>
@@ -373,9 +417,9 @@ function count(value: number | undefined): string {
       />
 
       <p v-if="words" aria-live="polite" class="muted count">
-        {{ count(words.total) }} {{ words.total === 1 ? 'word' : 'words' }} match
+        {{ count(words.total) }} {{ words.total === 1 ? 'word' : 'words' }} registered
         <template v-if="text?.used_once && !query">
-          &middot; {{ count(text.used_once) }} of them were used exactly once
+          &middot; {{ count(text.used_once) }} of them were only used once
         </template>
       </p>
 
@@ -468,6 +512,61 @@ h2 {
 
 .tile .foot {
   font-size: 0.8rem;
+}
+
+.which {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.which:hover,
+.which:focus-visible {
+  text-decoration-thickness: 2px;
+}
+
+.gaps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 22rem;
+}
+
+.gaps .lede {
+  font-size: 0.8rem;
+  text-wrap: pretty;
+}
+
+.gaps ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.gaps li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.25rem;
+  font-size: 0.88rem;
+}
+
+.gaps .when {
+  text-wrap: pretty;
+}
+
+.gaps .howmany {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .panel {
@@ -600,7 +699,6 @@ h2 {
   min-width: 11rem;
 }
 
-/* Same field-and-select height agreement as the other catalogue pages. */
 .controls :deep(.p-inputtext),
 .controls :deep(.p-select) {
   height: 2.75rem;
@@ -620,9 +718,13 @@ h2 {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0.4rem 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  columns: 19rem;
+  column-gap: 1rem;
+}
+
+.words li {
+  break-inside: avoid;
+  margin-bottom: 0.4rem;
 }
 
 .word {
@@ -671,6 +773,12 @@ h2 {
 .word .entries {
   font-size: 0.78rem;
   flex: none;
+}
+
+.legend {
+  margin: 0;
+  font-size: 0.78rem;
+  text-wrap: pretty;
 }
 
 .lines {

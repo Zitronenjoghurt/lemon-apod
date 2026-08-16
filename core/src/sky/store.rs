@@ -11,6 +11,7 @@ pub static MIGRATIONS: Migrator = sqlx::migrate!("./migrations-sky");
 
 pub const LAUNCHES: &str = "launches";
 pub const SPACE_WEATHER: &str = "space_weather";
+pub const LAUNCH_LOOKBACK_HOURS: i64 = 36;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Launch {
@@ -101,6 +102,29 @@ impl SkyReader {
         .await?;
 
         Ok(rows.iter().map(launch_from_row).collect())
+    }
+
+    pub async fn recent_launches(
+        &self,
+        since: DateTime<Utc>,
+        until: DateTime<Utc>,
+        limit: i64,
+    ) -> DbResult<Vec<Launch>> {
+        let rows = sqlx::query(
+            "SELECT id, name, provider, vehicle, pad, mission, orbit, status, net,
+                    window_start, window_end, precision, image_url, info_url
+             FROM launches
+             WHERE net >= ?1 AND net < ?2
+             ORDER BY net DESC
+             LIMIT ?3",
+        )
+        .bind(since.timestamp())
+        .bind(until.timestamp())
+        .bind(limit)
+        .fetch_all(self.db.reader())
+        .await?;
+
+        Ok(rows.iter().rev().map(launch_from_row).collect())
     }
 
     pub async fn space_weather(&self) -> DbResult<Option<SpaceWeather>> {
@@ -374,6 +398,67 @@ mod tests {
 
         let ids: Vec<&str> = found.iter().map(|launch| launch.id.as_str()).collect();
         assert_eq!(ids, ["a", "b", "c"]);
+
+        writer.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_launch_that_has_just_gone_up_is_still_reachable() {
+        let writer = SkyWriter::open(temp_path()).await.unwrap();
+        let now = Utc::now();
+        let lookback = now - TimeDelta::hours(LAUNCH_LOOKBACK_HOURS);
+
+        writer
+            .replace_launches(
+                &[
+                    launch("ancient", -60 * 24 * 7),
+                    launch("yesterday", -60 * 20),
+                    launch("an hour ago", -60),
+                    launch("soon", 90),
+                ],
+                lookback,
+            )
+            .await
+            .unwrap();
+
+        let reader = writer.reader();
+        let behind = reader.recent_launches(lookback, now, 10).await.unwrap();
+        let ids: Vec<&str> = behind.iter().map(|launch| launch.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            ["yesterday", "an hour ago"],
+            "oldest first, none ahead"
+        );
+
+        let ahead = reader.upcoming_launches(now, 10).await.unwrap();
+        let ids: Vec<&str> = ahead.iter().map(|launch| launch.id.as_str()).collect();
+        assert_eq!(ids, ["soon"]);
+
+        writer.close().await;
+    }
+
+    #[tokio::test]
+    async fn the_limit_on_the_launches_behind_us_keeps_the_latest() {
+        let writer = SkyWriter::open(temp_path()).await.unwrap();
+        let now = Utc::now();
+        let lookback = now - TimeDelta::hours(LAUNCH_LOOKBACK_HOURS);
+
+        writer
+            .replace_launches(
+                &[launch("a", -300), launch("b", -200), launch("c", -100)],
+                lookback,
+            )
+            .await
+            .unwrap();
+
+        let found = writer
+            .reader()
+            .recent_launches(lookback, now, 2)
+            .await
+            .unwrap();
+
+        let ids: Vec<&str> = found.iter().map(|launch| launch.id.as_str()).collect();
+        assert_eq!(ids, ["b", "c"], "the two nearest to now, still in order");
 
         writer.close().await;
     }
