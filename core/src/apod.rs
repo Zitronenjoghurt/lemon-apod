@@ -9,7 +9,7 @@ pub mod reuse;
 #[cfg(feature = "data-write")]
 pub mod write;
 
-pub use games::Deal;
+pub use games::{Deal, GameEntry};
 pub use model::{
     AnchorCount, Appearance, Changed, Cloze, ClozePiece, Coverage, EntryLength, Filters, HostCount,
     KindCount, LengthBucket, Listing, MonthCount, Order, Page, Picture, PictureAppearances,

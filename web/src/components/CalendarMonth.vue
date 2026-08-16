@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodCredit from './ApodCredit.vue'
 import type { ApodSummary } from '@/api/types'
 import { usePreferences } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
@@ -115,6 +116,8 @@ watch([rows, () => props.entries.length], () => void nextTick(measure))
 </script>
 
 <template>
+  <ApodCredit variant="banner" />
+
   <div ref="root" :aria-busy="loading" :style="fit" class="calendar">
     <div ref="head" class="weekdays">
       <div v-for="name in WEEKDAYS" :key="name" class="weekday muted">{{ name }}</div>

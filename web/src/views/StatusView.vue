@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodCredit from '@/components/ApodCredit.vue'
 import ReadProgress from '@/components/ReadProgress.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import SkyPanels from '@/components/SkyPanels.vue'
@@ -222,9 +223,11 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
               </span>
             </p>
 
-            <p v-if="credits.length" class="muted credit">
-              <span v-for="line in credits" :key="line">{{ line }}</span>
-            </p>
+            <ApodCredit :source="featuredFull?.source_url" variant="caption">
+              <p v-if="credits.length" class="muted credit">
+                <span v-for="line in credits" :key="line">{{ line }}</span>
+              </p>
+            </ApodCredit>
 
             <div class="row actions">
               <RouterLink v-slot="{ navigate }" :to="`/${featured.date}`" custom>
@@ -341,7 +344,7 @@ h1 {
 
 .today {
   display: grid;
-  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
   overflow: hidden;
 }
 
@@ -349,10 +352,13 @@ h1 {
   position: relative;
   display: block;
   background: color-mix(in srgb, var(--text) 6%, transparent);
-  aspect-ratio: 16 / 10;
+  min-height: 14rem;
 }
 
-.thumb img {
+.thumb img,
+.thumb .fallback {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -362,7 +368,6 @@ h1 {
 .fallback {
   display: grid;
   place-items: center;
-  height: 100%;
   color: var(--text-muted);
   font-size: 1.8rem;
 }
@@ -450,7 +455,7 @@ h1 {
   flex-direction: column;
   gap: 0.1rem;
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   text-wrap: pretty;
 }
 

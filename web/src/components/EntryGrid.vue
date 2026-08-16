@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import ApodCredit from './ApodCredit.vue'
 import EntryCard from './EntryCard.vue'
 import type { ApodSummary, SearchHit } from '@/api/types'
 
@@ -9,8 +10,16 @@ withDefaults(
     placeholders?: number
     empty?: string
     query?: string
+    credit?: boolean
   }>(),
-  { entries: () => [], loading: false, placeholders: 8, empty: 'Nothing here.', query: undefined },
+  {
+    entries: () => [],
+    loading: false,
+    placeholders: 8,
+    empty: 'Nothing here.',
+    query: undefined,
+    credit: true,
+  },
 )
 
 function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
@@ -35,16 +44,20 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
 
   <p v-else-if="!entries.length" class="muted empty">{{ empty }}</p>
 
-  <div v-else class="grid">
-    <EntryCard
-      v-for="entry in entries"
-      :key="entry.date"
-      :entry="entry"
-      :hit="hitOf(entry)"
-      :query="query"
-      :snippet="snippetOf(entry)"
-    />
-  </div>
+  <template v-else>
+    <ApodCredit v-if="credit" variant="banner" />
+
+    <div class="grid">
+      <EntryCard
+        v-for="entry in entries"
+        :key="entry.date"
+        :entry="entry"
+        :hit="hitOf(entry)"
+        :query="query"
+        :snippet="snippetOf(entry)"
+      />
+    </div>
+  </template>
 </template>
 
 <style scoped>

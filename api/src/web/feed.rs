@@ -186,6 +186,11 @@ fn content_html(base: &str, entry: &ApodEntry) -> String {
         html.push_str("></a></p>");
     }
 
+    html.push_str(&format!(
+        "<p>From NASA's <a href=\"{source}\">Astronomy Picture of the Day</a></p>",
+        source = super::escape(&entry.source_url),
+    ));
+
     html.push_str("<p>");
     html.push_str(&entry.explanation_html);
     html.push_str("</p>");
@@ -315,6 +320,22 @@ mod tests {
         assert!(
             !html.contains("</p>A ring"),
             "the explanation must not run straight out of the image paragraph: {html}"
+        );
+    }
+
+    #[test]
+    fn apod_is_named_next_to_the_picture_it_came_from() {
+        let html = content_html(BASE, &entry());
+
+        let image = html.find("<img").expect("the entry has a thumbnail");
+        let name = html
+            .find("Astronomy Picture of the Day")
+            .expect("the name is in the item");
+
+        assert!(name > image, "the name follows the picture: {html}");
+        assert!(
+            html.contains("<a href=\"https://apod.nasa.gov/apod/ap260305.html\">Astronomy Picture of the Day</a>"),
+            "{html}"
         );
     }
 

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodCredit from '@/components/ApodCredit.vue'
 import type { GameSlug } from '@/api/types'
 import { type GameMode, GAMES, useDailyDay, useGame } from '@/composables/useGames'
 
@@ -100,6 +101,8 @@ const played = computed(() => resultFor(dailyDay.value))
           <span class="sr-only">How to play</span>
         </button>
       </header>
+
+      <ApodCredit lead="Every picture in this game is from NASA's" variant="banner" />
 
       <slot />
     </template>

@@ -61,14 +61,16 @@ export function hydrateRead(): void {
 }
 
 export function useRead(scope?: ReadScope) {
-  const which = scope ?? inject(SCOPE, 'archive' as ReadScope)
+  const which = scope ?? inject<ReadScope | undefined>(SCOPE, undefined)
 
   const admitted = new Set<string>()
-  let admittedFor = filters.value[which]
+  let admittedFor = which ? filters.value[which] : 'all'
 
   const filter = computed<ReadFilter>({
-    get: () => filters.value[which],
+    get: () => (which ? filters.value[which] : 'all'),
     set: (next) => {
+      if (!which) return
+
       filters.value = { ...filters.value, [which]: next }
       try {
         localStorage.setItem(filterKey(which), next)

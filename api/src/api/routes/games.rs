@@ -4,7 +4,7 @@ pub mod token;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::{params, response};
 use crate::state::ServerState;
-use apod_core::{ApodDate, ApodSummary, Deal};
+use apod_core::{ApodDate, ApodSummary, Credit, Deal, GameEntry};
 use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode, header};
@@ -32,16 +32,26 @@ pub struct Picture {
     width: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     height: Option<u32>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    credit: Vec<String>,
 }
 
 impl Picture {
-    pub fn of(entry: &ApodSummary) -> Self {
+    pub fn of(entry: &GameEntry) -> Self {
         Self {
-            picture: token::encode(Kind::Picture, entry.date),
-            width: entry.media.thumb_width,
-            height: entry.media.thumb_height,
+            picture: token::encode(Kind::Picture, entry.summary.date),
+            width: entry.summary.media.thumb_width,
+            height: entry.summary.media.thumb_height,
+            credit: credit_lines(&entry.credits),
         }
     }
+}
+
+fn credit_lines(credits: &[Credit]) -> Vec<String> {
+    credits
+        .iter()
+        .map(|credit| format!("{}: {}", credit.role, credit.text))
+        .collect()
 }
 
 #[derive(Debug, Serialize)]

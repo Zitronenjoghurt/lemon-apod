@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import ApodCredit from '@/components/ApodCredit.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { PictureSort, SortOrder } from '@/api/types'
@@ -133,6 +134,8 @@ function span(first: string, last: string): string {
       {{ listing.total.toLocaleString() }} {{ listing.total === 1 ? 'encore' : 'encores' }}
       <template v-if="retitled">that were renamed</template>
     </h2>
+
+    <ApodCredit v-if="listing?.items.length" variant="banner" />
 
     <div v-if="loading && !listing" class="grid">
       <Skeleton v-for="index in 8" :key="index" height="13rem" width="100%" />

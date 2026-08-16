@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import ApodCredit from '@/components/ApodCredit.vue'
 import PictureTimeline from '@/components/PictureTimeline.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
@@ -83,6 +84,8 @@ watch([picture, notFound], ([found, missing]) => {
               {{ years === 1 ? 'year' : 'years' }}. You can see below what exactly has changed over
               time.
             </p>
+
+            <ApodCredit lead="This picture is from NASA's" variant="banner" />
 
             <dl class="facts">
               <div>

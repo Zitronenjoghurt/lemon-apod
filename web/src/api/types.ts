@@ -486,6 +486,7 @@ export interface GamePicture {
   picture: string
   width?: number
   height?: number
+  credit?: string[]
 }
 
 export interface Puzzle<T> {

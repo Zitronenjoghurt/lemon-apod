@@ -3,7 +3,7 @@ use super::{Picture, Setup};
 use crate::api::error::{ApiError, ApiResult};
 use crate::state::ServerState;
 use apod_core::apod::games;
-use apod_core::{ApodDate, Cloze};
+use apod_core::{ApodDate, Cloze, GameEntry};
 use serde::Serialize;
 use std::collections::HashSet;
 
@@ -196,7 +196,10 @@ pub async fn words(state: &ServerState, mut setup: Setup) -> ApiResult<Puzzle<Wo
         day: setup.day,
         range,
         rounds: vec![Words {
-            picture: Picture::of(&entry.to_summary()),
+            picture: Picture::of(&GameEntry {
+                summary: entry.to_summary(),
+                credits: entry.credits.clone(),
+            }),
             title_words,
             cloze,
         }],

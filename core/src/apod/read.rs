@@ -548,7 +548,7 @@ fn push_filters(sql: &mut String, params: &mut Vec<Param>, filters: &Filters) {
     }
 }
 
-fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {
+pub(super) fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {
     raw.and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default()
 }

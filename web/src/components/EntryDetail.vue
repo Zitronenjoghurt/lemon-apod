@@ -312,7 +312,35 @@ watch([() => props.entry.date, hits], async () => {
 
     <div class="layout">
       <div class="media-column">
-        <MediaFrame :media="entry.media" :title="entry.title" />
+        <MediaFrame :media="entry.media" :source="entry.source_url" :title="entry.title">
+          <template #credit>
+            <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
+              <template v-for="(credit, index) in credits" :key="credit.label + index">
+                <dt>{{ credit.label }}</dt>
+                <dd>
+                  <span v-html="credit.html" />
+                  <span
+                    v-if="index === 0 && entry.has_copyright"
+                    class="rights"
+                    title="Credited to a named copyright holder rather than released as public domain by NASA"
+                  >
+                    Copyrighted
+                  </span>
+                  <a
+                    v-if="index === 0 && license"
+                    :href="license.url"
+                    class="rights"
+                    rel="noopener license"
+                    target="_blank"
+                    title="Released under this licence rather than as public domain by NASA"
+                  >
+                    {{ license.name }}
+                  </a>
+                </dd>
+              </template>
+            </dl>
+          </template>
+        </MediaFrame>
 
         <div class="row actions">
           <Button
@@ -362,32 +390,6 @@ watch([() => props.entry.date, hits], async () => {
             />
           </RouterLink>
         </div>
-
-        <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
-          <template v-for="(credit, index) in credits" :key="credit.label + index">
-            <dt>{{ credit.label }}</dt>
-            <dd>
-              <span v-html="credit.html" />
-              <span
-                v-if="index === 0 && entry.has_copyright"
-                class="rights"
-                title="Credited to a named copyright holder rather than released as public domain by NASA"
-              >
-                Copyrighted
-              </span>
-              <a
-                v-if="index === 0 && license"
-                :href="license.url"
-                class="rights"
-                rel="noopener license"
-                target="_blank"
-                title="Released under this licence rather than as public domain by NASA"
-              >
-                {{ license.name }}
-              </a>
-            </dd>
-          </template>
-        </dl>
       </div>
 
       <div class="text-column">
@@ -408,6 +410,7 @@ watch([() => props.entry.date, hits], async () => {
     </div>
 
     <section v-if="alsoOnThisDay.length" class="stack">
+      <hr class="parting" />
       <h2 class="section-title">On this day in other years</h2>
       <EntryGrid :entries="alsoOnThisDay" />
     </section>
@@ -677,10 +680,17 @@ a.rights:hover {
   margin: 0;
 }
 
+.parting {
+  width: 100%;
+  margin: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
 .section-title {
   font-size: 1.15rem;
   font-weight: 600;
-  margin-top: 1rem;
+  margin-top: 0.25rem;
 }
 
 .hits {

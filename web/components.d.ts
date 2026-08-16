@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ApodCredit: typeof import('./src/components/ApodCredit.vue')['default']
     Button: typeof import('primevue/button')['default']
     CalendarMonth: typeof import('./src/components/CalendarMonth.vue')['default']
     Checkbox: typeof import('primevue/checkbox')['default']

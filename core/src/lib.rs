@@ -21,7 +21,7 @@ pub use apod::ApodWriter;
 #[cfg(feature = "data-read")]
 pub use apod::{
     AnchorCount, ApodError, ApodReader, ApodResult, Appearance, Changed, Cloze, ClozePiece, Deal,
-    Filters, Fingerprint, HostCount, Listing, Order, Page, Picture, PictureAppearances,
+    Filters, Fingerprint, GameEntry, HostCount, Listing, Order, Page, Picture, PictureAppearances,
     PictureFilters, PictureGroup, PictureOrder, PictureSummary, Resource, ResourceFilters,
     ResourceOrder, ResourceRef, ResourceRefs, SearchResults, Snippet, Stats, TextSummary, Timeline,
     Word, WordFilters, WordOrder, WordUse,

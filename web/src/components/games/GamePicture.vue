@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodCredit from '@/components/ApodCredit.vue'
 import { api } from '@/api/client'
 import type { GamePicture } from '@/api/types'
 
@@ -26,6 +27,7 @@ const zoomed = ref(false)
 const fullLoaded = ref(false)
 
 const source = computed(() => api.games.picture(props.picture.picture))
+const credit = computed(() => props.picture.credit ?? [])
 const ratio = computed(() => {
   const { width, height } = props.picture
   return width && height ? width / height : 1
@@ -45,30 +47,36 @@ watch(zoomed, (open) => {
 </script>
 
 <template>
-  <div :class="['game-picture', state, { framed: frame }]" :style="{ '--ratio': frame || ratio }">
-    <Skeleton v-if="!loaded && !failed" class="fill" height="100%" width="100%" />
-    <p v-if="failed" class="muted gone">
-      <i aria-hidden="true" class="pi pi-image" />
-      This picture could not be loaded.
-    </p>
-    <img
-      v-show="loaded"
-      :alt="alt"
-      :src="source"
-      :style="{
-        filter: blur ? `blur(${blur / 100}em)` : 'none',
-        transform: `scale(${scale})`,
-      }"
-      decoding="async"
-      draggable="false"
-      @error="failed = true"
-      @load="loaded = true"
-    />
+  <div :style="{ '--ratio': frame || ratio }" class="shot">
+    <div :class="['game-picture', state, { framed: frame }]">
+      <Skeleton v-if="!loaded && !failed" class="fill" height="100%" width="100%" />
+      <p v-if="failed" class="muted gone">
+        <i aria-hidden="true" class="pi pi-image" />
+        This picture could not be loaded.
+      </p>
+      <img
+        v-show="loaded"
+        :alt="alt"
+        :src="source"
+        :style="{
+          filter: blur ? `blur(${blur / 100}em)` : 'none',
+          transform: `scale(${scale})`,
+        }"
+        decoding="async"
+        draggable="false"
+        @error="failed = true"
+        @load="loaded = true"
+      />
 
-    <button v-if="zoomable && loaded" class="zoom" type="button" @click="zoomed = true">
-      <i aria-hidden="true" class="pi pi-search-plus" />
-      <span class="zoom-label">Full size</span>
-    </button>
+      <button v-if="zoomable && loaded" class="zoom" type="button" @click="zoomed = true">
+        <i aria-hidden="true" class="pi pi-search-plus" />
+        <span class="zoom-label">Full size</span>
+      </button>
+    </div>
+
+    <p v-if="credit.length" class="muted shot-credit">
+      <span v-for="line in credit" :key="line">{{ line }}</span>
+    </p>
   </div>
 
   <Dialog
@@ -80,6 +88,8 @@ watch(zoomed, (open) => {
     modal
   >
     <div class="full-wrap">
+      <ApodCredit lead="This picture is from NASA's" variant="banner" />
+
       <Skeleton v-if="!fullLoaded" height="60vh" width="100%" />
       <img
         v-show="fullLoaded"
@@ -89,6 +99,11 @@ watch(zoomed, (open) => {
         decoding="async"
         @load="fullLoaded = true"
       />
+
+      <p v-if="credit.length" class="muted shot-credit">
+        <span v-for="line in credit" :key="line">{{ line }}</span>
+      </p>
+
       <RouterLink v-if="date" :to="`/${date}`" class="muted open-entry">
         Open this entry
         <i aria-hidden="true" class="pi pi-angle-right" />
@@ -98,6 +113,25 @@ watch(zoomed, (open) => {
 </template>
 
 <style scoped>
+.shot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  margin-inline: auto;
+  max-width: calc(var(--cap, 200vh) * var(--ratio));
+}
+
+.shot-credit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
 .game-picture {
   position: relative;
   container-type: inline-size;
@@ -106,10 +140,8 @@ watch(zoomed, (open) => {
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   font-size: min(4vw, 1.4rem);
-  margin-inline: auto;
   width: 100%;
   aspect-ratio: var(--ratio);
-  max-width: calc(var(--cap, 200vh) * var(--ratio));
 }
 
 .game-picture img {

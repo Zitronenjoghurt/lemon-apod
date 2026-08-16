@@ -8,7 +8,7 @@ import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
 import { withInternalLinks } from '@/utils/apodLinks'
-import { roleLabel } from '@/utils/credits'
+import { licenseName, roleLabel } from '@/utils/credits'
 import { formatDate } from '@/utils/date'
 
 const props = defineProps<{
@@ -42,6 +42,12 @@ const credits = computed(() =>
     label: roleLabel(credit.role),
     html: withInternalLinks(credit.html),
   })),
+)
+
+const license = computed(() =>
+  entry.value?.license_url
+    ? { url: entry.value.license_url, name: licenseName(entry.value.license_url) }
+    : null,
 )
 
 const missing = ref(false)
@@ -124,10 +130,46 @@ onBeforeUnmount(() => {
           {{ formatDate(date) }}
         </time>
       </RouterLink>
-      <h2 class="title">{{ title || 'Untitled' }}</h2>
+      <h2 class="title">
+        <RouterLink :to="`/${date}`">{{ title || 'Untitled' }}</RouterLink>
+      </h2>
     </header>
 
-    <MediaFrame v-if="media" :media="media" :title="title" max-height="min(70vh, 44rem)" />
+    <MediaFrame
+      v-if="media"
+      :media="media"
+      :source="entry?.source_url"
+      :title="title"
+      max-height="min(70vh, 44rem)"
+    >
+      <template #credit>
+        <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
+          <template v-for="(credit, index) in credits" :key="credit.label + index">
+            <dt>{{ credit.label }}</dt>
+            <dd>
+              <span v-html="credit.html" />
+              <span
+                v-if="index === 0 && entry?.has_copyright"
+                class="rights"
+                title="Credited to a named copyright holder rather than released as public domain by NASA"
+              >
+                Copyrighted
+              </span>
+              <a
+                v-if="index === 0 && license"
+                :href="license.url"
+                class="rights"
+                rel="noopener license"
+                target="_blank"
+                title="Released under this licence rather than as public domain by NASA"
+              >
+                {{ license.name }}
+              </a>
+            </dd>
+          </template>
+        </dl>
+      </template>
+    </MediaFrame>
     <Skeleton v-else height="18rem" />
 
     <div class="row actions">
@@ -170,13 +212,6 @@ onBeforeUnmount(() => {
       <Skeleton height="0.9rem" width="100%" />
       <Skeleton height="0.9rem" width="60%" />
     </div>
-
-    <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
-      <template v-for="(credit, index) in credits" :key="credit.label + index">
-        <dt>{{ credit.label }}</dt>
-        <dd v-html="credit.html" />
-      </template>
-    </dl>
   </article>
 </template>
 
@@ -198,6 +233,15 @@ onBeforeUnmount(() => {
 
 .date {
   font-size: 0.82rem;
+}
+
+.title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.title a:hover {
+  color: var(--accent);
 }
 
 .title {
@@ -249,6 +293,22 @@ onBeforeUnmount(() => {
 
 .credits dd {
   margin: 0;
+}
+
+.rights {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  vertical-align: 0.05em;
+  text-decoration: none;
+}
+
+a.rights:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 @media (max-width: 40rem) {

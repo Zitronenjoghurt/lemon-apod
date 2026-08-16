@@ -1,12 +1,19 @@
 use super::model::{Cloze, ClozePiece, PictureSummary};
-use super::read::{ApodReader, ApodResult, to_dates};
+use super::read::{ApodReader, ApodResult, from_json, to_dates};
 use crate::date::ApodDate;
-use crate::entry::ApodSummary;
+use crate::entry::{ApodSummary, Credit};
 use crate::text;
-use sqlx::AssertSqlSafe;
+use sqlx::{AssertSqlSafe, Row};
 use std::collections::HashSet;
 
 const PICTURE_KINDS: &str = "'image_jpg', 'image_png', 'image_gif'";
+const CREDITS_COLUMN: usize = 10;
+
+#[derive(Debug, Clone)]
+pub struct GameEntry {
+    pub summary: ApodSummary,
+    pub credits: Vec<Credit>,
+}
 
 pub const WORDS_MIN: i64 = 90;
 pub const WORDS_MAX: i64 = 200;
@@ -47,12 +54,12 @@ impl ApodReader {
         Ok(to_dates(days))
     }
 
-    pub async fn summaries(&self, dates: &[ApodDate]) -> ApodResult<Vec<ApodSummary>> {
+    pub async fn summaries(&self, dates: &[ApodDate]) -> ApodResult<Vec<GameEntry>> {
         let mut out = Vec::with_capacity(dates.len());
 
         for &date in dates {
             let row = sqlx::query(AssertSqlSafe(format!(
-                "SELECT {} FROM entries WHERE date_id = ?1",
+                "SELECT {}, credits FROM entries WHERE date_id = ?1",
                 super::SUMMARY_COLUMNS
             )))
             .bind(date.days())
@@ -60,7 +67,10 @@ impl ApodReader {
             .await?;
 
             if let Some(row) = row {
-                out.push(self.summary(&row)?);
+                out.push(GameEntry {
+                    summary: self.summary(&row)?,
+                    credits: from_json(row.try_get(CREDITS_COLUMN)?),
+                });
             }
         }
 

@@ -1,11 +1,13 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import ApodCredit from './ApodCredit.vue'
 import { aspectRatio, isImage, type Media } from '@/api/types'
 
 const props = defineProps<{
   media: Media
   title: string
   maxHeight?: string
+  source?: string
 }>()
 
 const SLOW_AFTER_MS = 6000
@@ -86,6 +88,12 @@ const frameStyle = computed(() => ({
 
 <template>
   <figure :style="frameStyle" class="media">
+    <figcaption>
+      <ApodCredit :source="source" variant="caption">
+        <slot name="credit" />
+      </ApodCredit>
+    </figcaption>
+
     <Image
       v-if="showsImage"
       :alt="title"
@@ -126,13 +134,16 @@ const frameStyle = computed(() => ({
       </template>
 
       <template #original="{ style, previewCallback }">
-        <img
-          :alt="title"
-          :src="fullResolution ?? media.url ?? ''"
-          :style="style"
-          class="original"
-          @click="previewCallback"
-        />
+        <div class="zoomed">
+          <ApodCredit :title="title" class="zoomed-credit" variant="overlay" />
+          <img
+            :alt="title"
+            :src="fullResolution ?? media.url ?? ''"
+            :style="style"
+            class="original"
+            @click="previewCallback"
+          />
+        </div>
       </template>
 
       <template #previewicon>
@@ -183,6 +194,9 @@ const frameStyle = computed(() => ({
 <style scoped>
 .media {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   --media-max: min(62vh, 40rem);
 }
 
@@ -347,8 +361,22 @@ video.frame,
 
 .original {
   max-width: 95vw;
-  max-height: 95vh;
+  max-height: calc(95vh - 4rem);
   object-fit: contain;
+}
+
+.zoomed {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.zoomed-credit {
+  flex: none;
+  align-self: flex-start;
+  max-width: 100%;
 }
 
 .facade {

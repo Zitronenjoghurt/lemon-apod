@@ -94,7 +94,7 @@ const tally = computed(() => {
 
 <template>
   <div class="diff">
-    <p v-if="loading" class="muted note">Loading both runs…</p>
+    <p v-if="loading" class="muted note">Loading both entries…</p>
 
     <p v-else-if="error" class="muted note">{{ error }}</p>
 
