@@ -17,6 +17,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY core core
 COPY archiver archiver
 COPY api api
+COPY baseline baseline
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
@@ -38,6 +39,7 @@ WORKDIR /app
 
 FROM runtime AS archiver
 COPY --from=rust /out/apod-archiver /usr/local/bin/apod-archiver
+COPY baseline /app/baseline
 ENTRYPOINT ["apod-archiver"]
 CMD ["run"]
 

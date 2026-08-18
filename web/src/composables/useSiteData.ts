@@ -4,6 +4,7 @@ import { gameKey, GAMES, hydrateGames } from './useGames'
 import { ARCHIVE_VIEW_KEY, hydratePreferences, WEEK_START_KEY } from './usePreferences'
 import { filterKey, hydrateRead, READ_SCOPES } from './useRead'
 import { hydrateTheme } from './useTheme'
+import { CARD_KEY, hydrateRatingCard } from './useRating'
 import { hydrateWelcome, WELCOME_KEY } from './useWelcome'
 
 const APP = 'lemon-apod'
@@ -37,6 +38,7 @@ const FIELDS: Field[] = [
     hydrate: hydrateExternalLinks,
   },
   { key: WELCOME_KEY, shape: 'scalar', label: 'welcome note', hydrate: hydrateWelcome },
+  { key: CARD_KEY, shape: 'scalar', label: 'rating card', hydrate: hydrateRatingCard },
   ...GAMES.map((game) => ({
     key: gameKey(game.slug),
     shape: 'results' as Shape,

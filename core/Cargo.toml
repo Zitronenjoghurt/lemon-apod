@@ -10,6 +10,8 @@ data = ["dep:sqlx"]
 data-read = ["data", "dep:serde_json"]
 data-write = ["data-read"]
 notify-data = ["data"]
+rating = ["dep:serde_json"]
+rating-data = ["rating", "data"]
 sky = []
 sky-data = ["sky", "data"]
 

@@ -3,15 +3,20 @@ import { computed, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import EntryDetail from '@/components/EntryDetail.vue'
 import EntrySkeleton from '@/components/EntrySkeleton.vue'
+import GapDetail from '@/components/GapDetail.vue'
 import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
+import { useGaps } from '@/composables/useGaps'
 import { useLatestDate } from '@/composables/useStatus'
 import { formatDate } from '@/utils/date'
-import { entryTitle, pageTitle, setTitle } from '@/utils/title'
+import { entryTitle, gapTitle, pageTitle, setTitle } from '@/utils/title'
 
 const route = useRoute()
 const latest = useLatestDate()
+const { gaps, loaded: gapsLoaded } = useGaps()
 const date = computed(() => String(route.params.date ?? ''))
+
+const gap = computed(() => gaps.value.find((one) => one.date === date.value) ?? null)
 
 const highlight = computed(() => {
   const raw = String(route.query.q ?? '').trim()
@@ -28,14 +33,17 @@ const {
 
 watch(date, run, { immediate: true })
 
-watch([entry, notFound], ([found, missing]) => {
+watch([entry, notFound, gap], ([found, missing, empty]) => {
   if (found) setTitle(entryTitle(found.title, found.date))
+  else if (empty) setTitle(gapTitle(empty.date))
   else if (missing) setTitle(pageTitle(`No entry for ${formatDate(date.value)}`))
 })
 </script>
 
 <template>
-  <EntrySkeleton v-if="loading && !entry" />
+  <GapDetail v-if="gap" :gap="gap" />
+
+  <EntrySkeleton v-else-if="(loading && !entry) || (notFound && !gapsLoaded)" />
 
   <div v-else-if="notFound" class="card notice">
     <h1>No entry for {{ formatDate(date) }}</h1>

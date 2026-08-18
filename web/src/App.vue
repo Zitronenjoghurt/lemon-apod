@@ -20,6 +20,8 @@ const playingAGame = computed(() => {
   return String(route.name ?? '').startsWith('game-') && (play === 'daily' || play === 'free')
 })
 
+const needsRoom = computed(() => playingAGame.value || route.name === 'rating-vote')
+
 const menuOpen = ref(false)
 const settingsOpen = ref(false)
 
@@ -40,6 +42,7 @@ const groups: { name: string | null; links: NavLink[] }[] = [
     name: null,
     links: [
       { to: '/', label: 'Home', icon: 'pi pi-home', exact: true },
+      { to: '/rating', label: 'Best APOD Voting', icon: 'pi pi-images' },
       { to: APOD_URL, label: 'APOD Website', icon: 'pi pi-external-link', away: true },
     ],
   },
@@ -211,7 +214,7 @@ router.afterEach(() => (menuOpen.value = false))
     </aside>
 
     <div class="column">
-      <main id="main" :class="['container', 'page', { wide: playingAGame }]">
+      <main id="main" :class="['container', 'page', { wide: needsRoom }]">
         <RouterView v-slot="{ Component }">
           <Transition mode="out-in" name="fade">
             <KeepAlive :include="['FeedView']" :max="1">

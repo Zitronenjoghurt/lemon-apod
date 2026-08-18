@@ -3,7 +3,7 @@ members = ["core", "archiver", "api"]
 resolver = "3"
 
 [workspace.package]
-version = "0.13.0"
+version = "0.14.0"
 license = "MIT"
 edition = "2024"
 

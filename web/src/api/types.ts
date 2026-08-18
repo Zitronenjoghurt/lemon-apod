@@ -194,8 +194,18 @@ export interface Status {
   latest: ApodSummary | null
   entries: number
   publish: PublishSchedule
+  rating: RatingStatus
   contact: ContactConfig
   notify: NotifyConfig
+}
+
+export interface RatingStatus {
+  enabled: boolean
+  /** True once the first fit has built the pair index. Voting is not offered before then. */
+  ready: boolean
+  pool: number
+  votes: number
+  spent: number
 }
 
 export interface MonthCount {
@@ -560,4 +570,100 @@ export function isVideo(kind: MediaKind): boolean {
 export function aspectRatio(media: Media): number | null {
   const { thumb_width: width, thumb_height: height } = media
   return width && height ? width / height : null
+}
+
+export type RatingCategory = 'beautiful' | 'fascinating'
+
+export type RatingStage = 'screen' | 'contend' | 'settle' | 'settled'
+
+export interface RatingProgress {
+  stage: RatingStage
+  votes: number
+  done: number
+  target: number
+  total: number
+}
+
+export interface BallotSide extends ApodSummary {
+  source_url: string
+  credit?: string[]
+  dates: string[]
+}
+
+export interface Ballot {
+  ballot: string
+  category: RatingCategory
+  /** Seconds this ballot will still be accepted for. */
+  life: number
+  left: BallotSide
+  right: BallotSide
+}
+
+export type RatingOutcome = 'left' | 'right' | 'tie'
+
+export interface Cast {
+  outcome: RatingOutcome
+  left: string
+  right: string
+  next: Ballot | null
+}
+
+export interface BoardRow extends ApodSummary {
+  tier: number
+  score: number
+  stderr: number
+  lower: number
+  upper: number
+  comparisons: number
+  inherited?: number
+  dates: string[]
+  source_url: string
+  credit?: string[]
+}
+
+export interface Board {
+  category: RatingCategory
+  provisional: boolean
+  progress: RatingProgress
+  ranked: number
+  pool: number
+  votes: number
+  voters: number
+  favourite: string | null
+  min_comparisons: number
+  model: string | null
+  fitted_at: string | null
+  side_bias: number | null
+  rows: BoardRow[]
+}
+
+export interface RatingTerms {
+  cookie: string
+  cookie_days: number
+  categories: RatingCategory[]
+  beautiful_share: number
+  min_comparisons: number
+  baseline_max_ess: number
+  model: string
+  z: number
+  votes_per_window: number
+  window_secs: number
+  per_picture: number
+}
+
+export interface Forgotten {
+  forgotten: number
+}
+
+export interface Gap {
+  date: string
+  from: string
+  to: string
+  days: number
+  title: string
+  paragraphs: string[]
+  caveat?: string
+  source?: { label: string; url: string }
+  previous: string | null
+  next: string | null
 }

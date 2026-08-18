@@ -4,7 +4,7 @@ API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p a
 COMPOSE = docker compose -f docker/compose.yaml
 
 .PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs pictures sky \
-        notify docker seed up down logs ps shell
+        notify rating rating-import rating-export docker seed up down logs ps shell
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -51,6 +51,15 @@ pictures: ## Hash thumbnails and group the pictures the archive has shown more t
 
 sky: ## Poll the launch and space weather feeds once into ./data/sky.db
 	$(ARCHIVER) sky
+
+rating: ## Votes collected per category, and how far each has to go
+	$(ARCHIVER) rating status
+
+rating-import: ## Load baseline/rating into ./data/votes.db as priors. Run this if votes.db is lost
+	$(ARCHIVER) rating import
+
+rating-export: ## Fit what has been collected and write baseline/rating back out, ready to commit
+	$(ARCHIVER) rating export
 
 notify: ## Send what is due. DRY=1 lists it instead, SEED=1 records it as sent without sending
 	$(ARCHIVER) notify $(if $(DRY),--dry-run) $(if $(SEED),--seed)

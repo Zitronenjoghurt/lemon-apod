@@ -1,0 +1,24 @@
+[
+  {
+    "from": "1995-06-17",
+    "to": "1995-06-19",
+    "title": "Before APOD became a daily publication",
+    "paragraphs": [
+      "APOD's first picture went up on 16 June 1995. The second did not arrive until the 20th. Three days in between are blank."
+    ]
+  },
+  {
+    "from": "2020-06-10",
+    "to": "2020-06-10",
+    "title": "The first day APOD has been skipped",
+    "paragraphs": [
+      "APOD has published a picture every single day since June 20th 1995. Wednesday June 10th 2020 is the first day to break the streak.",
+      "That day was about #ShutDownSTEM and #Strike4BlackLives, a day of action across the science community held sixteen days after the killing of George Floyd on May 25th. Laboratories, university departments, observatories, scientific societies and journals put their normal work aside and spent the day to raise awareness against racism in their own fields. Astronomy and physics were near the centre of it: the call came from within the particle physics community, and many of the people whose pictures and research fill this archive took part."
+    ],
+    "caveat": "APOD itself published no information on why this day was skipped. The only thing we can show is that the streak stopped here for the first time in almost 25 years and what happened on that specific date.",
+    "source": {
+      "label": "About #ShutDownSTEM and #Strike4BlackLives",
+      "url": "https://en.wikipedia.org/wiki/Strike_for_Black_Lives_(academic_protest)"
+    }
+  }
+]

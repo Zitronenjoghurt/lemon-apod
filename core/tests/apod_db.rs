@@ -1530,3 +1530,133 @@ async fn coverage_counts_each_month_and_leaves_the_empty_ones_out() {
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+#[tokio::test]
+async fn a_rerun_that_changed_only_its_credit_label_is_reported_as_changed() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let runs = [
+        ("1996-02-29", "Photo Credit", "image/9602/aurora.jpg"),
+        (
+            "2000-02-29",
+            "Photo Credit & Copyright",
+            "image/9602/aurora.jpg",
+        ),
+        (
+            "2004-02-29",
+            "Photo Credit & Copyright",
+            "image/0402/aurora.jpg",
+        ),
+    ];
+
+    for (date, role, url) in runs {
+        let mut row = entry(date, "Aurora over Norway", "Green curtains over a fjord.");
+        row.credits = vec![Credit {
+            role: role.into(),
+            html: "Rune Rysstad".into(),
+            text: "Rune Rysstad".into(),
+        }];
+        row.media = Media::new(MediaKind::ImageJpg, Some(url.to_owned()), None);
+        writer.upsert(&row).await.unwrap();
+        writer
+            .set_thumb(
+                row.date,
+                Some(&Thumb::sized(row.date.thumb_path(), 480, 320)),
+            )
+            .await
+            .unwrap();
+        writer.set_phash(row.date, Some(&[7u8; 32])).await.unwrap();
+    }
+    writer.regroup_pictures().await.unwrap();
+
+    let reader = writer.reader();
+    let found = reader
+        .picture_appearances("1996-02-29".parse().unwrap())
+        .await
+        .unwrap()
+        .expect("three runs of one picture is a picture");
+
+    let changed: Vec<_> = found
+        .items
+        .iter()
+        .map(|item| (item.entry.date.to_string(), &item.changed))
+        .collect();
+    assert_eq!(changed.len(), 3);
+
+    assert!(
+        !changed[0].1.any(),
+        "the first run had nothing before it to differ from"
+    );
+
+    let second = changed[1].1;
+    assert!(
+        second.credit,
+        "Photo Credit became Photo Credit & Copyright, which is the run claiming a copyright"
+    );
+    assert!(!second.file, "the same file, so nothing to say about it");
+    assert!(!second.title && !second.explanation);
+
+    let third = changed[2].1;
+    assert!(third.file, "a different file behind the same words");
+    assert!(
+        !third.credit,
+        "the credit block is identical to the run before, so it must not be flagged"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_rerun_that_moved_only_its_high_resolution_file_is_reported_as_changed() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let runs = [
+        (
+            "2015-05-05",
+            "image/1505/m27_small.jpg",
+            "image/1505/m27_big.jpg",
+        ),
+        (
+            "2018-08-08",
+            "image/1505/m27_small.jpg",
+            "image/1808/m27_huge.jpg",
+        ),
+    ];
+
+    for (date, url, hd) in runs {
+        let mut row = entry(date, "The Dumbbell Nebula", "A planetary nebula.");
+        row.media = Media::new(
+            MediaKind::ImageJpg,
+            Some(url.to_owned()),
+            Some(hd.to_owned()),
+        );
+        writer.upsert(&row).await.unwrap();
+        writer
+            .set_thumb(
+                row.date,
+                Some(&Thumb::sized(row.date.thumb_path(), 480, 320)),
+            )
+            .await
+            .unwrap();
+        writer.set_phash(row.date, Some(&[3u8; 32])).await.unwrap();
+    }
+    writer.regroup_pictures().await.unwrap();
+
+    let found = writer
+        .reader()
+        .picture_appearances("2018-08-08".parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert!(
+        found.items[1].changed.file,
+        "the display url never moved, but the picture a reader is shown did"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}

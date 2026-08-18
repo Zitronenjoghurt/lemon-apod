@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import type { ApodEntry } from '@/api/types'
 import { type Change, type ChangeKind, countWords, diffWords } from '@/utils/diff'
-import { roleLabel } from '@/utils/credits'
 import { formatDate } from '@/utils/date'
 
 const props = defineProps<{
@@ -56,7 +55,7 @@ function pieces(changes: Change[]): Piece[] {
 }
 
 function credit(entry: ApodEntry): string {
-  return (entry.credits ?? []).map((one) => `${roleLabel(one.role)}: ${one.text}`).join('\n')
+  return (entry.credits ?? []).map((one) => `${one.role}: ${one.text}`).join('\n')
 }
 
 function file(entry: ApodEntry): string {

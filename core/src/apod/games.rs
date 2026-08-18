@@ -4,7 +4,7 @@ use crate::date::ApodDate;
 use crate::entry::{ApodSummary, Credit};
 use crate::text;
 use sqlx::{AssertSqlSafe, Row};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const PICTURE_KINDS: &str = "'image_jpg', 'image_png', 'image_gif'";
 const CREDITS_COLUMN: usize = 10;
@@ -55,26 +55,70 @@ impl ApodReader {
     }
 
     pub async fn summaries(&self, dates: &[ApodDate]) -> ApodResult<Vec<GameEntry>> {
-        let mut out = Vec::with_capacity(dates.len());
-
-        for &date in dates {
-            let row = sqlx::query(AssertSqlSafe(format!(
-                "SELECT {}, credits FROM entries WHERE date_id = ?1",
-                super::SUMMARY_COLUMNS
-            )))
-            .bind(date.days())
-            .fetch_optional(self.db().reader())
-            .await?;
-
-            if let Some(row) = row {
-                out.push(GameEntry {
-                    summary: self.summary(&row)?,
-                    credits: from_json(row.try_get(CREDITS_COLUMN)?),
-                });
-            }
+        if dates.is_empty() {
+            return Ok(Vec::new());
         }
 
-        Ok(out)
+        let placeholders = vec!["?"; dates.len()].join(", ");
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {}, credits FROM entries WHERE date_id IN ({placeholders})",
+            super::SUMMARY_COLUMNS
+        )));
+        for &date in dates {
+            query = query.bind(date.days());
+        }
+
+        let mut found: HashMap<ApodDate, GameEntry> = HashMap::with_capacity(dates.len());
+        for row in query.fetch_all(self.db().reader()).await? {
+            let entry = GameEntry {
+                summary: self.summary(&row)?,
+                credits: from_json(row.try_get(CREDITS_COLUMN)?),
+            };
+            found.insert(entry.summary.date, entry);
+        }
+
+        Ok(dates.iter().filter_map(|date| found.remove(date)).collect())
+    }
+
+    pub async fn group_dates(
+        &self,
+        dates: &[ApodDate],
+    ) -> ApodResult<HashMap<ApodDate, Vec<ApodDate>>> {
+        if dates.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let placeholders = vec!["?"; dates.len()].join(", ");
+        let mut query = sqlx::query_as::<_, (i64, i64)>(AssertSqlSafe(format!(
+            "SELECT peer.picture_group, peer.date_id FROM entries peer
+             WHERE peer.picture_group IN
+                   (SELECT picture_group FROM entries
+                    WHERE date_id IN ({placeholders}) AND picture_group IS NOT NULL)
+             ORDER BY peer.picture_group, peer.date_id"
+        )));
+        for &date in dates {
+            query = query.bind(date.days());
+        }
+
+        let mut groups: HashMap<i64, Vec<ApodDate>> = HashMap::new();
+        let mut member: HashMap<ApodDate, i64> = HashMap::new();
+        for (group, day) in query.fetch_all(self.db().reader()).await? {
+            let date = ApodDate::from_days(day as i32);
+            member.insert(date, group);
+            groups.entry(group).or_default().push(date);
+        }
+
+        Ok(dates
+            .iter()
+            .map(|&date| {
+                let runs = member
+                    .get(&date)
+                    .and_then(|group| groups.get(group))
+                    .cloned()
+                    .unwrap_or_else(|| vec![date]);
+                (date, runs)
+            })
+            .collect())
     }
 
     pub async fn picture_dates(&self, date: ApodDate) -> ApodResult<Vec<ApodDate>> {
@@ -93,6 +137,26 @@ impl ApodReader {
         } else {
             to_dates(days)
         })
+    }
+
+    pub async fn picture_groups(&self) -> ApodResult<Vec<(ApodDate, ApodDate)>> {
+        let rows: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT date_id, picture_group FROM entries
+             WHERE picture_group IS NOT NULL
+             ORDER BY picture_group, date_id",
+        )
+        .fetch_all(self.db().reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(entry, group)| {
+                (
+                    ApodDate::from_days(entry as i32),
+                    ApodDate::from_days(group as i32),
+                )
+            })
+            .collect())
     }
 
     pub async fn picture_summary(&self) -> ApodResult<PictureSummary> {

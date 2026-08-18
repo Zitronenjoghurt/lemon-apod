@@ -12,6 +12,8 @@ pub struct Config {
     pub index_db: PathBuf,
     pub sky_db: PathBuf,
     pub notify_db: PathBuf,
+    pub votes_db: PathBuf,
+    pub baseline_dir: PathBuf,
 
     pub source_base_url: String,
     pub user_agent: String,
@@ -125,6 +127,8 @@ impl Config {
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
             sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
             notify_db: env_or("APOD_NOTIFY_DB", data_dir.join("notify.db"))?,
+            votes_db: env_or("APOD_VOTES_DB", data_dir.join("votes.db"))?,
+            baseline_dir: env_or("APOD_BASELINE_DIR", "./baseline".into())?,
 
             source_base_url: env_or(
                 "APOD_SOURCE_BASE_URL",

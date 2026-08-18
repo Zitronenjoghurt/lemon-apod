@@ -11,6 +11,8 @@ pub mod media;
 pub mod notify;
 pub mod parse;
 pub mod quality;
+#[cfg(feature = "rating")]
+pub mod rating;
 pub mod resource;
 #[cfg(feature = "sky")]
 pub mod sky;

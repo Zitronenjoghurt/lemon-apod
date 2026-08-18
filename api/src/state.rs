@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::meta::Shell;
+use crate::rating::Rating;
 use anyhow::Result;
 use apod_core::db::DbConfig;
 use apod_core::sky::store::SkyReader;
@@ -17,6 +18,7 @@ pub struct ServerState {
     pub config: Arc<Config>,
     pub store: ApodReader,
     pub sky: Sky,
+    pub rating: Option<Arc<Rating>>,
     pub shell: Arc<Shell>,
     pub sitemap: Cached,
     pub atom: Cached,
@@ -34,7 +36,19 @@ impl ServerState {
                 .with_thumb_base("/thumbs/")
                 .with_snippet(Snippet::Html);
 
+        let rating = match config.rating.enabled {
+            false => None,
+            true => match Rating::open(&config.votes_db, config.rating.clone()).await {
+                Ok(rating) => Some(Arc::new(rating)),
+                Err(error) => {
+                    tracing::error!("rating is off: {error:#}");
+                    None
+                }
+            },
+        };
+
         Ok(Self {
+            rating,
             shell: Arc::new(Shell::load(&config)?),
             sky: Sky::new(
                 config.sky_db.clone(),

@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod meta;
 mod probe;
+mod rating;
 mod schedule;
 mod shutdown;
 mod state;
@@ -38,6 +39,10 @@ async fn main() -> Result<()> {
         .with_context(|| format!("binding {address}"))?;
     tracing::info!("listening on {address}");
 
+    if let Some(rating) = state.rating.clone() {
+        tokio::spawn(refit(state.clone(), rating));
+    }
+
     axum::serve(
         listener,
         router(&state).into_make_service_with_connect_info::<SocketAddr>(),
@@ -48,27 +53,58 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+async fn refit(state: ServerState, rating: Arc<rating::Rating>) {
+    let every = rating.settings.fit_every;
+
+    loop {
+        let before = schedule::Schedule::now(&state.config.publish)
+            .today
+            .parse()
+            .ok();
+
+        if let Err(error) = rating.refit(&state.store, before).await {
+            tracing::error!("refitting the ratings: {error:#}");
+        }
+        if let Err(error) = rating.sweep(chrono::Utc::now()).await {
+            tracing::error!("sweeping the voter table: {error:#}");
+        }
+
+        tokio::time::sleep(every).await;
+    }
+}
 
 fn router(state: &ServerState) -> Router {
-    let governor = GovernorConfigBuilder::default()
-        .per_second(state.config.rate_limit_per_second)
-        .burst_size(state.config.rate_limit_burst)
-        .key_extractor(SmartIpKeyExtractor)
-        .use_headers()
-        .finish()
-        .expect("rate limit configuration is valid");
+    let reading = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(state.config.rate_limit_per_second)
+            .burst_size(state.config.rate_limit_burst)
+            .key_extractor(SmartIpKeyExtractor)
+            .use_headers()
+            .finish()
+            .expect("the reading rate limit is valid"),
+    );
+    let voting = Arc::new(
+        GovernorConfigBuilder::default()
+            .period(state.config.rating.vote_limit_period)
+            .burst_size(state.config.rating.vote_limit_burst)
+            .key_extractor(SmartIpKeyExtractor)
+            .use_headers()
+            .finish()
+            .expect("the voting rate limit is valid"),
+    );
 
     let static_files = ServeDir::new(&state.config.static_dir)
         .append_index_html_on_directories(false)
         .fallback(get(web::spa).with_state(state.clone()));
 
-    let metered = Router::new()
-        .nest("/api", api::build())
-        .merge(web::metered())
-        .layer(GovernorLayer::new(Arc::new(governor)));
+    let api = Router::new()
+        .merge(api::read_routes().route_layer(GovernorLayer::new(reading.clone())))
+        .merge(api::vote_routes().route_layer(GovernorLayer::new(voting)))
+        .fallback(api::unknown_route);
 
     let router = Router::new()
-        .merge(metered)
+        .nest("/api", api)
+        .merge(web::metered().route_layer(GovernorLayer::new(reading)))
         .merge(web::unmetered(state))
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())

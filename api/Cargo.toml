@@ -5,14 +5,18 @@ license.workspace = true
 edition.workspace = true
 
 [dependencies]
-apod-core = { workspace = true, features = ["data-read", "sky-data"] }
+apod-core = { workspace = true, features = ["data-read", "rating-data", "sky-data"] }
 
 anyhow = { workspace = true }
 axum = { version = "0.8.9", features = ["macros"] }
+base64 = "0.22.1"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+hmac = "0.13.0"
+rand = "0.10.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = "0.11.0"
 tokio = { workspace = true, features = ["io-util", "net"] }
 tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }
 thiserror = { workspace = true }

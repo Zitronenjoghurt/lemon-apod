@@ -23,6 +23,10 @@ export function entryTitle(title: string, date: string): string {
   return `${title} (APOD ${date})`
 }
 
+export function gapTitle(date: string): string {
+  return pageTitle(`No picture on ${date}`)
+}
+
 export function pictureTitle(title: string, appearances: number): string {
   return `${title} · Shown ${appearances}×`
 }

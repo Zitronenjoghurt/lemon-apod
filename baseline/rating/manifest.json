@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "dataset": "rating",
+  "key": "picture_group",
+  "producer": "bt-map-1",
+  "generated_at": "1970-01-01T00:00:00Z",
+  "parser_version": 5,
+  "votes": 0,
+  "pool": 0,
+  "files": {
+    "beautiful.csv": 0,
+    "fascinating.csv": 0
+  }
+}

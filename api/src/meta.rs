@@ -111,6 +111,16 @@ const FIXED: &[Fixed] = &[
         title: "Fill the Words",
         description: "A minigame where you have to fill in the words of a NASA Astronomy Picture of the Day to eventually uncover its title.",
     },
+    Fixed {
+        path: "/rating",
+        title: "Reader ratings",
+        description: "Which NASA Astronomy Picture of the Day users think the best!",
+    },
+    Fixed {
+        path: "/rating/vote",
+        title: "Vote on a pair",
+        description: "Vote which NASA Astronomy Picture of the Day you like the most!",
+    },
 ];
 
 pub enum Target {
@@ -174,6 +184,21 @@ impl Shell {
             Some(meta) => self.render(&meta, path),
             None => self.default_page(),
         }
+    }
+
+    pub fn gap_page(&self, date: ApodDate) -> String {
+        let Some((title, opening)) = crate::api::routes::gaps::describe(date) else {
+            return self.default_page();
+        };
+
+        let meta = Meta {
+            title: format!("{title} \u{b7} {SITE}"),
+            description: format!("NASA's {NAME}, {date}. {opening}"),
+            image: None,
+            article: true,
+        };
+
+        self.render(&meta, &format!("/{date}"))
     }
 
     pub fn entry_page(&self, entry: &ApodEntry) -> String {
@@ -362,7 +387,7 @@ fn archive(path: &str) -> Option<Meta> {
 }
 
 fn noindex(path: &str) -> bool {
-    matches!(path, "/random" | "/favorites")
+    matches!(path, "/random" | "/favorites" | "/rating/vote")
 }
 
 pub fn indexable_paths() -> impl Iterator<Item = &'static str> {

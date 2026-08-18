@@ -8,6 +8,7 @@ pub async fn spa(State(state): State<ServerState>, uri: Uri) -> Response {
     let path = uri.path();
 
     let page = match meta::target(path) {
+        Target::Entry(date) if date.is_known_missing() => state.shell.gap_page(date),
         Target::Entry(date) => match looked_up(state.store.entry(date).await, path) {
             Some(entry) => state.shell.entry_page(&entry),
             None => state.shell.page(path),

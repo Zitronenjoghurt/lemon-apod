@@ -2,8 +2,13 @@ import { ref } from 'vue'
 import type {
   ApodEntry,
   ApodSummary,
+  Ballot,
+  Board,
+  Cast,
   Coverage,
+  Forgotten,
   GamePicture,
+  Gap,
   HostCount,
   KindFilter,
   KnownWord,
@@ -16,6 +21,9 @@ import type {
   PictureAppearances,
   PictureSort,
   Puzzle,
+  RatingCategory,
+  RatingOutcome,
+  RatingTerms,
   Resource,
   ResourceRefs,
   ResourceSort,
@@ -61,11 +69,26 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+interface Send {
+  method?: 'GET' | 'POST' | 'DELETE'
+  body?: unknown
+  credentials?: RequestCredentials
+}
+
+async function request<T>(path: string, signal?: AbortSignal, send: Send = {}): Promise<T> {
   let waited = 0
 
+  const headers: Record<string, string> = { accept: 'application/json' }
+  if (send.body !== undefined) headers['content-type'] = 'application/json'
+
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(path, { signal, headers: { accept: 'application/json' } })
+    const response = await fetch(path, {
+      signal,
+      headers,
+      method: send.method ?? 'GET',
+      body: send.body === undefined ? undefined : JSON.stringify(send.body),
+      credentials: send.credentials ?? 'omit',
+    })
 
     if (response.status !== 429) {
       if (!response.ok) {
@@ -269,5 +292,35 @@ export const api = {
       request<KnownWord>(`/api/games/known${query({ w: word })}`, signal),
 
     picture: (token: string) => `/pic/${encodeURIComponent(token)}`,
+  },
+
+  gaps: (signal?: AbortSignal) => request<Gap[]>('/api/gaps', signal),
+
+  rating: {
+    ballot: (category: RatingCategory, signal?: AbortSignal) =>
+      request<Ballot>(`/api/rating/ballot${query({ category })}`, signal, {
+        credentials: 'same-origin',
+      }),
+
+    vote: (ballot: string, outcome: RatingOutcome, category: RatingCategory) =>
+      request<Cast>('/api/rating/vote', undefined, {
+        method: 'POST',
+        body: { ballot, outcome, category },
+        credentials: 'same-origin',
+      }),
+
+    board: (
+      category: RatingCategory,
+      options: { limit?: number; offset?: number } = {},
+      signal?: AbortSignal,
+    ) => request<Board>(`/api/rating/board${query({ category, ...options })}`, signal),
+
+    terms: (signal?: AbortSignal) => request<RatingTerms>('/api/rating/terms', signal),
+
+    forget: () =>
+      request<Forgotten>('/api/rating/votes', undefined, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      }),
   },
 }

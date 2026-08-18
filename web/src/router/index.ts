@@ -74,6 +74,18 @@ const router = createRouter({
       meta: { title: 'Match the Picture' },
     },
     {
+      path: '/rating',
+      name: 'rating',
+      component: () => import('@/views/rating/BoardView.vue'),
+      meta: { title: 'Reader ratings' },
+    },
+    {
+      path: '/rating/vote',
+      name: 'rating-vote',
+      component: () => import('@/views/rating/VoteView.vue'),
+      meta: { title: 'Vote on a pair' },
+    },
+    {
       path: '/resources',
       name: 'resources',
       component: () => import('@/views/ResourcesView.vue'),
@@ -128,7 +140,7 @@ const router = createRouter({
     if (saved) return saved
     if (
       to.name === from.name &&
-      ['search', 'resources', 'pictures', 'stats'].includes(String(to.name))
+      ['search', 'resources', 'pictures', 'stats', 'rating'].includes(String(to.name))
     ) {
       return {}
     }

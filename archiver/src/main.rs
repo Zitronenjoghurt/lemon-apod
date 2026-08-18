@@ -5,6 +5,7 @@ mod fetch;
 mod notify;
 mod pictures;
 mod progress;
+mod rating;
 mod reparse;
 mod report;
 mod shutdown;
@@ -95,6 +96,10 @@ enum Command {
     /// Poll the launch and space weather feeds once into sky.db, then exit.
     Sky,
 
+    /// Move the ratings between votes.db and the committed baseline.
+    #[command(subcommand)]
+    Rating(RatingCommand),
+
     /// Send any notification that is due, then exit.
     Notify {
         /// Record everything currently due as already sent, without sending it. Run this once
@@ -109,6 +114,26 @@ enum Command {
 
     /// Coverage and index health.
     Status,
+}
+
+#[derive(Subcommand)]
+enum RatingCommand {
+    /// Load baseline/rating into votes.db as priors on the live fit. What a fresh deployment runs
+    /// if votes.db was ever lost.
+    Import,
+
+    /// Fit what has been collected and write it back to baseline/rating, ready to commit.
+    Export,
+
+    /// Votes collected, pictures on the board, and how far each category has to go.
+    Status,
+
+    /// Delete a voter and cascade their votes. The board corrects itself on the next fit. This is
+    /// also the reader's own route to erasure, which the voting page offers as a button.
+    Forget {
+        /// The voter id, as 32 hex characters.
+        voter: String,
+    },
 }
 
 #[tokio::main]
@@ -137,6 +162,12 @@ async fn main() -> Result<()> {
             report::quality(&cfg, index.reader(), date, warning.as_deref(), limit).await
         }
         Command::Sky => sky::poll(&cfg).await,
+        Command::Rating(command) => match command {
+            RatingCommand::Import => rating::import(&cfg).await,
+            RatingCommand::Export => rating::export(&cfg).await,
+            RatingCommand::Status => rating::status(&cfg).await,
+            RatingCommand::Forget { voter } => rating::forget(&cfg, &voter).await,
+        },
         Command::Notify { seed, dry_run } => notify_once(cfg, seed, dry_run).await,
         Command::Status => {
             let archive = ArchiveStore::open(&cfg.archive_db).await?;

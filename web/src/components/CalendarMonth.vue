@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ApodCredit from './ApodCredit.vue'
 import type { ApodSummary } from '@/api/types'
+import { useGaps } from '@/composables/useGaps'
 import { usePreferences } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
 
@@ -15,6 +16,8 @@ const props = defineProps<{
 
 const { isRead, dimmed } = useRead()
 const { weekStartsOn } = usePreferences()
+const { gaps } = useGaps()
+const missing = computed(() => new Set(gaps.value.map((gap) => gap.date)))
 
 const NAMES = Array.from({ length: 7 }, (_, index) =>
   new Date(Date.UTC(2024, 0, 7 + index)).toLocaleDateString(undefined, { weekday: 'short' }),
@@ -149,6 +152,17 @@ watch([rows, () => props.entries.length], () => void nextTick(measure))
           </span>
         </RouterLink>
 
+        <RouterLink
+          v-else-if="missing.has(slot.date) && !loading"
+          v-tooltip.bottom="'APOD published nothing this day'"
+          :to="`/${slot.date}`"
+          class="cell gap"
+        >
+          <span class="day">{{ slot.day }}</span>
+          <i aria-hidden="true" class="pi pi-calendar-times mark" />
+          <span class="sr-only">No picture on this day, and why</span>
+        </RouterLink>
+
         <div v-else class="cell empty">
           <Skeleton v-if="loading" height="100%" width="100%" />
           <span v-else class="day muted">{{ slot.day }}</span>
@@ -192,6 +206,29 @@ watch([rows, () => props.entries.length], () => void nextTick(measure))
 
 .blank {
   border: 0;
+}
+
+.gap {
+  border: 1px dashed color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.1rem;
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.gap:hover,
+.gap:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.gap .mark {
+  font-size: 0.8em;
+  opacity: 0.85;
 }
 
 .empty {

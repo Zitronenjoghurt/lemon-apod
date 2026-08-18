@@ -2,8 +2,9 @@ use super::SUMMARY_COLUMNS;
 use super::model::{
     Appearance, Changed, Listing, Order, Picture, PictureAppearances, PictureFilters, PictureOrder,
 };
-use super::read::{ApodReader, ApodResult, Param, arguments};
+use super::read::{ApodReader, ApodResult, Param, arguments, from_json};
 use crate::date::ApodDate;
+use crate::entry::Credit;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{AssertSqlSafe, Row};
 
@@ -75,8 +76,8 @@ impl ApodReader {
         let picture = self.picture(&row)?;
 
         let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT {SUMMARY_COLUMNS}, explanation_text, COALESCE(credit_text, ''), \
-                    COALESCE(media_url, '')
+            "SELECT {SUMMARY_COLUMNS}, explanation_text, credits, \
+                    COALESCE(NULLIF(media_hd_url, ''), media_url, '')
              FROM entries WHERE picture_group = ?1 ORDER BY date_id"
         )))
         .bind(picture.id.days())
@@ -89,7 +90,7 @@ impl ApodReader {
         for row in &rows {
             let entry = self.summary(row)?;
             let explanation: String = row.try_get(10)?;
-            let credit: String = row.try_get(11)?;
+            let credit = credit_block(from_json(row.try_get(11)?));
             let file: String = row.try_get(12)?;
 
             let (changed, since) = match &previous {
@@ -182,4 +183,12 @@ fn ordering(order: PictureOrder, direction: Order) -> String {
     };
 
     format!("{column} {sort}, g.picture_group ASC")
+}
+
+fn credit_block(credits: Vec<Credit>) -> String {
+    credits
+        .into_iter()
+        .map(|credit| format!("{}: {}", credit.role, credit.text))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

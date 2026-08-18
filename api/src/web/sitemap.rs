@@ -1,5 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::state::ServerState;
+use apod_core::ApodDate;
 use axum::extract::State;
 use axum::http::{HeaderMap, header};
 use axum::response::{IntoResponse, Response};
@@ -10,6 +11,7 @@ pub async fn get_robots(State(state): State<ServerState>) -> Response {
         "User-agent: *\n\
          Allow: /\n\
          Disallow: /random\n\
+         Disallow: /rating/vote\n\
          Disallow: /api/\n\
          Sitemap: {}/sitemap.xml\n",
         state.config.public_url
@@ -45,6 +47,10 @@ async fn build(state: &ServerState) -> ApiResult<String> {
     let years: BTreeSet<String> = dates.iter().map(|date| date.format("%Y")).collect();
     for year in years.iter().rev() {
         push_url(&mut xml, &format!("{base}/archive/{year}"), Some("weekly"));
+    }
+
+    for date in ApodDate::KNOWN_MISSING {
+        push_url(&mut xml, &format!("{base}/{date}"), None);
     }
 
     for date in &dates {

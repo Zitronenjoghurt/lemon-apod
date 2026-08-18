@@ -10,6 +10,10 @@ pub enum ApiError {
     NotFound,
     #[error("{0}")]
     BadRequest(String),
+    #[error("{0}")]
+    Unavailable(String),
+    #[error("{0}")]
+    TooManyRequests(String),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -26,11 +30,19 @@ impl From<apod_core::ApodError> for ApiError {
     }
 }
 
+impl From<apod_core::DbError> for ApiError {
+    fn from(error: apod_core::DbError) -> Self {
+        Self::Internal(error.into())
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             Self::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
+            Self::Unavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
+            Self::TooManyRequests(_) => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             Self::Internal(error) => {
                 tracing::error!("{error:#}");
                 (
@@ -71,5 +83,18 @@ mod tests {
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(!body.contains("/data/apod.db"), "leaked a path: {body}");
         assert!(body.contains("internal error"));
+    }
+
+    #[tokio::test]
+    async fn a_feature_that_is_not_running_is_not_an_error_the_caller_caused() {
+        let (status, body) = body_of(ApiError::Unavailable("not ready yet".to_owned())).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("not ready yet"));
+    }
+
+    #[tokio::test]
+    async fn a_vote_budget_reads_as_a_rate_limit_so_the_client_backs_off() {
+        let (status, _) = body_of(ApiError::TooManyRequests("come back later".to_owned())).await;
+        assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     }
 }

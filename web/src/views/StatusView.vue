@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
+import RatingCard from '@/components/rating/RatingCard.vue'
 import ReadProgress from '@/components/ReadProgress.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import SkyPanels from '@/components/SkyPanels.vue'
@@ -320,6 +321,8 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
           </p>
         </section>
       </div>
+
+      <RatingCard />
 
       <SkyPanels />
     </template>

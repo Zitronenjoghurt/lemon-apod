@@ -6,15 +6,37 @@ const OVERLAY = '.p-select-overlay, .p-dialog-mask, .p-drawer-mask, .p-popover'
 export interface ArrowHandlers {
   left?: () => void
   right?: () => void
+  up?: () => void
+  down?: () => void
+  space?: () => void
   shiftLeft?: () => void
   shiftRight?: () => void
 }
 
+const ARROWS = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+
 export function useArrowKeys(handlers: ArrowHandlers): void {
+  function step(event: KeyboardEvent, target: HTMLElement | null): (() => void) | undefined {
+    switch (event.key) {
+      case 'ArrowLeft':
+        return event.shiftKey ? handlers.shiftLeft : handlers.left
+      case 'ArrowRight':
+        return event.shiftKey ? handlers.shiftRight : handlers.right
+      case 'ArrowUp':
+        return handlers.up
+      case 'ArrowDown':
+        return handlers.down
+      case ' ':
+        return target?.closest?.('button, a, [role="button"]') ? undefined : handlers.space
+      default:
+        return undefined
+    }
+  }
+
   function onKey(event: KeyboardEvent): void {
     if (event.defaultPrevented) return
     if (event.metaKey || event.ctrlKey || event.altKey) return
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    if (!ARROWS.includes(event.key) && event.key !== ' ') return
 
     const target = event.target as HTMLElement | null
     if (target?.isContentEditable) return
@@ -22,14 +44,11 @@ export function useArrowKeys(handlers: ArrowHandlers): void {
     if (target?.closest?.(OWNS_ARROWS)) return
     if (document.querySelector(OVERLAY)) return
 
-    const back = event.key === 'ArrowLeft'
-    const step = event.shiftKey
-      ? handlers[back ? 'shiftLeft' : 'shiftRight']
-      : handlers[back ? 'left' : 'right']
-    if (!step) return
+    const chosen = step(event, target)
+    if (!chosen) return
 
     event.preventDefault()
-    step()
+    chosen()
   }
 
   onMounted(() => window.addEventListener('keydown', onKey))

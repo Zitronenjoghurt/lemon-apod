@@ -255,8 +255,14 @@ function count(value: number | undefined): string {
               {{ formatDate(run.from) }}
               <template v-if="run.to !== run.from"> to {{ formatDate(run.to) }}</template>
             </span>
-            <span class="muted howmany">
-              {{ run.days }} {{ run.days === 1 ? 'day' : 'days' }}
+            <span class="tail">
+              <span class="muted howmany">
+                {{ run.days }} {{ run.days === 1 ? 'day' : 'days' }}
+              </span>
+              <RouterLink :to="`/${run.from}`" class="why">
+                why
+                <i aria-hidden="true" class="pi pi-angle-right" />
+              </RouterLink>
             </span>
           </li>
         </ul>
@@ -563,10 +569,33 @@ h2 {
   text-wrap: pretty;
 }
 
+.gaps .tail {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  white-space: nowrap;
+}
+
 .gaps .howmany {
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.gaps .why {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.1rem;
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.gaps .why:hover {
+  text-decoration: underline;
+}
+
+.gaps .why i {
+  font-size: 0.75em;
 }
 
 .panel {
