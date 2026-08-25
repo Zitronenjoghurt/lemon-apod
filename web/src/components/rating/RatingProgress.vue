@@ -14,15 +14,15 @@ const props = withDefaults(
 const STAGES: Record<RatingStage, { name: string; buys: string }> = {
   screen: {
     name: 'Screening',
-    buys: 'sorting the whole archive into coarse tiers',
+    buys: 'currently sorting the whole archive into coarse tiers',
   },
   contend: {
     name: 'Narrowing',
-    buys: 'separating the uppermost tier to narrow down the best',
+    buys: 'currently separating the uppermost tier to narrow down the best',
   },
   settle: {
     name: 'Settling',
-    buys: 'trying to separate topmost picks',
+    buys: 'currently trying to separate topmost picks',
   },
   settled: {
     name: 'Settled',

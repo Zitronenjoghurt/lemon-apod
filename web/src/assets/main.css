@@ -19,6 +19,12 @@
     --diff-removed: #dc2626;
     --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
     --scroll-thumb: color-mix(in srgb, var(--accent) 45%, transparent);
+
+    --tone-calm: 152 55% 32%;
+    --tone-raised: 38 92% 32%;
+    --tone-warn: 24 90% 40%;
+    --tone-alert: 4 78% 46%;
+    --tone-severe: 330 72% 44%;
   }
 
   html.app-dark {
@@ -31,6 +37,12 @@
     --diff-added: #4ade80;
     --diff-removed: #f87171;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
+
+    --tone-calm: 152 52% 52%;
+    --tone-raised: 45 90% 56%;
+    --tone-warn: 28 92% 60%;
+    --tone-alert: 8 85% 64%;
+    --tone-severe: 330 75% 64%;
   }
 
   *,

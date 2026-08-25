@@ -44,10 +44,8 @@ pub fn alike(a: &[u8], b: &[u8], max: u32) -> bool {
     }
 
     let mut differing = 0;
-    for (left, right) in a.chunks_exact(8).zip(b.chunks_exact(8)) {
-        let left = u64::from_be_bytes(left.try_into().expect("chunks_exact(8) yields 8 bytes"));
-        let right = u64::from_be_bytes(right.try_into().expect("chunks_exact(8) yields 8 bytes"));
-        differing += (left ^ right).count_ones();
+    for (left, right) in a.as_chunks::<8>().0.iter().zip(b.as_chunks::<8>().0) {
+        differing += (u64::from_be_bytes(*left) ^ u64::from_be_bytes(*right)).count_ones();
         if differing > max {
             return false;
         }

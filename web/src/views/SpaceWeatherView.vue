@@ -1,6 +1,7 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import RetryNotice from '@/components/RetryNotice.vue'
+import ScaleKey from '@/components/ScaleKey.vue'
 import SeriesChart, { type SeriesPoint } from '@/components/SeriesChart.vue'
 import { api } from '@/api/client'
 import type { NoticeKind, ScaleDay, WeatherBand } from '@/api/types'
@@ -10,10 +11,22 @@ import {
   BAND_ABOUT,
   BAND_NAMES,
   BANDS,
+  DST_BANDS,
+  DST_FRAME,
+  DST_MARKS,
+  DST_TICKS,
+  FLUX_FRAME,
+  FLUX_MARKS,
+  FLUX_TICKS,
   inForce,
+  KP_BANDS,
+  KP_FRAME,
+  KP_TICKS,
   kpPercent,
   kpReading,
+  kpTone,
   levelName,
+  levelOdds,
   levelWord,
   NOTICE_ICONS,
   NOTICE_LABELS,
@@ -51,18 +64,23 @@ const page = ref(1)
 
 const roomyQuery = window.matchMedia('(min-width: 38rem)')
 const roomy = ref(roomyQuery.matches)
-roomyQuery.addEventListener('change', (event) => (roomy.value = event.matches))
 
-onMounted(run)
+function onRoomy(event: MediaQueryListEvent): void {
+  roomy.value = event.matches
+}
+
+onMounted(() => {
+  roomyQuery.addEventListener('change', onRoomy)
+  run()
+})
+
+onUnmounted(() => roomyQuery.removeEventListener('change', onRoomy))
 
 const now = computed(() => (report.value ? kpReading(report.value.kp) : null))
 const dial = computed(() => (report.value ? kpPercent(report.value.kp) : 0))
-const observed = computed(() => stamp(report.value?.observed_at))
-const days = computed<ScaleDay[]>(() => {
-  const report_ = report.value
-  if (!report_) return []
-  return [...(report_.scales ? [report_.scales] : []), ...report_.outlook]
-})
+const measuredAt = computed(() => stamp(report.value?.observed_at))
+const days = computed<ScaleDay[]>(() => report.value?.outlook ?? [])
+const observed = computed(() => report.value?.scales)
 
 const kpPoints = computed<SeriesPoint[]>(
   () =>
@@ -70,6 +88,7 @@ const kpPoints = computed<SeriesPoint[]>(
       label: hour(point.at),
       value: point.kp,
       ahead: point.ahead,
+      tone: kpTone(point.kp),
     })) ?? [],
 )
 
@@ -132,8 +151,17 @@ const day = (value: string) => format(value, DAY)
 const hour = (value: string) => format(value, HOUR)
 const stamp = (value: string | undefined) => format(value, STAMP)
 
-function dayName(date: string, index: number): string {
-  if (index === 0) return 'Today'
+function dayName(date: string): string {
+  const at = Date.parse(`${date}T12:00:00Z`)
+  if (Number.isNaN(at)) return date
+
+  const here = new Date()
+  const midday = Date.UTC(here.getFullYear(), here.getMonth(), here.getDate(), 12)
+  const away = Math.round((at - midday) / 86_400_000)
+
+  if (away === 0) return 'Today'
+  if (away === 1) return 'Tomorrow'
+  if (away === -1) return 'Yesterday'
   return format(`${date}T12:00:00Z`, DAY) || date
 }
 
@@ -144,6 +172,12 @@ function toggle(id: string): void {
 function explain(band: WeatherBand): void {
   about.value = about.value === band ? undefined : band
 }
+
+type Keyed = { toggle: (event: Event) => void }
+
+const kpKey = useTemplateRef<Keyed>('kpKey')
+const fluxKey = useTemplateRef<Keyed>('fluxKey')
+const dstKey = useTemplateRef<Keyed>('dstKey')
 </script>
 
 <template>
@@ -168,7 +202,7 @@ function explain(band: WeatherBand): void {
     <template v-else-if="report && now">
       <section class="card panel now">
         <div class="stack reading">
-          <p class="muted eyebrow">Planetary K index, measured {{ observed }}</p>
+          <p class="muted eyebrow">Planetary K index, measured {{ measuredAt }}</p>
           <p class="kp">
             <span class="figure">{{ report.kp.toFixed(2) }}</span>
             <span class="unit muted">Kp</span>
@@ -186,23 +220,43 @@ function explain(band: WeatherBand): void {
           <p class="muted note">{{ now.note }}</p>
         </div>
 
-        <div v-if="raised.length" class="stack in-force">
-          <h2 class="muted">In force now</h2>
-          <p v-for="alert in raised" :key="alert.id" class="raised">
-            <i :class="['pi', NOTICE_ICONS[alert.notice]]" aria-hidden="true" />
-            <span>
-              <strong>{{ NOTICE_LABELS[alert.notice] }}:</strong> {{ alert.headline }}
-              <span v-if="alert.scale" class="muted scale">{{ alert.scale }}</span>
-              <span v-if="alert.valid_until" class="muted until">
-                until {{ stamp(alert.valid_until) }}
+        <div class="stack right">
+          <div v-if="raised.length" class="stack in-force">
+            <h2 class="muted">In force now</h2>
+            <p v-for="alert in raised" :key="alert.id" class="raised">
+              <i :class="['pi', NOTICE_ICONS[alert.notice]]" aria-hidden="true" />
+              <span>
+                <strong>{{ NOTICE_LABELS[alert.notice] }}:</strong> {{ alert.headline }}
+                <span v-if="alert.scale" class="muted scale">{{ alert.scale }}</span>
+                <span v-if="alert.valid_until" class="muted until">
+                  until {{ stamp(alert.valid_until) }}
+                </span>
               </span>
-            </span>
+            </p>
+          </div>
+          <p v-else class="muted quiet">
+            <i aria-hidden="true" class="pi pi-check-circle" />
+            NOAA has no alert or warning running.
           </p>
+
+          <div v-if="observed" class="stack observed">
+            <h2 class="muted">
+              Current conditions
+              <span v-if="observed?.observed_at" class="stamp">
+                as of {{ stamp(observed.observed_at) }}
+              </span>
+            </h2>
+            <ul class="levels">
+              <li v-for="level in observed.levels" :key="level.band" class="level">
+                <span class="level-name">{{ BAND_NAMES[level.band] }}</span>
+                <span :class="['level-value', { up: (level.scale ?? 0) > 0 }]">
+                  {{ levelName(level) }}
+                  <span v-if="level.scale" class="muted word">{{ levelWord(level) }}</span>
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
-        <p v-else class="muted quiet">
-          <i aria-hidden="true" class="pi pi-check-circle" />
-          NOAA has no alert or warning running.
-        </p>
       </section>
 
       <section v-if="days.length" class="card panel">
@@ -213,8 +267,8 @@ function explain(band: WeatherBand): void {
             <thead>
               <tr>
                 <th scope="col">Scale</th>
-                <th v-for="(one, index) in days" :key="one.date" scope="col">
-                  {{ dayName(one.date, index) }}
+                <th v-for="one in days" :key="one.date" scope="col">
+                  {{ dayName(one.date) }}
                 </th>
               </tr>
             </thead>
@@ -242,11 +296,25 @@ function explain(band: WeatherBand): void {
                         v-if="level.band === band"
                         :class="[
                           'cell',
-                          { up: (level.scale ?? 0) > 0, blank: level.scale === null },
+                          {
+                            up: (level.scale ?? 0) > 0,
+                            blank: level.scale === null && !levelOdds(level).length,
+                          },
                         ]"
                       >
                         {{ levelName(level) }}
                         <span v-if="level.scale" class="muted word">{{ levelWord(level) }}</span>
+                        <span v-if="levelOdds(level).length" class="odds-list">
+                          <span
+                            v-for="odds in levelOdds(level)"
+                            :key="odds.of"
+                            :class="{ leading: odds.chance >= 50 }"
+                            class="odds"
+                          >
+                            <span class="chance">{{ odds.chance }}%</span>
+                            <span class="muted of">{{ odds.of }}</span>
+                          </span>
+                        </span>
                       </span>
                     </template>
                   </td>
@@ -268,51 +336,98 @@ function explain(band: WeatherBand): void {
 
       <div class="charts">
         <section v-if="kpPoints.length" class="card panel">
-          <h2 class="muted">Geomagnetic activity</h2>
+          <h2 class="muted heading">
+            Geomagnetic activity
+            <button
+              :aria-label="`What the geomagnetic activity levels mean`"
+              class="key-open"
+              type="button"
+              @click="kpKey?.toggle($event)"
+            >
+              <i aria-hidden="true" class="pi pi-question-circle" />
+            </button>
+          </h2>
           <SeriesChart
+            :bands="KP_BANDS"
             :decimals="2"
+            :frame="KP_FRAME"
             :points="kpPoints"
-            :threshold="5"
+            :ticks="KP_TICKS"
             label="Kp, measured and forecast"
-            threshold-label="storms start at 5"
           />
           <p class="muted note">
-            Solid bars are measured, outlined bars are NOAA's forecast
-            <template v-if="forecastFrom"> from {{ stamp(forecastFrom) }} </template>
-            . Three hours per bar.
+            Solid bars are measured, outlined bars are NOAA's forecast<template v-if="forecastFrom">
+              from {{ stamp(forecastFrom) }}</template
+            >. Three hours per bar.
           </p>
         </section>
 
         <section v-if="fluxPoints.length" class="card panel">
-          <h2 class="muted">Solar radio flux</h2>
+          <h2 class="muted heading">
+            Solar radio flux
+            <button
+              :aria-label="`What the solar radio flux levels mean`"
+              class="key-open"
+              type="button"
+              @click="fluxKey?.toggle($event)"
+            >
+              <i aria-hidden="true" class="pi pi-question-circle" />
+            </button>
+          </h2>
           <SeriesChart
+            :frame="FLUX_FRAME"
+            :marks="FLUX_MARKS"
             :points="fluxPoints"
+            :ticks="FLUX_TICKS"
             :zeroed="false"
             kind="line"
             label="F10.7, thirty days"
             unit=" sfu"
           />
           <p class="muted note">
-            Radio brightness at 10.7cm, a measure of how busy the sun currently is. In quiet times
-            around 70, past 200 at a solar maximum.
+            Radio brightness at 10.7cm, the standard measure of how busy the sun is.
           </p>
         </section>
 
         <section v-if="dstPoints.length" class="card panel">
-          <h2 class="muted">Ring current</h2>
+          <h2 class="muted heading">
+            Ring current
+            <button
+              :aria-label="`What the ring current levels mean`"
+              class="key-open"
+              type="button"
+              @click="dstKey?.toggle($event)"
+            >
+              <i aria-hidden="true" class="pi pi-question-circle" />
+            </button>
+          </h2>
           <SeriesChart
+            :bands="DST_BANDS"
+            :frame="DST_FRAME"
+            :marks="DST_MARKS"
             :points="dstPoints"
+            :ticks="DST_TICKS"
             :zeroed="false"
             kind="line"
             label="Dst, the last week"
             unit=" nT"
           />
           <p class="muted note">
-            How far a storm has pushed Earth's field out of shape. It sits near zero on a normal day
-            and spikes positive and negative during solar flares.
+            How far Earth's field has been pushed out of shape. A storm drives it down as the ring
+            current builds, and an arriving shock briefly pushes it the other way.
           </p>
         </section>
       </div>
+
+      <Popover ref="kpKey">
+        <ScaleKey :bands="KP_BANDS" />
+      </Popover>
+      <Popover ref="fluxKey">
+        <ScaleKey :marks="FLUX_MARKS" />
+      </Popover>
+      <Popover ref="dstKey">
+        <ScaleKey :bands="DST_BANDS" :marks="DST_MARKS" />
+      </Popover>
 
       <section v-if="notices.length" class="card panel">
         <div class="row notices-head">
@@ -437,6 +552,29 @@ h1 {
   font-weight: 600;
 }
 
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.key-open {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.key-open:hover,
+.key-open:focus-visible {
+  color: var(--accent);
+}
+
 .empty {
   padding: 1.2rem;
   margin: 0;
@@ -458,6 +596,89 @@ h1 {
 
 .reading {
   gap: 0.55rem;
+}
+
+.right {
+  gap: 1rem;
+}
+
+.observed {
+  gap: 0.4rem;
+}
+
+.stamp {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+.odds-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.odds {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+
+.odds .chance {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.odds.leading .chance {
+  color: var(--diff-removed);
+}
+
+.odds .of {
+  font-size: 0.92em;
+}
+
+.levels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.level {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  padding-bottom: 0.3rem;
+}
+
+.level:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.level-name {
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.level-value {
+  flex: none;
+  font-weight: 600;
+}
+
+.level-value.up {
+  color: var(--diff-removed);
+}
+
+.level-value .word {
+  font-weight: 400;
+  font-size: 0.82em;
 }
 
 .eyebrow {

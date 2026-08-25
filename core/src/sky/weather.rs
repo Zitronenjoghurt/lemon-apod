@@ -45,11 +45,25 @@ impl Band {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Chance {
+    pub minor: Option<u8>,
+    pub major: Option<u8>,
+}
+
+impl Chance {
+    pub fn is_empty(&self) -> bool {
+        self.minor.is_none() && self.major.is_none()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Level {
     pub band: Band,
     pub scale: Option<u8>,
     pub text: Option<String>,
+    #[serde(default)]
+    pub chance: Chance,
 }
 
 impl Level {
@@ -61,6 +75,8 @@ impl Level {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScaleDay {
     pub date: String,
+    #[serde(default)]
+    pub observed_at: Option<DateTime<Utc>>,
     pub levels: Vec<Level>,
 }
 
@@ -380,21 +396,25 @@ mod tests {
     fn a_day_reports_the_worst_of_its_three_scales() {
         let day = ScaleDay {
             date: "2026-08-09".to_owned(),
+            observed_at: None,
             levels: vec![
                 Level {
                     band: Band::R,
                     scale: Some(1),
                     text: Some("minor".to_owned()),
+                    chance: Chance::default(),
                 },
                 Level {
                     band: Band::S,
                     scale: Some(0),
                     text: Some("none".to_owned()),
+                    chance: Chance::default(),
                 },
                 Level {
                     band: Band::G,
                     scale: Some(3),
                     text: Some("strong".to_owned()),
+                    chance: Chance::default(),
                 },
             ],
         };
@@ -407,12 +427,14 @@ mod tests {
     fn a_day_with_nothing_on_it_is_quiet() {
         let day = ScaleDay {
             date: "2026-08-09".to_owned(),
+            observed_at: None,
             levels: Band::ALL
                 .into_iter()
                 .map(|band| Level {
                     band,
                     scale: Some(0),
                     text: Some("none".to_owned()),
+                    chance: Chance::default(),
                 })
                 .collect(),
         };

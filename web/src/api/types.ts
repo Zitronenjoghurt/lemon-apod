@@ -410,14 +410,21 @@ export interface SpaceWeather {
 
 export type WeatherBand = 'r' | 's' | 'g'
 
+export interface WeatherChance {
+  minor: number | null
+  major: number | null
+}
+
 export interface WeatherLevel {
   band: WeatherBand
   scale: number | null
   text: string | null
+  chance: WeatherChance
 }
 
 export interface ScaleDay {
   date: string
+  observed_at: string | null
   levels: WeatherLevel[]
 }
 

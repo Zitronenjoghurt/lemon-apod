@@ -2,7 +2,7 @@ use crate::client::{Client, Limit, Response};
 use crate::config::Sky;
 use anyhow::{Context, Result};
 use apod_core::sky::weather::{
-    Alert, Band, DstPoint, FluxPoint, KpPoint, Level, Notice, ScaleDay, WeatherReport,
+    Alert, Band, Chance, DstPoint, FluxPoint, KpPoint, Level, Notice, ScaleDay, WeatherReport,
 };
 use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
 use serde::Deserialize;
@@ -104,6 +104,8 @@ async fn kp_series(cfg: &Sky, client: &Client) -> Result<Vec<KpPoint>> {
 struct RawScales {
     #[serde(rename = "DateStamp")]
     date: Option<String>,
+    #[serde(rename = "TimeStamp")]
+    time: Option<String>,
     #[serde(rename = "R")]
     r: Option<RawLevel>,
     #[serde(rename = "S")]
@@ -118,15 +120,60 @@ struct RawLevel {
     scale: Option<String>,
     #[serde(rename = "Text")]
     text: Option<String>,
+    #[serde(rename = "MinorProb")]
+    minor_prob: Option<String>,
+    #[serde(rename = "MajorProb")]
+    major_prob: Option<String>,
+    #[serde(rename = "Prob")]
+    prob: Option<String>,
+}
+
+impl RawLevel {
+    fn chance(&self) -> Chance {
+        let percent = |raw: &Option<String>| {
+            raw.as_deref()
+                .map(str::trim)
+                .filter(|text| !text.is_empty())
+                .and_then(|text| text.parse::<u8>().ok())
+        };
+
+        Chance {
+            minor: percent(&self.minor_prob).or_else(|| percent(&self.prob)),
+            major: percent(&self.major_prob),
+        }
+    }
+}
+
+impl RawScales {
+    fn observed_at(&self) -> Option<DateTime<Utc>> {
+        let date = self.date.as_deref()?.trim();
+        let time = self.time.as_deref()?.trim();
+        if date.is_empty() || time.is_empty() {
+            return None;
+        }
+
+        NaiveDateTime::parse_from_str(&format!("{date} {time}"), "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .map(|at| at.and_utc())
+    }
 }
 
 async fn scales(cfg: &Sky, client: &Client) -> Result<(Option<ScaleDay>, Vec<ScaleDay>)> {
     let raw: BTreeMap<String, RawScales> = get(client, &product(cfg, "noaa-scales.json")).await?;
 
-    let day = |key: &str| raw.get(key).and_then(day_from_scales);
-    let outlook = ["1", "2", "3"].into_iter().filter_map(day).collect();
+    let outlook = ["1", "2", "3"]
+        .into_iter()
+        .filter_map(|key| raw.get(key).and_then(forecast_from_scales))
+        .collect();
 
-    Ok((day("0"), outlook))
+    Ok((raw.get("0").and_then(day_from_scales), outlook))
+}
+
+fn forecast_from_scales(raw: &RawScales) -> Option<ScaleDay> {
+    day_from_scales(raw).map(|day| ScaleDay {
+        observed_at: None,
+        ..day
+    })
 }
 
 fn day_from_scales(raw: &RawScales) -> Option<ScaleDay> {
@@ -138,12 +185,14 @@ fn day_from_scales(raw: &RawScales) -> Option<ScaleDay> {
                 band,
                 scale: level.scale.as_deref().and_then(|scale| scale.parse().ok()),
                 text: level.text.clone().filter(|text| !text.trim().is_empty()),
+                chance: level.chance(),
             })
         })
         .collect();
 
     (!levels.is_empty()).then(|| ScaleDay {
         date: raw.date.clone().unwrap_or_default(),
+        observed_at: raw.observed_at(),
         levels,
     })
 }
@@ -369,9 +418,13 @@ mod tests {
                     "R":{"Scale":"1","Text":"minor","MinorProb":null},
                     "S":{"Scale":"0","Text":"none","Prob":null},
                     "G":{"Scale":"2","Text":"moderate"}},
-              "1": {"DateStamp":"2026-08-09",
-                    "R":{"Scale":null,"Text":null,"MinorProb":"1"},
+              "1": {"DateStamp":"2026-08-10","TimeStamp":"00:00:00",
+                    "R":{"Scale":null,"Text":null,"MinorProb":"35","MajorProb":"5"},
                     "S":{"Scale":null,"Text":null,"Prob":"1"},
+                    "G":{"Scale":"0","Text":"none"}},
+              "2": {"DateStamp":"2026-08-11",
+                    "R":{"Scale":null,"Text":null,"MinorProb":"","MajorProb":null},
+                    "S":{"Scale":null,"Text":null,"Prob":null},
                     "G":{"Scale":"0","Text":"none"}}
             }"#,
         )
@@ -392,7 +445,13 @@ mod tests {
             "stored geomagnetic first, whichever way round NOAA sent it"
         );
 
-        let ahead = day_from_scales(raw.get("1").unwrap()).expect("tomorrow is there");
+        assert_eq!(
+            today.observed_at,
+            Some("2026-08-09T10:53:00Z".parse::<DateTime<Utc>>().unwrap()),
+            "the current reading keeps the time NOAA took it, not just the day"
+        );
+
+        let ahead = forecast_from_scales(raw.get("1").unwrap()).expect("tomorrow is there");
         assert_eq!(
             ahead
                 .levels
@@ -401,6 +460,52 @@ mod tests {
                 .count(),
             2,
             "a probability without a scale comes through as no scale rather than as zero"
+        );
+        assert_eq!(
+            day_from_scales(raw.get("1").unwrap())
+                .expect("tomorrow is there")
+                .observed_at,
+            Some("2026-08-10T00:00:00Z".parse::<DateTime<Utc>>().unwrap()),
+            "NOAA does stamp its forecast entries, midnight on the later ones"
+        );
+        assert_eq!(
+            ahead.observed_at, None,
+            "but a forecast day covers a whole day, so the stamp is dropped rather than shown"
+        );
+
+        let chance = |day: &ScaleDay, band: Band| {
+            day.levels
+                .iter()
+                .find(|level| level.band == band)
+                .expect("the band is there")
+                .chance
+        };
+
+        assert_eq!(
+            chance(&ahead, Band::R),
+            Chance {
+                minor: Some(35),
+                major: Some(5)
+            },
+            "both blackout tiers come through, so a band forecast only as odds still says something"
+        );
+        assert_eq!(
+            chance(&ahead, Band::S),
+            Chance {
+                minor: Some(1),
+                major: None
+            },
+            "radiation has one tier, and it lands in minor"
+        );
+        assert!(
+            chance(&ahead, Band::G).is_empty(),
+            "geomagnetic storms are forecast as a scale, so they carry no odds"
+        );
+
+        let further = forecast_from_scales(raw.get("2").unwrap()).expect("the day after is there");
+        assert!(
+            chance(&further, Band::R).is_empty(),
+            "an empty string is NOAA having no odds to give, not a zero percent chance"
         );
     }
 }

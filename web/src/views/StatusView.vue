@@ -224,11 +224,16 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
               </span>
             </p>
 
-            <ApodCredit :source="featuredFull?.source_url" variant="caption">
+            <div class="attribution">
+              <ApodCredit
+                :source="featuredFull?.source_url"
+                lead="This picture is from NASA's"
+                variant="banner"
+              />
               <p v-if="credits.length" class="muted credit">
                 <span v-for="line in credits" :key="line">{{ line }}</span>
               </p>
-            </ApodCredit>
+            </div>
 
             <div class="row actions">
               <RouterLink v-slot="{ navigate }" :to="`/${featured.date}`" custom>
@@ -453,12 +458,21 @@ h1 {
   font-size: 0.7em;
 }
 
+.attribution {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.25rem 0 0.1rem;
+  padding-left: 0.75rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
 .credit {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   text-wrap: pretty;
 }
 
