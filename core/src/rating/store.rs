@@ -5,8 +5,8 @@ use super::{COMPARISON_INFORMATION, MODEL, Z};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, TimeZone, Utc};
-use sqlx::migrate::Migrator;
 use sqlx::Row;
+use sqlx::migrate::Migrator;
 use std::fmt;
 use std::path::Path;
 
@@ -739,7 +739,7 @@ fn at(millis: i64) -> DateTime<Utc> {
 mod tests {
     use super::*;
     use crate::rating::baseline::Row;
-    use crate::rating::{fit, Grouping, Prior, MIN_COMPARISONS};
+    use crate::rating::{Grouping, MIN_COMPARISONS, Prior, fit};
     use chrono::TimeDelta;
 
     async fn store() -> VoteStore {

@@ -2,18 +2,18 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::api::{params, response};
 use crate::client_ip::client_address;
 use crate::rating::ballot::{Ballot, BallotError};
-use crate::rating::{weighted_category, Denied, Issued, Rating, Who};
+use crate::rating::{Denied, Issued, Rating, Who, weighted_category};
 use crate::state::ServerState;
 use apod_core::rating::store::VoterId;
 use apod_core::rating::{
-    self, Category, Outcome, Progress, Ranked, Score, BASELINE_MAX_ESS, MIN_COMPARISONS, MODEL, Z,
+    self, BASELINE_MAX_ESS, Category, MIN_COMPARISONS, MODEL, Outcome, Progress, Ranked, Score, Z,
 };
 use apod_core::{ApodDate, ApodSummary, Credit, GameEntry};
+use axum::Router;
 use axum::extract::{ConnectInfo, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue};
+use axum::http::{HeaderMap, HeaderValue, header};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
-use axum::Router;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

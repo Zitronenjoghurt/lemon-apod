@@ -2,7 +2,7 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use apod_core::rating::baseline::{Dataset, Manifest, Row};
 use apod_core::rating::store::VoterId;
-use apod_core::rating::{self, Category, Grouping, Prior, VoteStore, MIN_PROBES, MODEL};
+use apod_core::rating::{self, Category, Grouping, MIN_PROBES, MODEL, Prior, VoteStore};
 use apod_core::{ApodReader, ApodWriter, PARSER_VERSION};
 use chrono::Utc;
 use std::collections::BTreeMap;

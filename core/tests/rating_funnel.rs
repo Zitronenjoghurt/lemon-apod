@@ -1,6 +1,6 @@
 use apod_core::date::ApodDate;
 use apod_core::rating::{
-    fit, tiers, Candidate, Grouping, Outcome, Pairing, Pool, Prior, Progress, Vote,
+    Candidate, Grouping, Outcome, Pairing, Pool, Prior, Progress, Vote, fit, tiers,
 };
 
 const POOL: usize = 9_582;

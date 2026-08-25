@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
-import {api} from '@/api/client'
-import type {RatingTerms} from '@/api/types'
+import { computed, ref, watch } from 'vue'
+import { api } from '@/api/client'
+import type { RatingTerms } from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { default: false })
 
@@ -70,13 +70,13 @@ async function forget(): Promise<void> {
       <section>
         <h3>Reading the numbers</h3>
         <p>
-          Each picture shows how often readers picked it over a other entries of archive. The band
-          that fills the bar is the uncertainty of the result. It will narrow the more votes come
+          Each picture shows how often readers picked it over other entries of the archive. The band
+          that fills the bar is the uncertainty of the result and it will narrow the more votes come
           in.
         </p>
         <p>
-          Eventually pictures will fall into tiers, the higher ones being the most regarded. If
-          there are enough votes a single entry might come out alone on top.
+          Eventually pictures will fall into tiers, the pictures in the higher ones being the most
+          popular. If there are enough votes a single entry might come out alone on top.
         </p>
       </section>
 
