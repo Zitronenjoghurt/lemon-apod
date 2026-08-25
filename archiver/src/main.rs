@@ -134,6 +134,29 @@ enum RatingCommand {
         /// The voter id, as 32 hex characters.
         voter: String,
     },
+
+    /// How consistently people answered when a pair came back the other way round, worst first.
+    Voters {
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+    },
+
+    /// Take a voter's votes out of the fit, keeping their rows so it can be undone.
+    Block {
+        /// The voter id, as 32 hex characters.
+        voter: String,
+        /// Put them back in instead.
+        #[arg(long)]
+        undo: bool,
+    },
+
+    /// Count a voter for less than one vote without silencing them. Zero counts for nothing.
+    Weigh {
+        /// The voter id, as 32 hex characters.
+        voter: String,
+        /// From 0 to 1.
+        weight: f64,
+    },
 }
 
 #[tokio::main]
@@ -167,6 +190,9 @@ async fn main() -> Result<()> {
             RatingCommand::Export => rating::export(&cfg).await,
             RatingCommand::Status => rating::status(&cfg).await,
             RatingCommand::Forget { voter } => rating::forget(&cfg, &voter).await,
+            RatingCommand::Voters { limit } => rating::voters(&cfg, limit).await,
+            RatingCommand::Block { voter, undo } => rating::block(&cfg, &voter, !undo).await,
+            RatingCommand::Weigh { voter, weight } => rating::weigh(&cfg, &voter, weight).await,
         },
         Command::Notify { seed, dry_run } => notify_once(cfg, seed, dry_run).await,
         Command::Status => {

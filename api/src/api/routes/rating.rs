@@ -1,18 +1,19 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::{params, response};
+use crate::client_ip::client_address;
 use crate::rating::ballot::{Ballot, BallotError};
-use crate::rating::{Denied, Issued, Rating, Who, weighted_category};
+use crate::rating::{weighted_category, Denied, Issued, Rating, Who};
 use crate::state::ServerState;
 use apod_core::rating::store::VoterId;
 use apod_core::rating::{
-    self, BASELINE_MAX_ESS, Category, MIN_COMPARISONS, MODEL, Outcome, Progress, Ranked, Score, Z,
+    self, Category, Outcome, Progress, Ranked, Score, BASELINE_MAX_ESS, MIN_COMPARISONS, MODEL, Z,
 };
 use apod_core::{ApodDate, ApodSummary, Credit, GameEntry};
-use axum::Router;
 use axum::extract::{ConnectInfo, Query, State};
-use axum::http::{HeaderMap, HeaderValue, header};
+use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::Response;
 use axum::routing::{delete, get, post};
+use axum::Router;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -153,27 +154,12 @@ fn who(state: &ServerState, headers: &HeaderMap, address: Option<SocketAddr>) ->
             .as_deref()
             .and_then(VoterId::from_hex),
         cohort: rating.cohort(
-            client_address(headers, address),
+            client_address(headers, address, state.config.trusted_proxy_hops),
             headers
                 .get(header::USER_AGENT)
                 .and_then(|value| value.to_str().ok()),
         ),
     })
-}
-
-fn client_address(headers: &HeaderMap, address: Option<SocketAddr>) -> Option<std::net::IpAddr> {
-    for name in ["x-forwarded-for", "x-real-ip"] {
-        let found = headers
-            .get(name)
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split(',').next())
-            .and_then(|value| value.trim().parse().ok());
-        if found.is_some() {
-            return found;
-        }
-    }
-
-    address.map(|address| address.ip())
 }
 
 fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
@@ -230,12 +216,13 @@ async fn post_vote(
     let outcome = outcome(&body.outcome)?;
     let now = Utc::now();
 
-    let ballot = rating.spend(&body.ballot, asker.voter, now)?;
+    let ballot = rating.verify(&body.ballot, asker.voter, now)?;
+    rating.check(&asker, ballot.category, now).await?;
+    rating.spend(&ballot)?;
 
     let minted = asker.voter.is_none();
     let voter = asker.voter.unwrap_or_else(fresh_voter);
 
-    rating.check(&asker, ballot.category, now).await?;
     rating
         .record(&ballot, voter, asker.cohort.clone(), outcome, now)
         .await?;
@@ -620,30 +607,6 @@ mod tests {
         assert_eq!(cookie(&headers(&[("cookie", "theme=dark")]), COOKIE), None);
         assert_eq!(
             cookie(&headers(&[("cookie", "apod_voternot=x")]), COOKIE),
-            None
-        );
-    }
-
-    #[test]
-    fn the_forwarded_address_wins_over_the_socket_behind_the_proxy() {
-        let socket: SocketAddr = "10.0.0.5:40000".parse().unwrap();
-
-        assert_eq!(
-            client_address(
-                &headers(&[("x-forwarded-for", "203.0.113.7, 10.0.0.1")]),
-                Some(socket)
-            )
-            .map(|address| address.to_string()),
-            Some("203.0.113.7".to_owned()),
-            "the first entry is the client, the rest are hops"
-        );
-
-        assert_eq!(
-            client_address(&HeaderMap::new(), Some(socket)).map(|a| a.to_string()),
-            Some("10.0.0.5".to_owned())
-        );
-        assert_eq!(
-            client_address(&headers(&[("x-forwarded-for", "junk")]), None),
             None
         );
     }

@@ -141,7 +141,7 @@ impl Rating {
 
         let repeat = standing.probe.and_then(|(left, right)| {
             let pair = (live.grouping.group(left), live.grouping.group(right));
-            pool.repeat(seed, pair.0, pair.1)
+            pool.repeat(pair.0, pair.1)
         });
 
         let drawn = match Pairing::pick(seed, repeat.is_some()) {
@@ -167,7 +167,7 @@ impl Rating {
         })
     }
 
-    pub fn spend(
+    pub fn verify(
         &self,
         token: &str,
         voter: Option<VoterId>,
@@ -179,11 +179,15 @@ impl Rating {
         if !ballot.fresh(now, self.settings.ballot_life_delta()) {
             return Err(BallotError::Stale);
         }
-        if !self.nonces.claim(ballot.nonce) {
-            return Err(BallotError::Spent);
-        }
 
         Ok(ballot)
+    }
+
+    pub fn spend(&self, ballot: &Ballot) -> Result<(), BallotError> {
+        match self.nonces.claim(ballot.nonce) {
+            true => Ok(()),
+            false => Err(BallotError::Spent),
+        }
     }
 
     pub async fn record(
@@ -260,6 +264,28 @@ impl Rating {
             let log = self.store.log(category).await?;
             let fit = rating::fit(&log, &grouping, &Prior::weak().anchored(anchors));
 
+            self.store.save(category, &fit).await?;
+
+            let candidates: Vec<Candidate> = eligible
+                .iter()
+                .map(|&picture| match fit.score(picture) {
+                    Some(score) => Candidate {
+                        picture,
+                        score: score.score,
+                        stderr: score.stderr,
+                        comparisons: score.comparisons,
+                    },
+                    None => Candidate::unseen(picture),
+                })
+                .collect();
+
+            let votes = self.store.tally(category).await?.votes;
+            let stage = Progress::of(eligible.len() as u64, votes).stage;
+            let pool = match stage.contenders() {
+                None => Pool::new(candidates),
+                Some(keep) => Pool::focused(candidates, keep as usize),
+            };
+
             tracing::debug!(
                 category = category.as_str(),
                 votes = fit.votes,
@@ -267,27 +293,12 @@ impl Rating {
                 pictures = fit.scores.len(),
                 iterations = fit.iterations,
                 bias = fit.side_bias,
+                stage = stage.as_str(),
+                contenders = pool.contenders(),
                 "fitted"
             );
 
-            self.store.save(category, &fit).await?;
-            pools.insert(
-                category,
-                Pool::new(
-                    eligible
-                        .iter()
-                        .map(|&picture| match fit.score(picture) {
-                            Some(score) => Candidate {
-                                picture,
-                                score: score.score,
-                                stderr: score.stderr,
-                                comparisons: score.comparisons,
-                            },
-                            None => Candidate::unseen(picture),
-                        })
-                        .collect(),
-                ),
-            );
+            pools.insert(category, pool);
         }
 
         let mut live = self.live.write().await;

@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
-import { api } from '@/api/client'
-import type { RatingTerms } from '@/api/types'
+import {computed, ref, watch} from 'vue'
+import {api} from '@/api/client'
+import type {RatingTerms} from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { default: false })
 
@@ -13,7 +13,6 @@ const busy = ref(false)
 const forgotten = ref<number | null>(null)
 
 const days = computed(() => terms.value?.cookie_days ?? 90)
-const least = computed(() => terms.value?.min_comparisons ?? 8)
 
 watch(
   visible,

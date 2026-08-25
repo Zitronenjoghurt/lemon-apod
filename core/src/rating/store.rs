@@ -5,8 +5,8 @@ use super::{COMPARISON_INFORMATION, MODEL, Z};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, TimeZone, Utc};
-use sqlx::Row;
 use sqlx::migrate::Migrator;
+use sqlx::Row;
 use std::fmt;
 use std::path::Path;
 
@@ -101,6 +101,48 @@ pub struct Ranked {
 impl Ranked {
     pub fn evidence(&self) -> f64 {
         f64::from(self.score.comparisons) + self.inherited
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Consistency {
+    pub voter: VoterId,
+    pub probes: u64,
+    pub agreed: u64,
+    pub expected: f64,
+    pub quick: u64,
+    pub votes: u64,
+    pub weight: f64,
+    pub blocked: bool,
+}
+
+const CHANCE: f64 = 0.5;
+
+type ProbeRow = (
+    Vec<u8>,
+    String,
+    Option<String>,
+    Option<f64>,
+    Option<f64>,
+    f64,
+    i64,
+);
+
+impl Consistency {
+    pub fn observed(&self) -> f64 {
+        match self.probes {
+            0 => 1.0,
+            probes => self.agreed as f64 / probes as f64,
+        }
+    }
+
+    pub fn reliability(&self) -> f64 {
+        let headroom = self.expected - CHANCE;
+        if self.probes < super::MIN_PROBES || headroom <= 1e-6 {
+            return 1.0;
+        }
+
+        ((self.observed() - CHANCE) / headroom).clamp(0.0, 1.0)
     }
 }
 
@@ -221,6 +263,7 @@ impl VoteStore {
                SELECT right_id AS entry FROM votes WHERE voter_id = ?1 AND category = ?2
              )
              GROUP BY entry HAVING COUNT(*) >= ?3
+             ORDER BY COUNT(*) DESC, entry
              LIMIT ?4",
         )
         .bind(&id)
@@ -271,6 +314,101 @@ impl VoteStore {
         Ok(votes.max(0) as u64)
     }
 
+    pub async fn consistency(&self, quick: chrono::TimeDelta) -> DbResult<Vec<Consistency>> {
+        let pace: Vec<(Vec<u8>, i64, i64)> = sqlx::query_as(
+            "SELECT voter_id,
+                    COUNT(*),
+                    SUM(CASE WHEN voted_at - issued_at < ?1 THEN 1 ELSE 0 END)
+             FROM votes GROUP BY voter_id",
+        )
+        .bind(quick.num_milliseconds())
+        .fetch_all(self.db.reader())
+        .await?;
+
+        let pace: std::collections::HashMap<VoterId, (u64, u64)> = pace
+            .into_iter()
+            .filter_map(|(id, votes, quick)| {
+                Some((
+                    VoterId::from_blob(&id)?,
+                    (votes.max(0) as u64, quick.max(0) as u64),
+                ))
+            })
+            .collect();
+
+        let rows: Vec<ProbeRow> = sqlx::query_as(
+            "SELECT p.voter_id,
+                        p.outcome,
+                        (SELECT f.outcome FROM votes f
+                          WHERE f.voter_id = p.voter_id AND f.category = p.category
+                            AND f.probe = 0
+                            AND f.left_id = p.right_id AND f.right_id = p.left_id
+                            AND f.id < p.id
+                          ORDER BY f.id DESC LIMIT 1),
+                        (SELECT sl.score FROM scores sl
+                          WHERE sl.category = p.category AND sl.picture_id = p.left_id),
+                        (SELECT sr.score FROM scores sr
+                          WHERE sr.category = p.category AND sr.picture_id = p.right_id),
+                        voters.weight,
+                        voters.blocked
+                 FROM votes p
+                 JOIN voters ON voters.id = p.voter_id
+                 WHERE p.probe = 1
+                 ORDER BY p.voter_id",
+        )
+        .fetch_all(self.db.reader())
+        .await?;
+
+        let mut found: Vec<Consistency> = Vec::new();
+        let mut headroom: Vec<f64> = Vec::new();
+
+        for (id, said_now, said_before, left, right, weight, blocked) in rows {
+            let (Some(voter), Some(before)) = (VoterId::from_blob(&id), said_before) else {
+                continue;
+            };
+            let (Ok(now), Ok(before)) = (said_now.parse::<Outcome>(), before.parse::<Outcome>())
+            else {
+                continue;
+            };
+
+            if found.last().is_none_or(|last| last.voter != voter) {
+                let &(votes, quick) = pace.get(&voter).unwrap_or(&(0, 0));
+                found.push(Consistency {
+                    voter,
+                    probes: 0,
+                    agreed: 0,
+                    expected: 0.0,
+                    quick,
+                    votes,
+                    weight,
+                    blocked: blocked != 0,
+                });
+                headroom.push(0.0);
+            }
+
+            let held = found.last_mut().expect("just pushed");
+            held.probes += 1;
+            if now == mirror(before) {
+                held.agreed += 1;
+            }
+
+            let expected = match (left, right) {
+                (Some(left), Some(right)) => {
+                    let odds = logistic(left - right);
+                    odds * odds + (1.0 - odds) * (1.0 - odds)
+                }
+                _ => CHANCE,
+            };
+            *headroom.last_mut().expect("just pushed") += expected;
+        }
+
+        for (held, total) in found.iter_mut().zip(headroom) {
+            held.expected = (total / held.probes as f64).max(CHANCE);
+        }
+
+        found.sort_by(|one, two| one.reliability().total_cmp(&two.reliability()));
+        Ok(found)
+    }
+
     pub async fn kin(&self, cohort: &[u8]) -> DbResult<Vec<VoterId>> {
         let blobs: Vec<Vec<u8>> =
             sqlx::query_scalar("SELECT id FROM voters WHERE cohort = ?1 ORDER BY created_at")
@@ -288,7 +426,7 @@ impl VoteStore {
         let rows: Vec<(i64, i64, String, f64)> = sqlx::query_as(
             "SELECT votes.left_id, votes.right_id, votes.outcome, voters.weight
              FROM votes JOIN voters ON voters.id = votes.voter_id
-             WHERE votes.category = ?1 AND voters.blocked = 0
+             WHERE votes.category = ?1 AND voters.blocked = 0 AND votes.probe = 0
              ORDER BY votes.id",
         )
         .bind(category.as_str())
@@ -571,6 +709,18 @@ fn read_score((picture, score, stderr, comparisons): (i64, f64, f64, i64)) -> Sc
     }
 }
 
+fn mirror(outcome: Outcome) -> Outcome {
+    match outcome {
+        Outcome::Left => Outcome::Right,
+        Outcome::Right => Outcome::Left,
+        Outcome::Tie => Outcome::Tie,
+    }
+}
+
+fn logistic(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
+}
+
 fn days(value: i64) -> ApodDate {
     ApodDate::from_days(value as i32)
 }
@@ -589,7 +739,7 @@ fn at(millis: i64) -> DateTime<Utc> {
 mod tests {
     use super::*;
     use crate::rating::baseline::Row;
-    use crate::rating::{Grouping, MIN_COMPARISONS, Prior, fit};
+    use crate::rating::{fit, Grouping, Prior, MIN_COMPARISONS};
     use chrono::TimeDelta;
 
     async fn store() -> VoteStore {
@@ -630,6 +780,10 @@ mod tests {
 
     fn never() -> DateTime<Utc> {
         Utc::now() - TimeDelta::days(365)
+    }
+
+    fn quick() -> TimeDelta {
+        TimeDelta::milliseconds(super::super::QUICK_RESPONSE_MS)
     }
 
     #[tokio::test]
@@ -685,6 +839,215 @@ mod tests {
             store.voter(who).await.unwrap().unwrap().cohort.as_deref(),
             Some(&b"moved-house"[..])
         );
+    }
+
+    async fn separated(store: &VoteStore, pairs: i32) {
+        let mut log = Vec::new();
+        for at in 0..pairs {
+            let (left, right) = (day(at * 2), day(at * 2 + 1));
+            for round in 0..20 {
+                let outcome = match round < 18 {
+                    true => Outcome::Left,
+                    false => Outcome::Right,
+                };
+                log.push(Vote::new(left, right, outcome));
+            }
+        }
+
+        let decided = fit(&log, &Grouping::default(), &Prior::weak());
+        store.save(Category::Beautiful, &decided).await.unwrap();
+    }
+
+    fn probe(who: VoterId, left: i32, right: i32, outcome: Outcome) -> Cast {
+        Cast {
+            probe: true,
+            ..cast(who, left, right, outcome)
+        }
+    }
+
+    #[tokio::test]
+    async fn a_probe_is_measurement_rather_than_evidence_and_stays_out_of_the_fit() {
+        let store = store().await;
+        let who = voter(1);
+
+        store
+            .record(&cast(who, 0, 1, Outcome::Left), never())
+            .await
+            .unwrap();
+        store
+            .record(&probe(who, 1, 0, Outcome::Right), never())
+            .await
+            .unwrap();
+
+        let log = store.log(Category::Beautiful).await.unwrap();
+        assert_eq!(
+            log.len(),
+            1,
+            "one person's opinion of one pair is one comparison, however often it is asked"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_voter_who_says_the_same_thing_both_ways_round_reads_as_consistent() {
+        let store = store().await;
+        let who = voter(1);
+        separated(&store, 4).await;
+
+        for at in 0..4 {
+            let (left, right) = (at * 2, at * 2 + 1);
+            store
+                .record(&cast(who, left, right, Outcome::Left), never())
+                .await
+                .unwrap();
+            // The pair comes back mirrored, so naming the same picture means answering right.
+            store
+                .record(&probe(who, right, left, Outcome::Right), never())
+                .await
+                .unwrap();
+        }
+
+        let found = store.consistency(quick()).await.unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].probes, found[0].agreed), (4, 4));
+        assert_eq!(found[0].observed(), 1.0);
+        assert_eq!(found[0].reliability(), 1.0);
+    }
+
+    #[tokio::test]
+    async fn a_voter_who_contradicts_themselves_every_time_reads_as_a_coin() {
+        let store = store().await;
+        let who = voter(1);
+        separated(&store, 4).await;
+
+        for at in 0..4 {
+            let (left, right) = (at * 2, at * 2 + 1);
+            store
+                .record(&cast(who, left, right, Outcome::Left), never())
+                .await
+                .unwrap();
+            store
+                .record(&probe(who, right, left, Outcome::Left), never())
+                .await
+                .unwrap();
+        }
+
+        let found = store.consistency(quick()).await.unwrap();
+        assert_eq!((found[0].probes, found[0].agreed), (4, 0));
+        assert_eq!(found[0].reliability(), 0.0);
+    }
+
+    #[tokio::test]
+    async fn a_close_pair_is_not_held_against_the_voter_who_flipped_on_it() {
+        let store = store().await;
+        let who = voter(1);
+
+        let mut log = Vec::new();
+        for at in 0..4 {
+            let (left, right) = (day(at * 2), day(at * 2 + 1));
+            for round in 0..20 {
+                let outcome = match round % 2 == 0 {
+                    true => Outcome::Left,
+                    false => Outcome::Right,
+                };
+                log.push(Vote::new(left, right, outcome));
+            }
+        }
+        let level = fit(&log, &Grouping::default(), &Prior::weak());
+        store.save(Category::Beautiful, &level).await.unwrap();
+
+        for at in 0..4 {
+            let (left, right) = (at * 2, at * 2 + 1);
+            store
+                .record(&cast(who, left, right, Outcome::Left), never())
+                .await
+                .unwrap();
+            store
+                .record(&probe(who, right, left, Outcome::Left), never())
+                .await
+                .unwrap();
+        }
+
+        let found = store.consistency(quick()).await.unwrap();
+        assert_eq!(found[0].probes, 4);
+        assert_eq!(found[0].agreed, 0, "they did contradict themselves");
+        assert!(
+            found[0].expected < 0.55,
+            "pictures this level are a coin toss, and the expectation has to say so, got {}",
+            found[0].expected
+        );
+        assert_eq!(
+            found[0].reliability(),
+            1.0,
+            "flipping on pairs nobody can separate is not evidence of anything"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_voter_barely_probed_yet_is_given_the_benefit_of_the_doubt() {
+        let store = store().await;
+        let who = voter(1);
+
+        store
+            .record(&cast(who, 0, 1, Outcome::Left), never())
+            .await
+            .unwrap();
+        store
+            .record(&probe(who, 1, 0, Outcome::Left), never())
+            .await
+            .unwrap();
+
+        let found = store.consistency(quick()).await.unwrap();
+        assert_eq!((found[0].probes, found[0].agreed), (1, 0));
+        assert_eq!(
+            found[0].reliability(),
+            1.0,
+            "one contradiction is a bad day, not a pattern"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_probe_with_nothing_behind_it_is_not_counted() {
+        let store = store().await;
+        let who = voter(1);
+
+        store
+            .record(&probe(who, 0, 1, Outcome::Left), never())
+            .await
+            .unwrap();
+        assert!(
+            store.consistency(quick()).await.unwrap().is_empty(),
+            "a probe whose original vote was erased has nothing to compare against"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_least_consistent_voter_is_the_one_reported_first() {
+        let store = store().await;
+        let (steady, erratic) = (voter(1), voter(2));
+        separated(&store, 4).await;
+
+        for (who, agreeing) in [(steady, true), (erratic, false)] {
+            for at in 0..4 {
+                let (left, right) = (at * 2, at * 2 + 1);
+                store
+                    .record(&cast(who, left, right, Outcome::Left), never())
+                    .await
+                    .unwrap();
+                let said = match agreeing {
+                    true => Outcome::Right,
+                    false => Outcome::Left,
+                };
+                store
+                    .record(&probe(who, right, left, said), never())
+                    .await
+                    .unwrap();
+            }
+        }
+
+        let found = store.consistency(quick()).await.unwrap();
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[0].voter, erratic);
+        assert_eq!(found[1].voter, steady);
     }
 
     #[tokio::test]

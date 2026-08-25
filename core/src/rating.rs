@@ -10,7 +10,7 @@ pub use fit::{Anchor, Fit, Grouping, Outcome, Prior, Score, Vote, fit, tiers};
 pub use model::{Category, Progress, Stage};
 pub use pool::{Candidate, Draw, Pairing, Pool};
 #[cfg(feature = "rating-data")]
-pub use store::{Cast, Ranked, Standing, Tally, VoteStore, Voter};
+pub use store::{Cast, Consistency, Ranked, Standing, Tally, VoteStore, Voter};
 
 pub const MODEL: &str = "bt-map-1";
 pub const Z: f64 = 1.96;
@@ -23,6 +23,13 @@ pub const SIDE_BIAS_SIGMA: f64 = 1.0;
 
 /// The Fisher information one evenly matched comparison carries, `p(1-p)` at `p = 0.5`.
 pub const COMPARISON_INFORMATION: f64 = 0.25;
+
+/// Below this a voter has not been probed enough for their agreement rate to mean anything.
+pub const MIN_PROBES: u64 = 4;
+
+/// A vote returned faster than this was not a judgment of two pictures. Not refused, because a
+/// hair trigger is not proof of anything on its own, but counted: see `rating voters`.
+pub const QUICK_RESPONSE_MS: i64 = 400;
 
 /// Below this a picture is showing the prior rather than an opinion, so it is left off the board
 /// rather than listed at the average.

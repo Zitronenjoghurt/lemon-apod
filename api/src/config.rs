@@ -30,6 +30,8 @@ pub struct Config {
     pub rate_limit_per_second: u64,
     pub rate_limit_burst: u32,
 
+    pub trusted_proxy_hops: usize,
+
     pub cache_entry_secs: u64,
     pub cache_latest_secs: u64,
     pub cache_list_secs: u64,
@@ -138,7 +140,10 @@ impl Rating {
 
             ballot_life: secs(env_or("APOD_RATING_BALLOT_LIFE_SECS", 3_600)?),
             ballot_fresh: secs(env_or("APOD_RATING_BALLOT_FRESH_SECS", 300)?),
-            min_response: Duration::from_millis(env_or("APOD_RATING_MIN_RESPONSE_MS", 400)?),
+            min_response: Duration::from_millis(env_or(
+                "APOD_RATING_MIN_RESPONSE_MS",
+                apod_core::rating::QUICK_RESPONSE_MS as u64,
+            )?),
 
             cookie_life: days(env_or("APOD_RATING_COOKIE_DAYS", 90)?),
             cohort_life: days(env_or("APOD_RATING_COHORT_DAYS", 30)?),
@@ -282,6 +287,7 @@ impl Config {
 
             rate_limit_per_second: env_or("APOD_RATE_LIMIT_PER_SECOND", 5)?,
             rate_limit_burst: env_or("APOD_RATE_LIMIT_BURST", 30)?,
+            trusted_proxy_hops: env_or("APOD_TRUSTED_PROXY_HOPS", 0)?,
 
             cache_entry_secs: env_or("APOD_CACHE_ENTRY_SECS", 86_400)?,
             cache_latest_secs: env_or("APOD_CACHE_LATEST_SECS", 300)?,

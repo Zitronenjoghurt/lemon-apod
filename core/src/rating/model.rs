@@ -62,6 +62,14 @@ pub enum Stage {
 }
 
 impl Stage {
+    pub const fn contenders(self) -> Option<u64> {
+        match self {
+            Self::Screen => None,
+            Self::Contend => Some(CONTEND_POOL),
+            Self::Settle | Self::Settled => Some(SETTLE_POOL),
+        }
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Screen => "screen",
@@ -171,6 +179,22 @@ mod tests {
         let progress = Progress::of(20, 0);
         assert_eq!(progress.target, 100, "twenty pictures, ten deep");
         assert_eq!(progress.total, 100 + 20 * 50 + 20 * 300);
+    }
+
+    #[test]
+    fn each_stage_says_how_wide_a_field_it_is_working_in() {
+        assert_eq!(
+            Stage::Screen.contenders(),
+            None,
+            "the screen looks at everything"
+        );
+        assert_eq!(Stage::Contend.contenders(), Some(CONTEND_POOL));
+        assert_eq!(Stage::Settle.contenders(), Some(SETTLE_POOL));
+        assert_eq!(
+            Stage::Settled.contenders(),
+            Some(SETTLE_POOL),
+            "a settled board still spends what it collects on the pictures in question"
+        );
     }
 
     #[test]

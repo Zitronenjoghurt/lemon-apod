@@ -1,4 +1,5 @@
 mod api;
+mod client_ip;
 mod config;
 mod meta;
 mod probe;
@@ -11,13 +12,13 @@ mod web;
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::routing::get;
+use client_ip::TrustedIpKeyExtractor;
 use config::Config;
 use state::ServerState;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_governor::GovernorLayer;
 use tower_governor::governor::GovernorConfigBuilder;
-use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
@@ -74,11 +75,14 @@ async fn refit(state: ServerState, rating: Arc<rating::Rating>) {
 }
 
 fn router(state: &ServerState) -> Router {
+    let by_client = TrustedIpKeyExtractor {
+        hops: state.config.trusted_proxy_hops,
+    };
     let reading = Arc::new(
         GovernorConfigBuilder::default()
             .per_second(state.config.rate_limit_per_second)
             .burst_size(state.config.rate_limit_burst)
-            .key_extractor(SmartIpKeyExtractor)
+            .key_extractor(by_client)
             .use_headers()
             .finish()
             .expect("the reading rate limit is valid"),
@@ -87,7 +91,7 @@ fn router(state: &ServerState) -> Router {
         GovernorConfigBuilder::default()
             .period(state.config.rating.vote_limit_period)
             .burst_size(state.config.rating.vote_limit_burst)
-            .key_extractor(SmartIpKeyExtractor)
+            .key_extractor(by_client)
             .use_headers()
             .finish()
             .expect("the voting rate limit is valid"),

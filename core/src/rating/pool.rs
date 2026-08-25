@@ -84,12 +84,21 @@ struct Band {
 pub struct Pool {
     candidates: Vec<Candidate>,
     at: HashMap<ApodDate, usize>,
+    contenders: usize,
     bands: Vec<Band>,
     uncertainty: f64,
 }
 
 impl Pool {
-    pub fn new(mut candidates: Vec<Candidate>) -> Self {
+    pub fn new(candidates: Vec<Candidate>) -> Self {
+        Self::build(candidates, None)
+    }
+
+    pub fn focused(candidates: Vec<Candidate>, keep: usize) -> Self {
+        Self::build(candidates, Some(keep))
+    }
+
+    fn build(mut candidates: Vec<Candidate>, keep: Option<usize>) -> Self {
         candidates.sort_unstable_by_key(|candidate| candidate.picture);
         candidates.dedup_by_key(|candidate| candidate.picture);
 
@@ -99,8 +108,23 @@ impl Pool {
             .map(|(index, candidate)| (candidate.picture, index))
             .collect();
 
+        let focus: Vec<usize> = match keep {
+            None => (0..candidates.len()).collect(),
+            Some(keep) => {
+                let mut order: Vec<usize> = (0..candidates.len()).collect();
+                order.sort_unstable_by(|&one, &two| {
+                    upper(&candidates[two])
+                        .total_cmp(&upper(&candidates[one]))
+                        .then(candidates[one].picture.cmp(&candidates[two].picture))
+                });
+                order.truncate(keep.max(2).min(candidates.len()));
+                order
+            }
+        };
+
         let mut grouped: HashMap<i64, Band> = HashMap::new();
-        for (index, candidate) in candidates.iter().enumerate() {
+        for &index in &focus {
+            let candidate = &candidates[index];
             let band = grouped
                 .entry((candidate.score / BAND_WIDTH).floor() as i64)
                 .or_insert_with(|| Band {
@@ -120,6 +144,7 @@ impl Pool {
 
         Self {
             uncertainty: bands.iter().map(|band| band.uncertainty).sum(),
+            contenders: focus.len(),
             candidates,
             at,
             bands,
@@ -128,6 +153,11 @@ impl Pool {
 
     pub fn len(&self) -> usize {
         self.candidates.len()
+    }
+
+    /// How many of them the informative draws are choosing between.
+    pub fn contenders(&self) -> usize {
+        self.contenders
     }
 
     pub fn is_empty(&self) -> bool {
@@ -162,13 +192,17 @@ impl Pool {
         Some(self.sided(picked, pairing, &mut rng))
     }
 
-    pub fn repeat(&self, seed: u64, left: ApodDate, right: ApodDate) -> Option<Draw> {
-        let pair = (*self.at.get(&left)?, *self.at.get(&right)?);
-        if pair.0 == pair.1 {
+    pub fn repeat(&self, left: ApodDate, right: ApodDate) -> Option<Draw> {
+        let (one, two) = (*self.at.get(&left)?, *self.at.get(&right)?);
+        if one == two {
             return None;
         }
 
-        Some(self.sided(pair, Pairing::Probe, &mut Rng::new(seed)))
+        Some(Draw {
+            left: self.candidates[two].picture,
+            right: self.candidates[one].picture,
+            pairing: Pairing::Probe,
+        })
     }
 
     fn sided(&self, (one, two): (usize, usize), pairing: Pairing, rng: &mut Rng) -> Draw {
@@ -262,6 +296,10 @@ impl Pool {
 
         self.bands.last()
     }
+}
+
+fn upper(candidate: &Candidate) -> f64 {
+    candidate.score + super::Z * candidate.stderr
 }
 
 struct Rng(u64);
@@ -485,30 +523,99 @@ mod tests {
         let pool = spread(40);
         let (one, two) = (day(3), day(11));
 
-        let mut swapped = 0;
-        for seed in 0..200u64 {
-            let draw = pool.repeat(seed, one, two).unwrap();
-            assert!(draw.holds(one) && draw.holds(two));
-            assert_eq!(draw.pairing, Pairing::Probe);
-            if draw.left == two {
-                swapped += 1;
-            }
-        }
-
-        assert!(
-            (60..140).contains(&swapped),
-            "{swapped} of 200 came back swapped"
+        let draw = pool.repeat(one, two).unwrap();
+        assert_eq!(draw.pairing, Pairing::Probe);
+        assert_eq!(
+            (draw.left, draw.right),
+            (two, one),
+            "half the probes coming back the original way round would measure nothing"
         );
+        assert_eq!(pool.repeat(two, one).unwrap().left, one, "and back again");
     }
 
     #[test]
     fn a_repeat_of_something_outside_the_pool_is_refused() {
         let pool = spread(10);
-        assert!(pool.repeat(1, day(3), day(999)).is_none());
+        assert!(pool.repeat(day(3), day(999)).is_none());
+        assert!(pool.repeat(day(3), day(3)).is_none(), "not against itself");
+    }
+
+    #[test]
+    fn a_focused_pool_asks_its_questions_of_the_contenders() {
+        let mut candidates: Vec<Candidate> = (0..500).map(|at| scored(at, -2.0, 40)).collect();
+        candidates.extend((500..550).map(|at| scored(at, 3.0, 40)));
+        let pool = Pool::focused(candidates, 50);
+
+        assert_eq!(pool.len(), 550, "the whole archive is still reachable");
+        assert_eq!(pool.contenders(), 50);
+
+        let mut inside = 0;
+        for seed in 0..1_000u64 {
+            let draw = pool.draw(seed, Pairing::Informative, &[]).unwrap();
+            if draw.left.days() >= 500 && draw.right.days() >= 500 {
+                inside += 1;
+            }
+        }
+
         assert!(
-            pool.repeat(1, day(3), day(3)).is_none(),
-            "not against itself"
+            inside > 950,
+            "only {inside} of 1,000 informative pairs stayed among the contenders"
         );
+    }
+
+    #[test]
+    fn a_uniform_draw_still_reaches_past_the_cut() {
+        let mut candidates: Vec<Candidate> = (0..500).map(|at| scored(at, -2.0, 40)).collect();
+        candidates.extend((500..550).map(|at| scored(at, 3.0, 40)));
+        let pool = Pool::focused(candidates, 50);
+
+        let mut outside = 0;
+        for seed in 0..1_000u64 {
+            let draw = pool.draw(seed, Pairing::Uniform, &[]).unwrap();
+            if draw.left.days() < 500 || draw.right.days() < 500 {
+                outside += 1;
+            }
+        }
+
+        assert!(
+            outside > 900,
+            "the cut has to stay connected to the archive, and only {outside} of 1,000 reached it"
+        );
+    }
+
+    #[test]
+    fn the_cut_is_made_on_the_upper_bound_so_a_thin_record_is_not_dropped_for_being_thin() {
+        let settled = scored(0, 1.0, 400);
+        let unasked = Candidate::unseen(day(1));
+        let poor = scored(2, -1.0, 400);
+        let pool = Pool::focused(vec![settled, unasked, poor], 2);
+
+        assert_eq!(pool.contenders(), 2);
+        let mut seen = 0;
+        for seed in 0..500u64 {
+            let draw = pool.draw(seed, Pairing::Informative, &[]).unwrap();
+            if draw.holds(day(1)) {
+                seen += 1;
+            }
+        }
+        assert!(seen > 0, "a picture nobody has judged cannot be cut for it");
+    }
+
+    #[test]
+    fn a_cut_below_a_pair_still_leaves_a_pair() {
+        let pool = Pool::focused(vec![scored(0, 1.0, 5), scored(1, 0.0, 5)], 0);
+        assert_eq!(pool.contenders(), 2);
+        assert!(pool.draw(1, Pairing::Informative, &[]).is_some());
+
+        let empty = Pool::focused(Vec::new(), 50);
+        assert_eq!(empty.contenders(), 0);
+        assert!(empty.draw(1, Pairing::Informative, &[]).is_none());
+    }
+
+    #[test]
+    fn an_unfocused_pool_holds_everything_in_contention() {
+        let pool = spread(200);
+        assert_eq!(pool.contenders(), pool.len());
     }
 
     #[test]

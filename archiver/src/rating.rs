@@ -1,7 +1,8 @@
 use crate::config::Config;
 use anyhow::{Context, Result};
 use apod_core::rating::baseline::{Dataset, Manifest, Row};
-use apod_core::rating::{self, Category, Grouping, MODEL, Prior, VoteStore};
+use apod_core::rating::store::VoterId;
+use apod_core::rating::{self, Category, Grouping, Prior, VoteStore, MIN_PROBES, MODEL};
 use apod_core::{ApodReader, ApodWriter, PARSER_VERSION};
 use chrono::Utc;
 use std::collections::BTreeMap;
@@ -168,9 +169,114 @@ pub async fn status(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn forget(cfg: &Config, voter: &str) -> Result<()> {
-    use apod_core::rating::store::VoterId;
+pub async fn voters(cfg: &Config, limit: usize) -> Result<()> {
+    let store = VoteStore::open(&cfg.votes_db).await?;
+    let found = store
+        .consistency(chrono::TimeDelta::milliseconds(rating::QUICK_RESPONSE_MS))
+        .await?;
 
+    if found.is_empty() {
+        println!("nobody has been probed yet, so there is nothing to compare");
+        store.close().await;
+        return Ok(());
+    }
+
+    println!(
+        "{} probed voters, least consistent first. A probe puts a pair the voter has already \
+         judged back",
+        found.len()
+    );
+    println!(
+        "in front of them the other way round. 'expected' is the agreement the current fit \
+         predicts on"
+    );
+    println!("those same pairs, and 'score' is the observed rate read against it. 'rushed' is the");
+    println!(
+        "share of their votes that came back inside {}ms, which nobody looking could manage.\n",
+        rating::QUICK_RESPONSE_MS
+    );
+    println!(
+        "{:<34}{:>7}{:>9}{:>10}{:>7}{:>9}{:>8}",
+        "voter", "probes", "agreed", "expected", "score", "rushed", "weight"
+    );
+
+    for held in found.iter().take(limit) {
+        let rushed = match held.votes {
+            0 => 0.0,
+            votes => held.quick as f64 / votes as f64 * 100.0,
+        };
+
+        println!(
+            "{:<34}{:>7}{:>8.0}%{:>9.0}%{:>7.2}{:>8.0}%{:>8.2}{}",
+            held.voter.to_hex(),
+            held.probes,
+            held.observed() * 100.0,
+            held.expected * 100.0,
+            held.reliability(),
+            rushed,
+            held.weight,
+            match held.blocked {
+                true => "  blocked",
+                false => "",
+            }
+        );
+    }
+
+    let thin = found.iter().filter(|held| held.probes < MIN_PROBES).count();
+    if thin > 0 {
+        println!(
+            "\n{thin} have had fewer than {MIN_PROBES} probes, too few to say anything, and \
+             score 1.00 for now"
+        );
+    }
+    println!("to act on one: apod-archiver rating weigh <voter> <0..1>, or rating block <voter>");
+
+    store.close().await;
+    Ok(())
+}
+
+pub async fn block(cfg: &Config, voter: &str, blocked: bool) -> Result<()> {
+    let id = VoterId::from_hex(voter).with_context(|| format!("'{voter}' is not a voter id"))?;
+    let store = VoteStore::open(&cfg.votes_db).await?;
+
+    match store.block(id, blocked).await? {
+        false => println!("no such voter"),
+        true => println!(
+            "{voter} {}, so their votes {} the next fit",
+            match blocked {
+                true => "blocked",
+                false => "unblocked",
+            },
+            match blocked {
+                true => "leave",
+                false => "return to",
+            }
+        ),
+    }
+
+    store.close().await;
+    Ok(())
+}
+
+pub async fn weigh(cfg: &Config, voter: &str, weight: f64) -> Result<()> {
+    anyhow::ensure!(
+        (0.0..=1.0).contains(&weight),
+        "a weight runs from 0, counting for nothing, to 1, counting in full"
+    );
+
+    let id = VoterId::from_hex(voter).with_context(|| format!("'{voter}' is not a voter id"))?;
+    let store = VoteStore::open(&cfg.votes_db).await?;
+
+    match store.weigh(id, weight).await? {
+        false => println!("no such voter"),
+        true => println!("{voter} now counts for {weight:.2} of a vote from the next fit on"),
+    }
+
+    store.close().await;
+    Ok(())
+}
+
+pub async fn forget(cfg: &Config, voter: &str) -> Result<()> {
     let id = VoterId::from_hex(voter).with_context(|| format!("'{voter}' is not a voter id"))?;
 
     let store = VoteStore::open(&cfg.votes_db).await?;
