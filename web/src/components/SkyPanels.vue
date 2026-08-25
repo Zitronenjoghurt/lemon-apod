@@ -1,17 +1,10 @@
 <script lang="ts" setup>
 import { computed, onUnmounted, ref } from 'vue'
+import KpGauge from './KpGauge.vue'
 import MoonDial from './MoonDial.vue'
 import type { Launch, SkyEventKind } from '@/api/types'
 import { useSky } from '@/composables/useSky'
-import {
-  BAND_NAMES,
-  BANDS,
-  inForce,
-  kpPercent,
-  kpReading,
-  levelName,
-  NOTICE_LABELS,
-} from '@/utils/weather'
+import { BAND_NAMES, BANDS, inForce, kpReading, levelName, NOTICE_LABELS } from '@/utils/weather'
 import { RouterLink } from 'vue-router'
 
 const { sky, failed, visiblePlanets } = useSky()
@@ -106,22 +99,16 @@ const orbit = computed(() => {
   return Math.min(100, Math.max(0, ((now.distance_km - now.perigee_km) / span) * 100))
 })
 
-const weather = computed(() => sky.value?.space_weather ?? null)
 const report = computed(() => sky.value?.weather ?? null)
 
-const activity = computed(() => {
-  const kp = weather.value?.kp
-  return kp === undefined ? null : kpReading(kp)
-})
+const activity = computed(() => (report.value ? kpReading(report.value.kp) : null))
 
 const raised = computed(() => {
   const alert = report.value?.alert
   return alert && inForce(alert) ? alert : null
 })
 
-const stormy = computed(() => (weather.value?.kp ?? 0) >= 5 || !!raised.value)
-
-const dial = computed(() => (weather.value ? kpPercent(weather.value.kp) : 0))
+const stormy = computed(() => (report.value?.kp ?? 0) >= 5 || !!raised.value)
 
 const levels = computed(() => {
   const stored = report.value?.scales?.levels ?? []
@@ -131,9 +118,9 @@ const levels = computed(() => {
 })
 
 const observed = computed(() => {
-  if (!weather.value) return ''
-  const at = new Date(weather.value.observed_at)
-  return Number.isNaN(at.getTime()) ? '' : clock(weather.value.observed_at)
+  const at = report.value?.observed_at
+  if (!at) return ''
+  return Number.isNaN(new Date(at).getTime()) ? '' : clock(at)
 })
 
 function magnitude(value: number): string {
@@ -220,26 +207,10 @@ function magnitude(value: number): string {
         </p>
       </section>
 
-      <section v-if="weather && activity" :class="{ stormy }" class="card panel">
+      <section v-if="report" :class="{ stormy }" class="card panel">
         <h2 class="muted">Space weather</h2>
 
-        <div class="row kp-row">
-          <p class="kp">
-            <span class="figure">{{ weather.kp.toFixed(2) }}</span>
-            <span class="unit muted">Kp</span>
-          </p>
-          <p class="verdict">{{ activity.label }}</p>
-        </div>
-
-        <div class="gauge">
-          <div class="track">
-            <div :style="{ width: `${dial}%` }" class="fill" />
-            <div class="threshold" />
-          </div>
-          <p class="muted caption">
-            Scale of 0 to 9, Storms start at 5. Last measured at {{ observed }}.
-          </p>
-        </div>
+        <KpGauge :kp="report.kp" :stamp="observed" />
 
         <ul v-if="levels.length" class="bands">
           <li v-for="level in levels" :key="level.band" :class="{ up: (level.scale ?? 0) > 0 }">
@@ -255,7 +226,7 @@ function magnitude(value: number): string {
             {{ raised.headline }}
           </span>
         </p>
-        <p v-else class="muted note">{{ activity.note }}</p>
+        <p v-else class="muted note">{{ activity?.note }}</p>
 
         <RouterLink class="more" to="/space-weather">
           Space weather in detail
@@ -485,26 +456,6 @@ h2 {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
-.kp-row {
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.kp {
-  display: flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin: 0;
-}
-
-.verdict {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  text-align: right;
-  text-wrap: balance;
-}
-
 .gauge {
   display: flex;
   flex-direction: column;
@@ -524,15 +475,6 @@ h2 {
   border-radius: 999px;
   background: var(--accent);
   transition: width 0.3s ease;
-}
-
-.threshold {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 55.55%;
-  width: 2px;
-  background: color-mix(in srgb, var(--text) 45%, transparent);
 }
 
 .orbit .track {
@@ -576,11 +518,6 @@ h2 {
 
 .far {
   text-align: right;
-}
-
-.caption {
-  margin: 0;
-  font-size: 0.72rem;
 }
 
 .bands {
@@ -647,8 +584,6 @@ h2 {
   text-decoration: underline;
 }
 
-/* Stretched rather than set to start: the two lists never run to the same length, and the pair
-   reads as one thing only when the cards agree on where they end. */
 .columns {
   display: grid;
   gap: var(--gap);

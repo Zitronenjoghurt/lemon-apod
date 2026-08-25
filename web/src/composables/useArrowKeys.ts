@@ -35,6 +35,7 @@ export function useArrowKeys(handlers: ArrowHandlers): void {
 
   function onKey(event: KeyboardEvent): void {
     if (event.defaultPrevented) return
+    if (event.repeat) return
     if (event.metaKey || event.ctrlKey || event.altKey) return
     if (!ARROWS.includes(event.key) && event.key !== ' ') return
 

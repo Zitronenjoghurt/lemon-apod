@@ -71,6 +71,7 @@ pub struct Sky {
     path: Arc<PathBuf>,
     reader: Arc<RwLock<Option<SkyReader>>>,
     pub cached: Cached,
+    pub weather: Cached,
 }
 
 impl Sky {
@@ -79,6 +80,7 @@ impl Sky {
             path: Arc::new(path),
             reader: Arc::new(RwLock::new(None)),
             cached: Cached::new(ttl),
+            weather: Cached::new(ttl),
         }
     }
 

@@ -9,8 +9,9 @@ export function inForce(alert: WeatherAlert, now = Date.now()): boolean {
   return now - Date.parse(alert.issued_at) <= ALERT_LIFE_MS
 }
 
-export const SWPC_URL = 'https://www.swpc.noaa.gov/products/planetary-k-index'
+export const SWPC_URL = 'https://www.swpc.noaa.gov'
 export const SCALES_URL = 'https://www.swpc.noaa.gov/noaa-scales-explanation'
+export const KYOTO_URL = 'https://wdc.kugi.kyoto-u.ac.jp/dstdir/'
 
 export const BANDS: WeatherBand[] = ['g', 's', 'r']
 
@@ -22,8 +23,8 @@ export const BAND_NAMES: Record<WeatherBand, string> = {
 
 export const BAND_ABOUT: Record<WeatherBand, string> = {
   g: 'The magnetic field shaken by the solar wind, which influences power grids and brings auroras closer to the equator.',
-  s: 'Energetic protons streaming past Earth, which reaches satellites and polar flights.',
-  r: 'Flares soaking the sunlit side of Earth in x-rays, which drowns out high frequency radio.',
+  s: 'Energetic protons streaming past Earth, which reach satellites and polar flights.',
+  r: 'Flares soaking the daylit side of Earth in x-rays, which absorb high frequency radio.',
 }
 
 export const SCALE_WORDS = ['none', 'minor', 'moderate', 'strong', 'severe', 'extreme']
@@ -60,10 +61,10 @@ export const NOTICE_LABELS: Record<NoticeKind, string> = {
 }
 
 export const NOTICE_ICONS: Record<NoticeKind, string> = {
-  alert: 'pi pi-exclamation-triangle',
-  warning: 'pi pi-bell',
-  watch: 'pi pi-eye',
-  summary: 'pi pi-file',
+  alert: 'pi-exclamation-triangle',
+  warning: 'pi-bell',
+  watch: 'pi-eye',
+  summary: 'pi-file',
 }
 
 export const KP_SCALE: { at: number; label: string; note: string }[] = [
@@ -126,14 +127,14 @@ export const KP_BANDS: ChartBand[] = [
     label: 'severe',
     range: 'Kp 7 to 9, G3 to G5',
     effect:
-      'Aurora as low as Illinois, or Florida at the extreme. Grid voltage problems up to transformer damage, shortwave signals become patchy or out for up to two days, satellite navigation degraded for hours.',
+      'Aurora as low as Illinois, or Florida at the extreme. Grid voltage problems up to transformer damage, shortwave signals become patchy or out for up to two days, satellite navigation degraded for hours to days.',
   },
   {
     from: 5,
     to: 7,
     tone: 'warn',
     label: 'storm',
-    range: 'Kp 5 to 7, G1 to G2',
+    range: 'Kp 5 and 6, G1 to G2',
     effect:
       'Aurora as low as New York or Idaho. Weak grid voltage swings and shortwave signals fading at high latitudes.',
   },
@@ -154,7 +155,7 @@ export const FLUX_MARKS: ChartMark[] = [
     at: 250,
     label: 'major',
     tone: 'alert',
-    range: 'past 250 sfu',
+    range: 'above 250 sfu',
     effect:
       'Large active solar regions facing Earth with a severely increased flare and blackout risk.',
   },
@@ -168,11 +169,11 @@ export const FLUX_MARKS: ChartMark[] = [
   },
   {
     at: 70,
-    label: 'quiet sun',
+    label: 'quiet',
     tone: 'calm',
     range: 'around 70 sfu',
     effect:
-      'Few sunspots, little flaring and minimal effect on earths atmosphere. Low satellites hold their altitude longer.',
+      "Few sunspots, little flaring and minimal effect on Earth's atmosphere. Low satellites hold their altitude longer.",
   },
 ]
 
@@ -212,7 +213,7 @@ export const DST_MARKS: ChartMark[] = [
     at: 0,
     label: 'baseline',
     tone: 'calm',
-    range: 'around 0 nT',
-    effect: 'Where it sits on an ordinary day.',
+    range: 'zero',
+    effect: 'A quiet day rests just below this: the ring current never empties completely.',
   },
 ]

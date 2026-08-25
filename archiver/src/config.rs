@@ -76,7 +76,6 @@ pub struct Sky {
     pub weather_enabled: bool,
     pub launches_url: String,
     pub launch_page_url: String,
-    pub weather_url: String,
     pub swpc_base_url: String,
     pub launch_limit: u32,
     pub interval: Duration,
@@ -179,20 +178,13 @@ impl Config {
                     "APOD_SKY_LAUNCH_PAGE_URL",
                     "https://spacelaunchnow.me/launch/{slug}/".to_owned(),
                 )?,
-                weather_url: env_or(
-                    "APOD_SKY_WEATHER_URL",
-                    "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
-                        .to_owned(),
-                )?,
                 swpc_base_url: env_or(
                     "APOD_SWPC_BASE_URL",
                     "https://services.swpc.noaa.gov/products".to_owned(),
                 )
                 .map(|url: String| url.trim_end_matches('/').to_owned())?,
                 launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 20)?,
-                interval: Duration::from_secs(
-                    u64::from(env_or::<u32>("APOD_SKY_INTERVAL_HOURS", 1)?.max(1)) * 3600,
-                ),
+                interval: secs("APOD_SKY_INTERVAL_SECS", 1_800)?,
             },
 
             notify: Notify {
@@ -280,6 +272,11 @@ impl Config {
         anyhow::ensure!(
             !self.notify.interval.is_zero(),
             "APOD_NOTIFY_INTERVAL_SECS must be greater than zero"
+        );
+        anyhow::ensure!(
+            self.sky.interval >= Duration::from_secs(60),
+            "APOD_SKY_INTERVAL_SECS must be at least 60; NOAA's feeds do not move faster than \
+             that and there is no reason to ask them to"
         );
         Ok(self)
     }

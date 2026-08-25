@@ -1,7 +1,7 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::response;
 use crate::state::ServerState;
-use apod_core::sky::store::{FeedState, Launch, SpaceWeather};
+use apod_core::sky::store::{FeedState, Launch};
 use apod_core::sky::weather::WeatherSummary;
 use apod_core::sky::{self, SkyNow};
 use axum::Router;
@@ -19,7 +19,6 @@ struct Sky {
     #[serde(flatten)]
     computed: SkyNow,
     launches: Vec<Launch>,
-    space_weather: Option<SpaceWeather>,
     weather: Option<WeatherSummary>,
     feeds: Vec<FeedState>,
 }
@@ -33,7 +32,7 @@ async fn get_sky(State(state): State<ServerState>, headers: HeaderMap) -> ApiRes
 async fn build(state: &ServerState) -> ApiResult<String> {
     let now = Utc::now();
 
-    let (launches, space_weather, weather, feeds) = match state.sky.reader().await {
+    let (launches, weather, feeds) = match state.sky.reader().await {
         Some(reader) => {
             let since = now - TimeDelta::hours(apod_core::sky::store::LAUNCH_LOOKBACK_HOURS);
 
@@ -55,11 +54,6 @@ async fn build(state: &ServerState) -> ApiResult<String> {
                     }),
             );
 
-            let space_weather = reader.space_weather().await.unwrap_or_else(|error| {
-                tracing::warn!("reading space weather: {error}");
-                None
-            });
-
             let weather = reader
                 .weather_report()
                 .await
@@ -74,22 +68,31 @@ async fn build(state: &ServerState) -> ApiResult<String> {
                 Vec::new()
             });
 
-            (launches, space_weather, weather, feeds)
+            (launches, weather, feeds)
         }
-        None => (Vec::new(), None, None, Vec::new()),
+        None => (Vec::new(), None, Vec::new()),
     };
 
     serde_json::to_string(&Sky {
         computed: sky::now(now),
         launches,
-        space_weather,
         weather,
         feeds,
     })
     .map_err(|error| ApiError::Internal(error.into()))
 }
 
-async fn get_weather(State(state): State<ServerState>) -> ApiResult<Response> {
+async fn get_weather(State(state): State<ServerState>, headers: HeaderMap) -> ApiResult<Response> {
+    let weather = state
+        .sky
+        .weather
+        .get_or_build(|| build_weather(&state))
+        .await?;
+
+    Ok(response::revalidated(&headers, &weather, response::JSON))
+}
+
+async fn build_weather(state: &ServerState) -> ApiResult<String> {
     let reader = state.sky.reader().await.ok_or(ApiError::NotFound)?;
     let report = reader
         .weather_report()
@@ -97,7 +100,7 @@ async fn get_weather(State(state): State<ServerState>) -> ApiResult<Response> {
         .map_err(|error| ApiError::Internal(error.into()))?
         .ok_or(ApiError::NotFound)?;
 
-    Ok(response::cached(state.config.cache_sky_secs, report))
+    serde_json::to_string(&report).map_err(|error| ApiError::Internal(error.into()))
 }
 
 pub fn router() -> Router<ServerState> {

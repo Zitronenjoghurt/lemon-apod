@@ -90,7 +90,7 @@ async fn kp_series(cfg: &Sky, client: &Client) -> Result<Vec<KpPoint>> {
             Some(KpPoint {
                 at,
                 kp: row.kp?,
-                ahead: row.observed.as_deref() != Some("observed") || at > now,
+                ahead: ahead_of(row.observed.as_deref(), at, now),
             })
         })
         .filter(|point| point.at >= floor)
@@ -98,6 +98,10 @@ async fn kp_series(cfg: &Sky, client: &Client) -> Result<Vec<KpPoint>> {
 
     points.sort_by_key(|point| point.at);
     Ok(points)
+}
+
+fn ahead_of(observed: Option<&str>, at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+    !matches!(observed, Some("observed" | "estimated")) || at > now
 }
 
 #[derive(Debug, Deserialize)]
@@ -336,6 +340,28 @@ mod tests {
         assert!(parse_time("2026-08-08 21:08:07.987").is_some());
         assert!(parse_time("2026-08-09").is_some());
         assert!(parse_time("not a time").is_none());
+    }
+
+    #[test]
+    fn an_estimated_kp_is_a_measurement_and_only_a_prediction_is_a_forecast() {
+        let now = parse_time("2026-08-25T22:00:00").unwrap();
+        let earlier = parse_time("2026-08-25T18:00:00").unwrap();
+        let later = parse_time("2026-08-26T00:00:00").unwrap();
+
+        assert!(!ahead_of(Some("observed"), earlier, now));
+        assert!(
+            !ahead_of(Some("estimated"), earlier, now),
+            "the newest nine hours of the feed are readings, not guesses"
+        );
+        assert!(ahead_of(Some("predicted"), later, now));
+        assert!(
+            ahead_of(None, earlier, now),
+            "a label we do not recognise is treated as a forecast"
+        );
+        assert!(
+            ahead_of(Some("observed"), later, now),
+            "nothing still in the future is a measurement, whatever it is labelled"
+        );
     }
 
     #[test]

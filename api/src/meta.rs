@@ -64,7 +64,7 @@ const FIXED: &[Fixed] = &[
     Fixed {
         path: "/space-weather",
         title: "Space weather",
-        description: "Solar activity and its influence on earth, as measured and forecast by NOAA's Space Weather Prediction Center.",
+        description: "Solar activity and its influence on Earth, as measured and forecast by NOAA's Space Weather Prediction Center.",
     },
     Fixed {
         path: "/pictures",

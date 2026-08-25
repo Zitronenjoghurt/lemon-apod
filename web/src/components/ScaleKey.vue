@@ -1,18 +1,36 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
-import type { ChartBand, ChartMark } from './SeriesChart.vue'
+import type { ChartBand, ChartMark, Tone } from './SeriesChart.vue'
+
+export interface KeyRow {
+  letter: string
+  label: string
+  effect: string
+}
 
 const props = withDefaults(
   defineProps<{
     bands?: ChartBand[]
     marks?: ChartMark[]
+    rows?: KeyRow[]
   }>(),
-  { bands: () => [], marks: () => [] },
+  { bands: () => [], marks: () => [], rows: () => [] },
 )
 
-const rows = computed(() =>
+interface Entry {
+  key: string
+  tone?: Tone
+  kind: 'band' | 'mark' | 'letter'
+  letter?: string
+  label?: string
+  range?: string
+  effect?: string
+}
+
+const scaled = computed<Entry[]>(() =>
   [
     ...props.bands.map((band) => ({
+      key: `band-${Math.max(band.from, band.to)}`,
       tone: band.tone,
       kind: 'band' as const,
       at: Math.max(band.from, band.to),
@@ -21,7 +39,8 @@ const rows = computed(() =>
       effect: band.effect,
     })),
     ...props.marks.map((mark) => ({
-      tone: mark.tone ?? 'warn',
+      key: `mark-${mark.at}`,
+      tone: mark.tone ?? ('warn' as Tone),
       kind: 'mark' as const,
       at: mark.at,
       label: mark.label,
@@ -32,12 +51,26 @@ const rows = computed(() =>
     .filter((row) => row.effect)
     .sort((one, two) => two.at - one.at),
 )
+
+const entries = computed<Entry[]>(() => [
+  ...props.rows.map((row) => ({
+    key: `letter-${row.letter}`,
+    kind: 'letter' as const,
+    letter: row.letter,
+    label: row.label,
+    effect: row.effect,
+  })),
+  ...scaled.value,
+])
 </script>
 
 <template>
   <ul class="scale-key">
-    <li v-for="row in rows" :key="`${row.kind}-${row.at}`" class="entry">
-      <span :class="['swatch', row.kind]" :data-tone="row.tone" aria-hidden="true" />
+    <li v-for="row in entries" :key="row.key" class="entry">
+      <span v-if="row.kind === 'letter'" aria-hidden="true" class="swatch letter">
+        {{ row.letter }}
+      </span>
+      <span v-else :class="['swatch', row.kind]" :data-tone="row.tone" aria-hidden="true" />
       <span class="text">
         <span class="head">
           <span v-if="row.label" :data-tone="row.tone" class="label">{{ row.label }}</span>
@@ -78,6 +111,19 @@ const rows = computed(() =>
 .swatch.band {
   background: hsl(var(--tone) / 0.22);
   border: 1px solid hsl(var(--tone) / 0.6);
+}
+
+.swatch.letter {
+  display: grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .swatch.mark {
@@ -133,10 +179,14 @@ const rows = computed(() =>
 
 .label {
   font-weight: 600;
-  color: hsl(var(--tone));
+  color: var(--text);
   text-transform: uppercase;
   font-size: 0.7rem;
   letter-spacing: 0.05em;
+}
+
+.label[data-tone] {
+  color: hsl(var(--tone));
 }
 
 .range {

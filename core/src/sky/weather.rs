@@ -13,36 +13,11 @@ pub enum Band {
 
 impl Band {
     pub const ALL: [Self; 3] = [Self::G, Self::S, Self::R];
+}
 
-    pub const fn letter(self) -> &'static str {
-        match self {
-            Self::G => "G",
-            Self::S => "S",
-            Self::R => "R",
-        }
-    }
-
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::G => "Geomagnetic storms",
-            Self::S => "Solar radiation",
-            Self::R => "Radio blackouts",
-        }
-    }
-
-    pub const fn about(self) -> &'static str {
-        match self {
-            Self::G => {
-                "The magnetic field being shaken by the solar wind, which influences power grids and brings auroras closer to the equator."
-            }
-            Self::S => {
-                "Energetic protons streaming past Earth, which reaches satellites and polar flights."
-            }
-            Self::R => {
-                "Flares soaking the sunlit side of Earth in x-rays, which drowns out high frequency radio."
-            }
-        }
-    }
+pub fn g_level(kp: f64) -> Option<u8> {
+    let level = kp.floor();
+    (level >= 5.0).then(|| level.min(9.0) as u8 - 4)
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -247,6 +222,19 @@ mod tests {
             scale: scale.map(str::to_owned),
             ..alert(Notice::Alert, 100, None)
         }
+    }
+
+    #[test]
+    fn the_g_scale_runs_from_five_to_nine_and_tops_out_at_g5() {
+        assert_eq!(g_level(0.0), None);
+        assert_eq!(g_level(4.67), None, "just under a storm is not one");
+        assert_eq!(g_level(5.0), Some(1));
+        assert_eq!(g_level(5.67), Some(1), "still G1 until Kp reaches 6");
+        assert_eq!(g_level(6.0), Some(2));
+        assert_eq!(g_level(7.0), Some(3));
+        assert_eq!(g_level(8.0), Some(4));
+        assert_eq!(g_level(9.0), Some(5));
+        assert_eq!(g_level(9.5), Some(5), "the scale stops at G5");
     }
 
     #[test]

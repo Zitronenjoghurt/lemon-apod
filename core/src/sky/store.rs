@@ -40,29 +40,6 @@ impl Launch {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
-pub struct SpaceWeather {
-    pub kp: f64,
-    pub observed_at: DateTime<Utc>,
-}
-
-impl SpaceWeather {
-    pub fn is_storm(&self) -> bool {
-        self.kp >= 5.0
-    }
-
-    pub fn label(&self) -> &'static str {
-        match self.kp {
-            kp if kp >= 8.0 => "Severe geomagnetic storm",
-            kp if kp >= 7.0 => "Strong geomagnetic storm",
-            kp if kp >= 6.0 => "Moderate geomagnetic storm",
-            kp if kp >= 5.0 => "Minor geomagnetic storm",
-            kp if kp >= 4.0 => "Unsettled",
-            _ => "Quiet",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct FeedState {
     pub name: String,
@@ -125,18 +102,6 @@ impl SkyReader {
         .await?;
 
         Ok(rows.iter().rev().map(launch_from_row).collect())
-    }
-
-    pub async fn space_weather(&self) -> DbResult<Option<SpaceWeather>> {
-        let row: Option<(f64, i64)> =
-            sqlx::query_as("SELECT kp, observed_at FROM space_weather WHERE id = 1")
-                .fetch_optional(self.db.reader())
-                .await?;
-
-        Ok(row.map(|(kp, observed_at)| SpaceWeather {
-            kp,
-            observed_at: timestamp(observed_at),
-        }))
     }
 
     pub async fn weather_report(&self) -> DbResult<Option<WeatherReport>> {
@@ -233,24 +198,6 @@ impl SkyWriter {
 
         transaction.commit().await?;
         Ok(written)
-    }
-
-    pub async fn set_space_weather(&self, weather: SpaceWeather) -> DbResult<()> {
-        sqlx::query(
-            "INSERT INTO space_weather (id, kp, observed_at, updated_at)
-             VALUES (1, ?1, ?2, ?3)
-             ON CONFLICT(id) DO UPDATE SET
-               kp = excluded.kp,
-               observed_at = excluded.observed_at,
-               updated_at = excluded.updated_at",
-        )
-        .bind(weather.kp)
-        .bind(weather.observed_at.timestamp())
-        .bind(Utc::now().timestamp())
-        .execute(self.db.writer()?)
-        .await?;
-
-        Ok(())
     }
 
     pub async fn set_weather_report(&self, report: &WeatherReport) -> DbResult<()> {
@@ -371,7 +318,6 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        assert!(reader.space_weather().await.unwrap().is_none());
         assert!(reader.feeds().await.unwrap().is_empty());
 
         writer.close().await;
@@ -536,55 +482,6 @@ mod tests {
         assert_eq!(found.net.timestamp(), original.net.timestamp());
 
         writer.close().await;
-    }
-
-    #[tokio::test]
-    async fn space_weather_holds_only_the_latest_reading() {
-        let writer = SkyWriter::open(temp_path()).await.unwrap();
-        let observed = Utc::now();
-
-        writer
-            .set_space_weather(SpaceWeather {
-                kp: 2.0,
-                observed_at: observed,
-            })
-            .await
-            .unwrap();
-        writer
-            .set_space_weather(SpaceWeather {
-                kp: 6.33,
-                observed_at: observed + TimeDelta::hours(3),
-            })
-            .await
-            .unwrap();
-
-        let found = writer.reader().space_weather().await.unwrap().unwrap();
-        assert!((found.kp - 6.33).abs() < 1e-9);
-        assert!(found.is_storm());
-        assert_eq!(found.label(), "Moderate geomagnetic storm");
-
-        writer.close().await;
-    }
-
-    #[tokio::test]
-    async fn the_kp_scale_reads_the_way_noaa_words_it() {
-        let at = Utc::now();
-        for (kp, expected, storm) in [
-            (0.0, "Quiet", false),
-            (3.67, "Quiet", false),
-            (4.0, "Unsettled", false),
-            (5.0, "Minor geomagnetic storm", true),
-            (6.0, "Moderate geomagnetic storm", true),
-            (7.0, "Strong geomagnetic storm", true),
-            (9.0, "Severe geomagnetic storm", true),
-        ] {
-            let weather = SpaceWeather {
-                kp,
-                observed_at: at,
-            };
-            assert_eq!(weather.label(), expected, "kp {kp}");
-            assert_eq!(weather.is_storm(), storm, "kp {kp}");
-        }
     }
 
     #[tokio::test]

@@ -804,12 +804,6 @@ h2 {
   flex: none;
 }
 
-.legend {
-  margin: 0;
-  font-size: 0.78rem;
-  text-wrap: pretty;
-}
-
 .lines {
   gap: 0.4rem;
 }

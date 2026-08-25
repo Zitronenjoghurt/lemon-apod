@@ -163,7 +163,7 @@ impl Rating {
                 "APOD_RATING_VOTE_LIMIT_PERIOD_MS",
                 500,
             )?),
-            vote_limit_burst: env_or("APOD_RATING_VOTE_LIMIT_BURST", 60)?,
+            vote_limit_burst: env_or("APOD_RATING_VOTE_LIMIT_BURST", 12)?,
 
             board_default_limit: env_or("APOD_RATING_BOARD_DEFAULT_LIMIT", 50)?,
             board_max_limit: env_or("APOD_RATING_BOARD_MAX_LIMIT", 200)?,
@@ -295,7 +295,7 @@ impl Config {
             cache_sitemap_secs: env_or("APOD_CACHE_SITEMAP_SECS", 3_600)?,
             cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
             cache_status_secs: env_or("APOD_CACHE_STATUS_SECS", 60)?,
-            cache_sky_secs: env_or("APOD_CACHE_SKY_SECS", 1800)?,
+            cache_sky_secs: env_or("APOD_CACHE_SKY_SECS", 600)?,
             cache_feed_secs: env_or("APOD_CACHE_FEED_SECS", 3_600)?,
 
             feed_limit: env_or("APOD_FEED_LIMIT", 25)?,

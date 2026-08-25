@@ -78,6 +78,7 @@ export function useRatingSession(category: Ref<RatingCategory>) {
   const error = ref<string>()
   const throttled = ref(false)
   const cast = ref(0)
+  let lastVote = 0
 
   const ready = computed(() => Boolean(ballot.value) && !loading.value)
 
@@ -115,6 +116,9 @@ export function useRatingSession(category: Ref<RatingCategory>) {
     const spent = ballot.value
     if (!spent || sending.value) return
 
+    if (Date.now() - lastVote < spent.pace) return
+    lastVote = Date.now()
+
     sending.value = true
     error.value = undefined
     cast.value += 1
@@ -134,6 +138,7 @@ export function useRatingSession(category: Ref<RatingCategory>) {
 
   async function reset(): Promise<void> {
     cast.value = 0
+    lastVote = 0
     take(null)
     await open()
   }

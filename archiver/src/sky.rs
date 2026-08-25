@@ -2,7 +2,8 @@ use crate::client::{Client, Limit, Response};
 use crate::config::Sky;
 use crate::shutdown::Shutdown;
 use anyhow::{Context, Result};
-use apod_core::sky::store::{self, Launch, SkyWriter, SpaceWeather};
+use apod_core::sky::store::{self, Launch, SkyWriter};
+use apod_core::sky::weather::g_level;
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Deserialize;
 
@@ -53,12 +54,15 @@ pub async fn poll(cfg: &crate::config::Config) -> Result<()> {
         );
     }
 
-    match reader.space_weather().await? {
-        Some(weather) => println!(
-            "space weather: Kp {:.2}, {}, observed {}",
-            weather.kp,
-            weather.label(),
-            weather.observed_at.format("%Y-%m-%d %H:%M UTC")
+    match reader.weather_report().await? {
+        Some(report) => println!(
+            "space weather: Kp {:.2} ({}), measured {}",
+            report.kp,
+            match g_level(report.kp) {
+                Some(level) => format!("G{level}"),
+                None => "below G1".to_owned(),
+            },
+            report.observed_at.format("%Y-%m-%d %H:%M UTC")
         ),
         None => println!("space weather: nothing recorded"),
     }
@@ -133,18 +137,6 @@ async fn poll_launches(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Result<us
 }
 
 async fn poll_space_weather(cfg: &Sky, client: &Client, sky: &SkyWriter) -> Result<usize> {
-    let body = fetch(client, &cfg.weather_url).await?;
-    let readings: Vec<KpReading> = serde_json::from_slice(&body)
-        .with_context(|| format!("parsing the space weather feed from {}", cfg.weather_url))?;
-
-    let latest = readings
-        .into_iter()
-        .filter_map(|reading| reading.into_weather())
-        .max_by_key(|weather| weather.observed_at)
-        .context("the space weather feed carried no usable reading")?;
-
-    sky.set_space_weather(latest).await?;
-
     let report = crate::weather::report(cfg, client).await?;
     sky.set_weather_report(&report).await?;
 
@@ -270,33 +262,6 @@ fn launch_page(slug: Option<&str>, template: &str) -> Option<String> {
     }
 
     Some(template.replace("{slug}", slug))
-}
-
-#[derive(Debug, Deserialize)]
-struct KpReading {
-    time_tag: String,
-    #[serde(rename = "Kp")]
-    kp: Option<f64>,
-}
-
-impl KpReading {
-    fn into_weather(self) -> Option<SpaceWeather> {
-        let kp = self.kp?;
-
-        let observed_at =
-            chrono::NaiveDateTime::parse_from_str(&self.time_tag, "%Y-%m-%dT%H:%M:%S")
-                .or_else(|_| {
-                    chrono::NaiveDateTime::parse_from_str(&self.time_tag, "%Y-%m-%d %H:%M:%S")
-                })
-                .ok()?
-                .and_utc();
-
-        if Utc::now() - observed_at > TimeDelta::days(3) {
-            return None;
-        }
-
-        Some(SpaceWeather { kp, observed_at })
-    }
 }
 
 #[cfg(test)]
@@ -457,51 +422,5 @@ mod tests {
             "something_new": { "nested": [1, 2, 3] }, "probability": 80
         }]}"#;
         assert!(parse_one(extra).is_some());
-    }
-
-    fn kp_feed(offset: TimeDelta, kp: f64) -> String {
-        let at = (Utc::now() + offset).format("%Y-%m-%dT%H:%M:%S");
-        format!(r#"[{{"time_tag":"{at}","Kp":{kp},"a_running":4,"station_count":8}}]"#)
-    }
-
-    fn latest(json: &str) -> Option<SpaceWeather> {
-        let readings: Vec<KpReading> = serde_json::from_str(json).expect("the feed parses");
-        readings
-            .into_iter()
-            .filter_map(|reading| reading.into_weather())
-            .max_by_key(|weather| weather.observed_at)
-    }
-
-    #[test]
-    fn the_newest_kp_reading_wins() {
-        let feed = format!(
-            "[{},{},{}]",
-            &kp_feed(TimeDelta::hours(-9), 1.0)[1..kp_feed(TimeDelta::hours(-9), 1.0).len() - 1],
-            &kp_feed(TimeDelta::hours(-3), 2.33)[1..kp_feed(TimeDelta::hours(-3), 2.33).len() - 1],
-            &kp_feed(TimeDelta::hours(-1), 4.67)[1..kp_feed(TimeDelta::hours(-1), 4.67).len() - 1],
-        );
-
-        let found = latest(&feed).expect("a reading comes through");
-        assert!((found.kp - 4.67).abs() < 1e-9);
-    }
-
-    #[test]
-    fn a_stale_reading_is_thrown_away_rather_than_shown() {
-        assert!(latest(&kp_feed(TimeDelta::days(-10), 7.0)).is_none());
-        assert!(latest(&kp_feed(TimeDelta::hours(-2), 7.0)).is_some());
-    }
-
-    #[test]
-    fn both_of_noaas_timestamp_spellings_parse() {
-        let at = (Utc::now() - TimeDelta::hours(1)).format("%Y-%m-%d %H:%M:%S");
-        let spaced = format!(r#"[{{"time_tag":"{at}","Kp":3.0}}]"#);
-        assert!(latest(&spaced).is_some());
-    }
-
-    #[test]
-    fn a_reading_with_no_value_is_skipped() {
-        let at = (Utc::now() - TimeDelta::hours(1)).format("%Y-%m-%dT%H:%M:%S");
-        let empty = format!(r#"[{{"time_tag":"{at}","Kp":null}}]"#);
-        assert!(latest(&empty).is_none());
     }
 }

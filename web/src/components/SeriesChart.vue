@@ -38,6 +38,7 @@ const props = withDefaults(
     unit?: string
     bands?: ChartBand[]
     marks?: ChartMark[]
+    markLabels?: boolean
     frame?: { min?: number; max?: number }
     ticks?: number[]
   }>(),
@@ -49,6 +50,7 @@ const props = withDefaults(
     unit: '',
     bands: () => [],
     marks: () => [],
+    markLabels: true,
     frame: () => ({}),
     ticks: () => [],
   },
@@ -261,7 +263,7 @@ const ends = computed(() => ({
         :style="{ top: down(mark.at) }"
         class="mark"
       >
-        <span class="mark-label">{{ mark.label }}</span>
+        <span v-if="markLabels" class="mark-label">{{ mark.label }}</span>
       </div>
     </div>
 

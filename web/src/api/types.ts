@@ -403,11 +403,6 @@ export interface Launch {
   info_url: string | null
 }
 
-export interface SpaceWeather {
-  kp: number
-  observed_at: string
-}
-
 export type WeatherBand = 'r' | 's' | 'g'
 
 export interface WeatherChance {
@@ -492,7 +487,6 @@ export interface Sky {
   eclipses: EclipseEvent[]
   events: SkyEvent[]
   launches: Launch[]
-  space_weather: SpaceWeather | null
   weather: WeatherSummary | null
   feeds: FeedState[]
 }
@@ -602,6 +596,8 @@ export interface Ballot {
   category: RatingCategory
   /** Seconds this ballot will still be accepted for. */
   life: number
+  /** Milliseconds below which a vote is faster than a judgment of two pictures. */
+  pace: number
   left: BallotSide
   right: BallotSide
 }

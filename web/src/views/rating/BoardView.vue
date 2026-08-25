@@ -372,13 +372,6 @@ h1 {
   font-weight: 600;
 }
 
-.invite {
-  margin: 0;
-  flex: 1 1 16rem;
-  font-size: 0.85rem;
-  text-wrap: pretty;
-}
-
 .facts {
   display: flex;
   gap: 1.5rem;
@@ -529,26 +522,6 @@ h3 a:hover {
   margin-top: 0.3rem;
 }
 
-.legend {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.45rem;
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
-
-.legend i {
-  flex: none;
-  margin-top: 0.2rem;
-  color: var(--accent);
-}
-
-.legend strong {
-  color: var(--text);
-}
-
 .credit-lines {
   display: flex;
   flex-direction: column;
@@ -556,12 +529,6 @@ h3 a:hover {
   margin: 0.15rem 0 0;
   font-size: 0.72rem;
   line-height: 1.35;
-  text-wrap: pretty;
-}
-
-.foot {
-  margin: 0;
-  font-size: 0.8rem;
   text-wrap: pretty;
 }
 </style>

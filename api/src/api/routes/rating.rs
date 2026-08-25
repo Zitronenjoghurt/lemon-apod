@@ -46,6 +46,7 @@ struct Ticket {
     ballot: String,
     category: Category,
     life: u64,
+    pace: u64,
     left: Side,
     right: Side,
 }
@@ -294,6 +295,7 @@ async fn ticket(state: &ServerState, rating: &Rating, issued: &Issued) -> ApiRes
         ballot: issued.token.clone(),
         category: issued.ballot.category,
         life: rating.settings.ballot_life.as_secs(),
+        pace: rating.settings.min_response.as_millis() as u64,
         left: side(state, issued.ballot.left).await?,
         right: side(state, issued.ballot.right).await?,
     })

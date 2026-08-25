@@ -72,8 +72,8 @@ missing.
 Losing it means re-fetching the whole archive at whatever delay configured.
 
 `sky.db` holds the two things the front page cannot work out for itself, upcoming rocket launches and the current
-geomagnetic activity. The archiver refreshes it hourly by default (`APOD_SKY_INTERVAL_HOURS`), and `make sky` does one
-pass now and prints what it got. Deleting it costs one poll. Everything else on those panels, the moon and the planets and the showers and the
+geomagnetic activity. The archiver refreshes it every half hour by default (`APOD_SKY_INTERVAL_SECS`), and `make sky`
+does one pass now and prints what it got. Deleting it costs one poll. Everything else on those panels, the moon and the planets and the showers and the
 eclipses, is computed on the spot and needs neither this file nor a network.
 
 `notify.db` records every notification already sent, which is what stops the same eclipse being announced on every
