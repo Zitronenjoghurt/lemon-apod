@@ -8,11 +8,19 @@ use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    Stored { bytes: usize },
-    Updated { bytes: usize },
+    Stored {
+        bytes: usize,
+    },
+    Updated {
+        bytes: usize,
+    },
     Unchanged,
     Absent,
     Rejected(String),
+    Redirected {
+        status: u16,
+        location: Option<String>,
+    },
 }
 
 pub async fn fetch_and_store(
@@ -32,6 +40,22 @@ pub async fn fetch_and_store(
                 .record_failure(date, &url, Some(404), "not published", now)
                 .await?;
             return Ok(Outcome::Absent);
+        }
+        Ok(Response::Redirected { status, location }) => {
+            let reason = match &location {
+                Some(target) => format!("redirected with {status} to {target}"),
+                None => format!("redirected with {status} without a Location header"),
+            };
+            archive
+                .record_failure(date, &url, Some(status), &reason, now)
+                .await?;
+            tracing::warn!(
+                %date,
+                status,
+                location = location.as_deref().unwrap_or("none"),
+                "the source redirected; refusing to follow it, the archived copy is untouched"
+            );
+            return Ok(Outcome::Redirected { status, location });
         }
         Err(error) => {
             archive
@@ -174,6 +198,80 @@ mod tests {
         assert_eq!(std::fs::read(&path).unwrap(), b"replaced");
         assert!(!path.with_extension("html.tmp").exists());
 
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_redirect_records_the_target_and_leaves_the_page_on_disk() {
+        use crate::client::Redirects;
+        use apod_core::db::{Db, DbConfig};
+        use std::time::Duration;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let _ = socket.read(&mut [0u8; 2048]).await;
+                    let _ = socket
+                        .write_all(
+                            b"HTTP/1.1 301 Moved Permanently\r\n\
+                              Location: https://science.nasa.gov/apod/\r\n\
+                              Content-Length: 0\r\n\r\n",
+                        )
+                        .await;
+                });
+            }
+        });
+
+        let dir = std::env::temp_dir().join(format!("apod-redirect-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut cfg = Config::from_env().unwrap();
+        cfg.html_dir = dir.join("html");
+        cfg.source_base_url = format!("http://{address}");
+
+        let date = ApodDate::from_ymd(2026, 8, 25).unwrap();
+        write_atomically(&cfg.html_path(date), b"the archived legacy page").unwrap();
+
+        let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
+        let client =
+            Client::new("apod-test", Duration::from_secs(10), 0, Redirects::Refuse).unwrap();
+
+        let outcome = fetch_and_store(&cfg, &client, &archive, &index, date)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            outcome,
+            Outcome::Redirected {
+                status: 301,
+                location: Some("https://science.nasa.gov/apod/".to_owned())
+            }
+        );
+        assert_eq!(
+            std::fs::read(cfg.html_path(date)).unwrap(),
+            b"the archived legacy page"
+        );
+
+        let record = archive.get(date).await.unwrap().unwrap();
+        assert_eq!(record.http_status, Some(301));
+
+        let db = Db::open(DbConfig::read_only(dir.join("archive.db")))
+            .await
+            .unwrap();
+        let (error,): (String,) = sqlx::query_as("SELECT error FROM fetches WHERE date_id = ?1")
+            .bind(date.days())
+            .fetch_one(db.reader())
+            .await
+            .unwrap();
+        assert!(error.contains("301"), "{error}");
+        assert!(error.contains("science.nasa.gov/apod/"), "{error}");
+
+        db.close().await;
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -74,6 +74,9 @@ pub async fn generate(
             match client.get_limited(&url, limit).await {
                 Err(error) => Err(error),
                 Ok(Response::NotFound) => Err(anyhow::anyhow!("{url} is gone")),
+                Ok(Response::Redirected { status, .. }) => {
+                    Err(anyhow::anyhow!("{url} returned {status}"))
+                }
                 Ok(Response::Body(bytes)) => video::poster_frame(&bytes)
                     .with_context(|| format!("taking a frame from {url}"))
                     .and_then(|frame| {
@@ -123,6 +126,9 @@ async fn download(client: &Client, candidates: &[String], limit: Limit) -> Resul
         match client.get_limited(url, limit).await {
             Ok(Response::Body(bytes)) => return Ok(bytes),
             Ok(Response::NotFound) => last = Some(anyhow::anyhow!("{url} is gone")),
+            Ok(Response::Redirected { status, .. }) => {
+                last = Some(anyhow::anyhow!("{url} returned {status}"))
+            }
             Err(error) => last = Some(error),
         }
     }

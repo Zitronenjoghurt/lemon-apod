@@ -27,9 +27,9 @@ pub struct Who {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum Denied {
-    #[error("the archive is not ready to be rated yet; try again shortly")]
+    #[error("The archive is not ready to be rated yet; try again shortly")]
     Unavailable,
-    #[error("that is a lot of votes in an hour. Come back a bit later")]
+    #[error("That is a lot of votes in an hour. Come back a bit later")]
     OverBudget,
 }
 

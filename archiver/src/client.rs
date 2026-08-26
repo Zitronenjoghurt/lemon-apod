@@ -4,6 +4,16 @@ use std::time::Duration;
 pub enum Response {
     Body(Vec<u8>),
     NotFound,
+    Redirected {
+        status: u16,
+        location: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Redirects {
+    Follow,
+    Refuse,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -19,16 +29,40 @@ enum Attempt {
 }
 
 #[derive(Clone)]
+pub struct Clients {
+    pub source: Client,
+    pub media: Client,
+}
+
+impl Clients {
+    pub fn new(user_agent: &str, timeout: Duration, max_retries: u32) -> Result<Self> {
+        Ok(Self {
+            source: Client::new(user_agent, timeout, max_retries, Redirects::Refuse)?,
+            media: Client::new(user_agent, timeout, max_retries, Redirects::Follow)?,
+        })
+    }
+}
+
+#[derive(Clone)]
 pub struct Client {
     http: reqwest::Client,
     max_retries: u32,
 }
 
 impl Client {
-    pub fn new(user_agent: &str, timeout: Duration, max_retries: u32) -> Result<Self> {
+    pub fn new(
+        user_agent: &str,
+        timeout: Duration,
+        max_retries: u32,
+        redirects: Redirects,
+    ) -> Result<Self> {
         let http = reqwest::Client::builder()
             .user_agent(user_agent)
             .timeout(timeout)
+            .redirect(match redirects {
+                Redirects::Follow => reqwest::redirect::Policy::limited(10),
+                Redirects::Refuse => reqwest::redirect::Policy::none(),
+            })
             .build()
             .context("building the HTTP client")?;
 
@@ -126,6 +160,16 @@ impl Client {
         if status == reqwest::StatusCode::NOT_FOUND {
             return Attempt::Done(Response::NotFound);
         }
+        if status.is_redirection() {
+            return Attempt::Done(Response::Redirected {
+                status: status.as_u16(),
+                location: response
+                    .headers()
+                    .get(reqwest::header::LOCATION)
+                    .and_then(|value| value.to_str().ok())
+                    .map(str::to_owned),
+            });
+        }
         if status.is_server_error() {
             return Attempt::Retryable(anyhow::anyhow!("{url} returned {status}"));
         }
@@ -183,6 +227,8 @@ fn too_large(url: &str, size: u64, max: u64) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
 
@@ -191,12 +237,12 @@ mod tests {
         timeout: Duration::from_secs(10),
     };
 
-    fn client() -> Client {
-        Client::new("apod-test", Duration::from_secs(10), 0).unwrap()
+    fn client(redirects: Redirects) -> Client {
+        Client::new("apod-test", Duration::from_secs(10), 0, redirects).unwrap()
     }
 
     async fn rejected(url: &str) -> String {
-        match client().get_limited(url, LIMIT).await {
+        match client(Redirects::Follow).get_limited(url, LIMIT).await {
             Err(error) => format!("{error:#}"),
             Ok(_) => panic!("the cap let {url} through"),
         }
@@ -261,9 +307,100 @@ mod tests {
         )
         .await;
 
-        let Response::Body(bytes) = client().get_limited(&url, LIMIT).await.unwrap() else {
+        let Response::Body(bytes) = client(Redirects::Follow)
+            .get_limited(&url, LIMIT)
+            .await
+            .unwrap()
+        else {
             panic!("expected a body");
         };
         assert_eq!(bytes.len(), 1024);
+    }
+
+    async fn redirecting(status: u16, location: Option<String>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let head = match location {
+            Some(location) => format!(
+                "HTTP/1.1 {status} Moved\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n"
+            ),
+            None => format!("HTTP/1.1 {status} Moved\r\nContent-Length: 0\r\n\r\n"),
+        };
+
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let head = head.clone();
+                tokio::spawn(async move {
+                    let _ = socket.read(&mut [0u8; 2048]).await;
+                    let _ = socket.write_all(head.as_bytes()).await;
+                });
+            }
+        });
+
+        format!("http://{address}/ap260825.html")
+    }
+
+    async fn counting() -> (String, Arc<AtomicUsize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let counter = Arc::clone(&hits);
+
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                counter.fetch_add(1, Ordering::SeqCst);
+                tokio::spawn(async move {
+                    let _ = socket.read(&mut [0u8; 2048]).await;
+                    let _ = socket
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nmoved")
+                        .await;
+                });
+            }
+        });
+
+        (format!("http://{address}/moved"), hits)
+    }
+
+    #[tokio::test]
+    async fn the_source_client_reports_a_redirect_without_following_it() {
+        let (target, hits) = counting().await;
+        let url = redirecting(301, Some(target.clone())).await;
+
+        let Response::Redirected { status, location } =
+            client(Redirects::Refuse).get(&url).await.unwrap()
+        else {
+            panic!("expected a redirect");
+        };
+
+        assert_eq!(status, 301);
+        assert_eq!(location.as_deref(), Some(target.as_str()));
+        assert_eq!(hits.load(Ordering::SeqCst), 0, "the target was requested");
+    }
+
+    #[tokio::test]
+    async fn a_redirect_without_a_location_still_comes_back_as_one() {
+        let url = redirecting(302, None).await;
+
+        let Response::Redirected { status, location } =
+            client(Redirects::Refuse).get(&url).await.unwrap()
+        else {
+            panic!("expected a redirect");
+        };
+
+        assert_eq!(status, 302);
+        assert_eq!(location, None);
+    }
+
+    #[tokio::test]
+    async fn third_party_media_still_follows_a_redirect() {
+        let (target, hits) = counting().await;
+        let url = redirecting(302, Some(target)).await;
+
+        let Response::Body(bytes) = client(Redirects::Follow).get(&url).await.unwrap() else {
+            panic!("expected the redirect to be followed");
+        };
+
+        assert_eq!(bytes, b"moved");
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 }

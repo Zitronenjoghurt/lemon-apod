@@ -1,5 +1,5 @@
 use crate::archive::ArchiveStore;
-use crate::client::Client;
+use crate::client::{Client, Clients};
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
 use crate::pictures;
@@ -16,7 +16,7 @@ const MAX_SLEEP: Duration = Duration::from_secs(900);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 
 pub async fn run(cfg: Config) -> Result<()> {
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let (stop, shutdown) = Shutdown::channel();
     let mut handles = Vec::new();
 
@@ -26,7 +26,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     if cfg.backfill.enabled {
         handles.push(tokio::spawn(backfill(
             cfg.clone(),
-            client.clone(),
+            clients.clone(),
             archive.clone(),
             index.clone(),
             shutdown.clone(),
@@ -38,7 +38,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     if cfg.daily.enabled {
         handles.push(tokio::spawn(daily(
             cfg.clone(),
-            client.clone(),
+            clients.clone(),
             archive.clone(),
             index.clone(),
             shutdown.clone(),
@@ -50,7 +50,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     if cfg.recheck_per_day > 0 {
         handles.push(tokio::spawn(recheck(
             cfg.clone(),
-            client.clone(),
+            clients.clone(),
             archive.clone(),
             index.clone(),
             shutdown.clone(),
@@ -62,7 +62,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     if cfg.sky.enabled {
         handles.push(tokio::spawn(crate::sky::run(
             cfg.clone(),
-            client.clone(),
+            clients.media.clone(),
             shutdown.clone(),
         )));
     } else {
@@ -73,7 +73,7 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!(topics = ?cfg.notify.topics(), "notifications enabled");
         handles.push(tokio::spawn(crate::notify::run(
             cfg.clone(),
-            client.clone(),
+            clients.media.clone(),
             shutdown.clone(),
         )));
     } else {
@@ -99,7 +99,7 @@ pub async fn run(cfg: Config) -> Result<()> {
 
 async fn backfill(
     cfg: Config,
-    client: Client,
+    clients: Clients,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
@@ -123,7 +123,7 @@ async fn backfill(
 
         caught_up = false;
 
-        step(&cfg, &client, &archive, &index, date).await;
+        step(&cfg, &clients, &archive, &index, date).await;
 
         if !shutdown
             .sleep(jitter(cfg.backfill.delay_min, cfg.backfill.delay_max))
@@ -138,7 +138,7 @@ async fn backfill(
 
 async fn daily(
     cfg: Config,
-    client: Client,
+    clients: Clients,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
@@ -180,7 +180,7 @@ async fn daily(
             continue;
         }
 
-        let kept_waiting = match step(&cfg, &client, &archive, &index, today).await {
+        let kept_waiting = match step(&cfg, &clients, &archive, &index, today).await {
             Some(Outcome::Stored { .. } | Outcome::Updated { .. }) => {
                 regroup(&index).await;
                 sleep_until(&mut shutdown, next_window(&cfg, now)).await
@@ -198,7 +198,7 @@ async fn daily(
 
 async fn recheck(
     cfg: Config,
-    client: Client,
+    clients: Clients,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
@@ -207,7 +207,7 @@ async fn recheck(
 
     while shutdown.sleep(interval).await {
         for date in archive.recheck_candidates(1).await? {
-            step(&cfg, &client, &archive, &index, date).await;
+            step(&cfg, &clients, &archive, &index, date).await;
         }
     }
 
@@ -216,12 +216,12 @@ async fn recheck(
 
 pub async fn step(
     cfg: &Config,
-    client: &Client,
+    clients: &Clients,
     archive: &ArchiveStore,
     index: &ApodWriter,
     date: ApodDate,
 ) -> Option<Outcome> {
-    let outcome = match fetch::fetch_and_store(cfg, client, archive, index, date).await {
+    let outcome = match fetch::fetch_and_store(cfg, &clients.source, archive, index, date).await {
         Ok(outcome) => outcome,
         Err(error) => {
             tracing::warn!(%date, "fetch failed: {error:#}");
@@ -235,10 +235,16 @@ pub async fn step(
         Outcome::Unchanged => tracing::debug!(%date, "unchanged"),
         Outcome::Absent => tracing::info!(%date, "not published"),
         Outcome::Rejected(reason) => tracing::warn!(%date, %reason, "rejected"),
+        Outcome::Redirected { status, location } => tracing::warn!(
+            %date,
+            status,
+            location = location.as_deref().unwrap_or("none"),
+            "redirected away from the source; nothing was stored"
+        ),
     }
 
     if cfg.thumbs.enabled && matches!(outcome, Outcome::Stored { .. } | Outcome::Updated { .. }) {
-        thumbnail(cfg, client, index, date).await;
+        thumbnail(cfg, &clients.media, index, date).await;
     }
 
     Some(outcome)

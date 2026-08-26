@@ -57,6 +57,7 @@ async fn get<T: serde::de::DeserializeOwned>(client: &Client, url: &str) -> Resu
     let body = match client.get_limited(url, BODY_LIMIT).await? {
         Response::Body(bytes) => bytes,
         Response::NotFound => anyhow::bail!("{url} returned 404"),
+        Response::Redirected { status, .. } => anyhow::bail!("{url} returned {status}"),
     };
 
     serde_json::from_slice(&body).with_context(|| format!("parsing {url}"))

@@ -1,4 +1,4 @@
-use crate::client::{Client, Limit, Response};
+use crate::client::{Client, Limit, Redirects, Response};
 use crate::config::Sky;
 use crate::shutdown::Shutdown;
 use anyhow::{Context, Result};
@@ -30,7 +30,12 @@ pub async fn run(cfg: crate::config::Config, client: Client, mut shutdown: Shutd
 }
 
 pub async fn poll(cfg: &crate::config::Config) -> Result<()> {
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let client = Client::new(
+        &cfg.user_agent,
+        cfg.fetch_timeout,
+        cfg.fetch_max_retries,
+        Redirects::Follow,
+    )?;
     let sky = SkyWriter::open(&cfg.sky_db)
         .await
         .with_context(|| format!("opening {}", cfg.sky_db.display()))?;
@@ -147,6 +152,7 @@ async fn fetch(client: &Client, url: &str) -> Result<Vec<u8>> {
     match client.get_limited(url, BODY_LIMIT).await? {
         Response::Body(bytes) => Ok(bytes),
         Response::NotFound => anyhow::bail!("{url} returned 404"),
+        Response::Redirected { status, .. } => anyhow::bail!("{url} returned {status}"),
     }
 }
 

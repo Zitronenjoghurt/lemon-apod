@@ -20,7 +20,7 @@ use apod_core::ApodDate;
 use apod_core::ApodWriter;
 use archive::ArchiveStore;
 use clap::{Parser, Subcommand};
-use client::Client;
+use client::{Client, Clients, Redirects};
 use config::Config;
 use tracing_subscriber::EnvFilter;
 
@@ -245,7 +245,12 @@ async fn notify_once(cfg: Config, seed: bool, dry_run: bool) -> Result<()> {
         return Ok(());
     }
 
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let client = Client::new(
+        &cfg.user_agent,
+        cfg.fetch_timeout,
+        cfg.fetch_max_retries,
+        Redirects::Follow,
+    )?;
     let delivery = match seed {
         true => notify::Delivery::Seed,
         false => notify::Delivery::Send,
@@ -268,7 +273,7 @@ async fn notify_once(cfg: Config, seed: bool, dry_run: bool) -> Result<()> {
 }
 
 async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
     let today = workers::today_in(cfg.daily.timezone);
@@ -286,7 +291,7 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
         };
 
         bar.set_message(date.to_string());
-        workers::step(&cfg, &client, &archive, &index, date).await;
+        workers::step(&cfg, &clients, &archive, &index, date).await;
         done += 1;
         bar.inc(1);
 
@@ -304,7 +309,7 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
 }
 
 async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
 
@@ -319,7 +324,7 @@ async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
         }
     }
 
-    match workers::step(&cfg, &client, &archive, &index, date).await {
+    match workers::step(&cfg, &clients, &archive, &index, date).await {
         Some(outcome) => println!("{date}: {outcome:?}"),
         None => println!("{date}: failed"),
     }
@@ -365,7 +370,12 @@ async fn reparse_range(
 }
 
 async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
-    let client = Client::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let client = Client::new(
+        &cfg.user_agent,
+        cfg.fetch_timeout,
+        cfg.fetch_max_retries,
+        Redirects::Follow,
+    )?;
     let index = ApodWriter::open(&cfg.index_db).await?;
 
     let measured = measure_existing(&cfg, &index).await?;
