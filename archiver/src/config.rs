@@ -22,10 +22,15 @@ pub struct Config {
 
     pub source_base_url: String,
     pub legacy_archive_url: Option<String>,
+    pub modern_api_url: String,
+    pub modern_category: u32,
     pub user_agent: String,
+    pub fetch_legacy: bool,
+    pub fetch_modern: bool,
     pub fetch_timeout: Duration,
     pub fetch_max_retries: u32,
     pub fetch_min_bytes: usize,
+    pub retry_backoff_max: Duration,
 
     pub backfill: Backfill,
     pub daily: Daily,
@@ -153,6 +158,11 @@ impl Config {
             )?,
             legacy_archive_url: optional("APOD_LEGACY_ARCHIVE_URL")
                 .or_else(|| LEGACY_ARCHIVE_URL.map(str::to_owned)),
+            modern_api_url: env_or(
+                "APOD_MODERN_API_URL",
+                "https://science.nasa.gov/wp-json/wp/v2/image-article".to_owned(),
+            )?,
+            modern_category: env_or("APOD_MODERN_CATEGORY", 22766)?,
             user_agent: env_or(
                 "APOD_USER_AGENT",
                 format!(
@@ -160,9 +170,12 @@ impl Config {
                     env!("CARGO_PKG_VERSION")
                 ),
             )?,
+            fetch_legacy: env_or("APOD_FETCH_LEGACY", false)?,
+            fetch_modern: env_or("APOD_FETCH_MODERN", true)?,
             fetch_timeout: secs("APOD_FETCH_TIMEOUT_SECS", 30)?,
             fetch_max_retries: env_or("APOD_FETCH_MAX_RETRIES", 3)?,
             fetch_min_bytes: env_or("APOD_FETCH_MIN_BYTES", 512)?,
+            retry_backoff_max: secs("APOD_RETRY_BACKOFF_MAX_SECS", 6 * 3600)?,
 
             backfill: Backfill {
                 enabled: env_or("APOD_BACKFILL_ENABLED", true)?,
@@ -271,6 +284,20 @@ impl Config {
 
     fn validated(self) -> Result<Self> {
         anyhow::ensure!(
+            self.modern_api_url.starts_with("http"),
+            "APOD_MODERN_API_URL must be an absolute http or https URL"
+        );
+        anyhow::ensure!(
+            self.modern_category > 0,
+            "APOD_MODERN_CATEGORY must name the APOD category; without it the endpoint serves \
+             every image article science.nasa.gov holds, not APOD"
+        );
+        anyhow::ensure!(
+            !self.retry_backoff_max.is_zero(),
+            "APOD_RETRY_BACKOFF_MAX_SECS must be greater than zero; a ceiling of zero retries a \
+             permanently failing date on every tick, which is what the backoff exists to stop"
+        );
+        anyhow::ensure!(
             self.backfill.delay_min <= self.backfill.delay_max,
             "APOD_BACKFILL_DELAY_MIN_SECS must not exceed APOD_BACKFILL_DELAY_MAX_SECS"
         );
@@ -316,6 +343,16 @@ impl Config {
              that and there is no reason to ask them to"
         );
         Ok(self)
+    }
+
+    /// Nothing reaches the decommissioned host unless a human turned it on.
+    pub fn require_legacy(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.fetch_legacy,
+            "APOD_FETCH_LEGACY is false, so apod.nasa.gov is not contacted. Restore the \
+             archived corpus with `legacy-import`, or set APOD_FETCH_LEGACY=true"
+        );
+        Ok(())
     }
 
     pub fn page_url(&self, date: apod_core::ApodDate) -> String {

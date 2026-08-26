@@ -1,4 +1,4 @@
-use crate::archive::{ArchiveStore, FetchRow};
+use crate::archive::{ArchiveStore, FetchRow, Source};
 use crate::client::{Client, Redirects, Response};
 use crate::config::Config;
 use crate::fetch::{sha256, write_atomically};
@@ -26,7 +26,7 @@ pub async fn export(cfg: &Config, out: &Path) -> Result<()> {
     std::fs::create_dir_all(out).with_context(|| format!("creating {}", out.display()))?;
 
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
-    let rows = archive.fetch_rows().await?;
+    let rows = archive.fetch_rows(Source::Legacy).await?;
     let dates = reparse::archived_dates(&cfg.html_dir)?;
     ensure!(
         !dates.is_empty(),
@@ -648,6 +648,7 @@ mod tests {
             archive
                 .record_success(
                     date,
+                    Source::Legacy,
                     &cfg.page_url(date),
                     &sha256(body.as_bytes()),
                     body.len(),
@@ -744,7 +745,7 @@ mod tests {
         }
 
         let archive = ArchiveStore::open(&restored.archive_db).await.unwrap();
-        let rows = archive.fetch_rows().await.unwrap();
+        let rows = archive.fetch_rows(Source::Legacy).await.unwrap();
         assert_eq!(rows.len(), dates.len());
         assert_eq!(
             rows[0].sha256,

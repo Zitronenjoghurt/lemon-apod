@@ -1,4 +1,4 @@
-use crate::archive::ArchiveStore;
+use crate::archive::{ArchiveStore, Next, Source};
 use crate::config::Config;
 use crate::media;
 use crate::progress;
@@ -83,8 +83,9 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     let scan = progress::spinner("reading", "counting the archive");
     let today = workers::today_in(cfg.daily.timezone);
     let publishable = today.iter_desc().count();
-    let counts = archive.counts().await?;
     let on_disk = reparse::archived_dates(&cfg.html_dir)?.len();
+    let now = chrono::Utc::now().timestamp();
+    let stored = archive.stored_dates().await?;
     scan.finish_and_clear();
 
     println!("today ({})       {today}", cfg.daily.timezone);
@@ -92,21 +93,34 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!();
     println!("archive");
     println!(
-        "  stored          {} ({:.1}%)",
-        counts.stored,
-        percent(counts.stored, publishable)
+        "  dates stored    {stored} ({:.1}%)",
+        percent(stored, publishable)
     );
-    println!("  not published   {}", counts.absent);
-    println!("  failed          {}", counts.failed);
     println!("  html on disk    {on_disk}");
-    println!("  bytes           {}", size(counts.bytes));
-    println!(
-        "  next target     {}",
-        match archive.next_target(today).await? {
-            Some(date) => date.to_string(),
-            None => "complete".to_owned(),
-        }
-    );
+    for source in Source::ALL {
+        let counts = archive.counts(source).await?;
+        println!("  {source}");
+        println!(
+            "    stored        {} ({:.1}%)",
+            counts.stored,
+            percent(counts.stored, publishable)
+        );
+        println!("    not published {}", counts.absent);
+        println!("    redirected    {}", counts.redirected);
+        println!("    failed        {}", counts.failed);
+        println!("    bytes         {}", size(counts.bytes));
+        println!(
+            "    next target   {}",
+            match archive
+                .next_target(today, source, cfg.retry_backoff_max, now)
+                .await?
+            {
+                Next::Fetch(date) => date.to_string(),
+                Next::Waiting(wait) => format!("waiting {}", duration(wait)),
+                Next::Complete => "complete".to_owned(),
+            }
+        );
+    }
     println!();
 
     let store = archive.media();
@@ -158,10 +172,10 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
         );
     }
 
-    if indexed < counts.stored {
+    if indexed < stored {
         println!(
             "\n{} stored pages are not indexed. Run `apod-archiver reparse`",
-            counts.stored - indexed
+            stored - indexed
         );
     }
     if stale > 0 {
@@ -180,6 +194,14 @@ fn size(bytes: i64) -> String {
     match bytes as f64 {
         bytes if bytes >= GB => format!("{:.1} GB", bytes / GB),
         bytes => format!("{:.1} MB", bytes / MB),
+    }
+}
+
+fn duration(wait: std::time::Duration) -> String {
+    match wait.as_secs() {
+        seconds if seconds >= 3600 => format!("{:.1}h", seconds as f64 / 3600.0),
+        seconds if seconds >= 60 => format!("{:.0}m", seconds as f64 / 60.0),
+        seconds => format!("{seconds}s"),
     }
 }
 

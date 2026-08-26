@@ -1,4 +1,4 @@
-use crate::archive::ArchiveStore;
+use crate::archive::{ArchiveStore, Next, Source};
 use crate::client::{Client, Clients};
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
@@ -24,7 +24,14 @@ pub async fn run(cfg: Config) -> Result<()> {
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
 
-    if cfg.backfill.enabled {
+    if !cfg.fetch_legacy {
+        tracing::info!("legacy fetching disabled; apod.nasa.gov will not be contacted");
+    }
+    if !cfg.fetch_modern {
+        tracing::info!("modern fetching disabled; science.nasa.gov will not be contacted");
+    }
+
+    if cfg.fetch_legacy && cfg.backfill.enabled {
         handles.push(tokio::spawn(backfill(
             cfg.clone(),
             clients.clone(),
@@ -36,7 +43,7 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!("backfill disabled");
     }
 
-    if cfg.daily.enabled {
+    if cfg.fetch_legacy && cfg.daily.enabled {
         handles.push(tokio::spawn(daily(
             cfg.clone(),
             clients.clone(),
@@ -48,7 +55,7 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!("daily poll disabled");
     }
 
-    if cfg.recheck_per_day > 0 {
+    if cfg.fetch_legacy && cfg.recheck_per_day > 0 {
         handles.push(tokio::spawn(recheck(
             cfg.clone(),
             clients.clone(),
@@ -122,16 +129,37 @@ async fn backfill(
     while !shutdown.is_triggered() {
         let today = today_in(cfg.daily.timezone);
 
-        let Some(date) = archive.next_target(today).await? else {
-            tracing::info!("archive is complete back to {}", ApodDate::START);
-            if !caught_up {
-                caught_up = true;
-                regroup(&index).await;
+        let date = match archive
+            .next_target(
+                today,
+                Source::Legacy,
+                cfg.retry_backoff_max,
+                Utc::now().timestamp(),
+            )
+            .await?
+        {
+            Next::Fetch(date) => date,
+            Next::Waiting(wait) => {
+                tracing::warn!(
+                    ?wait,
+                    "every date left has failed and is waiting out its retry backoff"
+                );
+                if !shutdown.sleep(wait.min(MAX_SLEEP)).await {
+                    break;
+                }
+                continue;
             }
-            if !shutdown.sleep(MAX_SLEEP).await {
-                break;
+            Next::Complete => {
+                tracing::info!("archive is complete back to {}", ApodDate::START);
+                if !caught_up {
+                    caught_up = true;
+                    regroup(&index).await;
+                }
+                if !shutdown.sleep(MAX_SLEEP).await {
+                    break;
+                }
+                continue;
             }
-            continue;
         };
 
         caught_up = false;
@@ -230,7 +258,7 @@ async fn daily(
         let today = ApodDate::from(now.date_naive());
 
         if archive
-            .get(today)
+            .get(today, Source::Legacy)
             .await?
             .is_some_and(|record| record.is_success())
         {
@@ -288,7 +316,7 @@ async fn recheck(
     let interval = Duration::from_secs(86_400 / u64::from(cfg.recheck_per_day).max(1));
 
     while shutdown.sleep(interval).await {
-        for date in archive.recheck_candidates(1).await? {
+        for date in archive.recheck_candidates(Source::Legacy, 1).await? {
             step(&cfg, &clients, &archive, &index, date).await;
         }
     }

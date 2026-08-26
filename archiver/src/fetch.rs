@@ -1,4 +1,4 @@
-use crate::archive::ArchiveStore;
+use crate::archive::{ArchiveStore, Failure, Source};
 use crate::client::{Client, Response};
 use crate::config::Config;
 use anyhow::{Context, Result};
@@ -37,7 +37,13 @@ pub async fn fetch_and_store(
         Ok(Response::Body(body)) => body,
         Ok(Response::NotFound) => {
             archive
-                .record_failure(date, &url, Some(404), "not published", now)
+                .record_failure(
+                    date,
+                    Source::Legacy,
+                    &url,
+                    Failure::new(Some(404), "not published"),
+                    now,
+                )
                 .await?;
             return Ok(Outcome::Absent);
         }
@@ -47,7 +53,13 @@ pub async fn fetch_and_store(
                 None => format!("redirected with {status} without a Location header"),
             };
             archive
-                .record_failure(date, &url, Some(status), &reason, now)
+                .record_failure(
+                    date,
+                    Source::Legacy,
+                    &url,
+                    Failure::new(Some(status), &reason).landed_on(location.as_deref()),
+                    now,
+                )
                 .await?;
             tracing::warn!(
                 %date,
@@ -60,13 +72,25 @@ pub async fn fetch_and_store(
         Ok(Response::Refused { status }) => {
             let error = anyhow::anyhow!("{url} returned {status}");
             archive
-                .record_failure(date, &url, Some(status), &format!("{error:#}"), now)
+                .record_failure(
+                    date,
+                    Source::Legacy,
+                    &url,
+                    Failure::new(Some(status), &format!("{error:#}")),
+                    now,
+                )
                 .await?;
             return Err(error.context(format!("fetching {date}")));
         }
         Err(error) => {
             archive
-                .record_failure(date, &url, None, &format!("{error:#}"), now)
+                .record_failure(
+                    date,
+                    Source::Legacy,
+                    &url,
+                    Failure::new(None, &format!("{error:#}")),
+                    now,
+                )
                 .await?;
             return Err(error.context(format!("fetching {date}")));
         }
@@ -74,26 +98,32 @@ pub async fn fetch_and_store(
 
     if let Err(reason) = sanity_check(&body, cfg.fetch_min_bytes) {
         archive
-            .record_failure(date, &url, Some(200), &reason, now)
+            .record_failure(
+                date,
+                Source::Legacy,
+                &url,
+                Failure::new(Some(200), &reason),
+                now,
+            )
             .await?;
         tracing::warn!(%date, %reason, "refusing to store the response; the archived copy is untouched");
         return Ok(Outcome::Rejected(reason));
     }
 
     let digest = sha256(&body);
-    let previous = archive.get(date).await?;
+    let previous = archive.get(date, Source::Legacy).await?;
     let existed = previous.as_ref().is_some_and(|record| record.is_success());
 
     if previous.as_ref().and_then(|r| r.sha256.as_deref()) == Some(digest.as_str())
         && cfg.html_path(date).exists()
     {
-        archive.touch(date, now).await?;
+        archive.touch(date, Source::Legacy, now).await?;
         return Ok(Outcome::Unchanged);
     }
 
     write_atomically(&cfg.html_path(date), &body)?;
     archive
-        .record_success(date, &url, &digest, body.len(), now)
+        .record_success(date, Source::Legacy, &url, &digest, body.len(), now)
         .await?;
 
     match parse::parse_bytes(date, &body) {
@@ -273,19 +303,22 @@ mod tests {
             b"the archived legacy page"
         );
 
-        let record = archive.get(date).await.unwrap().unwrap();
+        let record = archive.get(date, Source::Legacy).await.unwrap().unwrap();
         assert_eq!(record.http_status, Some(301));
 
         let db = Db::open(DbConfig::read_only(dir.join("archive.db")))
             .await
             .unwrap();
-        let (error,): (String,) = sqlx::query_as("SELECT error FROM fetches WHERE date_id = ?1")
-            .bind(date.days())
-            .fetch_one(db.reader())
-            .await
-            .unwrap();
+        let (error, final_url): (String, Option<String>) = sqlx::query_as(
+            "SELECT error, final_url FROM fetches WHERE date_id = ?1 AND source = 'legacy'",
+        )
+        .bind(date.days())
+        .fetch_one(db.reader())
+        .await
+        .unwrap();
         assert!(error.contains("301"), "{error}");
         assert!(error.contains("science.nasa.gov/apod/"), "{error}");
+        assert_eq!(final_url.as_deref(), Some("https://science.nasa.gov/apod/"));
 
         db.close().await;
         std::fs::remove_dir_all(&dir).unwrap();

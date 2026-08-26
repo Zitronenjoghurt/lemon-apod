@@ -20,7 +20,7 @@ mod workers;
 use anyhow::Result;
 use apod_core::ApodDate;
 use apod_core::ApodWriter;
-use archive::ArchiveStore;
+use archive::{ArchiveStore, Next, Source};
 use clap::{Parser, Subcommand};
 use client::{Client, Clients, Redirects};
 use config::Config;
@@ -309,6 +309,7 @@ async fn notify_once(cfg: Config, seed: bool, dry_run: bool) -> Result<()> {
 }
 
 async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
+    cfg.require_legacy()?;
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
@@ -321,9 +322,27 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
 
     let mut done = 0;
     while limit.is_none_or(|limit| done < limit) {
-        let Some(date) = archive.next_target(today).await? else {
-            tracing::info!("archive is complete");
-            break;
+        let date = match archive
+            .next_target(
+                today,
+                Source::Legacy,
+                cfg.retry_backoff_max,
+                chrono::Utc::now().timestamp(),
+            )
+            .await?
+        {
+            Next::Fetch(date) => date,
+            Next::Waiting(wait) => {
+                tracing::info!(
+                    ?wait,
+                    "nothing is due; the rest is waiting out a retry backoff"
+                );
+                break;
+            }
+            Next::Complete => {
+                tracing::info!("archive is complete");
+                break;
+            }
         };
 
         bar.set_message(date.to_string());
@@ -406,11 +425,12 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
 }
 
 async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
+    cfg.require_legacy()?;
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
 
-    if !force && let Some(record) = archive.get(date).await? {
+    if !force && let Some(record) = archive.get(date, Source::Legacy).await? {
         if record.is_success() {
             println!("{date} is already archived; pass --force to fetch it again");
             return Ok(());
