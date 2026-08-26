@@ -203,6 +203,29 @@ impl ApodWriter {
             .collect()
     }
 
+    pub async fn all_media(&self) -> ApodResult<Vec<(ApodDate, Media)>> {
+        let rows = sqlx::query(
+            "SELECT date_id, media_kind, media_url, media_hd_url FROM entries \
+                         ORDER BY date_id",
+        )
+        .fetch_all(self.db().reader())
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                Ok((
+                    ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
+                    self.reader.media(
+                        &row.try_get::<String, _>(1)?,
+                        row.try_get(2)?,
+                        row.try_get(3)?,
+                        None,
+                    ),
+                ))
+            })
+            .collect()
+    }
+
     pub async fn media_for(&self, dates: &[ApodDate]) -> ApodResult<Vec<(ApodDate, Media)>> {
         let mut out = Vec::with_capacity(dates.len());
 

@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::fetch::{sha256, write_atomically};
 use crate::progress;
 use crate::reparse;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use apod_core::ApodDate;
 use chrono::Utc;
 use std::collections::{BTreeMap, BTreeSet};
@@ -326,7 +326,9 @@ async fn obtain(cfg: &Config, source: Option<String>) -> Result<Vec<u8>> {
     let body = match client.get(&source).await? {
         Response::Body(body) => body,
         Response::NotFound => bail!("{source} is not there"),
-        Response::Redirected { status, .. } => bail!("{source} answered {status}"),
+        Response::Redirected { status, .. } | Response::Refused { status } => {
+            bail!("{source} answered {status}")
+        }
     };
     progress::done(
         &spinner,

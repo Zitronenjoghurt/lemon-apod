@@ -8,6 +8,9 @@ pub enum Response {
         status: u16,
         location: Option<String>,
     },
+    Refused {
+        status: u16,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,7 +177,9 @@ impl Client {
             return Attempt::Retryable(anyhow::anyhow!("{url} returned {status}"));
         }
         if !status.is_success() {
-            return Attempt::Fatal(anyhow::anyhow!("{url} returned {status}"));
+            return Attempt::Done(Response::Refused {
+                status: status.as_u16(),
+            });
         }
 
         let Some(limit) = limit else {

@@ -2,6 +2,7 @@ use crate::archive::ArchiveStore;
 use crate::client::{Client, Clients};
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
+use crate::media::{self, MediaStore};
 use crate::pictures;
 use crate::shutdown::{self, Shutdown};
 use crate::thumbs;
@@ -57,6 +58,18 @@ pub async fn run(cfg: Config) -> Result<()> {
         )));
     } else {
         tracing::info!("re-check disabled");
+    }
+
+    if cfg.media.enabled {
+        handles.push(tokio::spawn(media_backfill(
+            cfg.clone(),
+            clients.media.clone(),
+            archive.clone(),
+            index.clone(),
+            shutdown.clone(),
+        )));
+    } else {
+        tracing::info!("media archive disabled");
     }
 
     if cfg.sky.enabled {
@@ -134,6 +147,75 @@ async fn backfill(
     }
 
     Ok(())
+}
+
+async fn media_backfill(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
+    let store = archive.media();
+    let mut targets = media::targets(&index.all_media().await?);
+
+    while !shutdown.is_triggered() {
+        let Some(target) = store.next_target(&targets, cfg.media.max_attempts).await? else {
+            tracing::info!(
+                files = targets.len(),
+                "every picture the index knows about is stored"
+            );
+            if !shutdown.sleep(MAX_SLEEP).await {
+                break;
+            }
+            targets = media::targets(&index.all_media().await?);
+            continue;
+        };
+
+        media_step(&cfg, &client, &store, &targets, &target).await;
+
+        if !shutdown
+            .sleep(jitter(cfg.media.delay_min, cfg.media.delay_max))
+            .await
+        {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn media_step(
+    cfg: &Config,
+    client: &Client,
+    store: &MediaStore,
+    targets: &[media::Target],
+    target: &media::Target,
+) -> Option<media::Outcome> {
+    let siblings = media::siblings(targets, target.date);
+    let outcome = match media::fetch_and_store(cfg, client, store, target, &siblings).await {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            tracing::warn!(url = %target.url, "storing the media failed: {error:#}");
+            return None;
+        }
+    };
+
+    let date = target.date;
+    let role = target.role.as_str();
+    match &outcome {
+        media::Outcome::Stored { bytes } => tracing::info!(%date, role, bytes, "media stored"),
+        media::Outcome::Adopted { bytes } => {
+            tracing::debug!(%date, role, bytes, "media already on disk")
+        }
+        media::Outcome::Missing => tracing::info!(%date, role, url = %target.url, "media is gone"),
+        media::Outcome::Rejected(reason) => {
+            tracing::warn!(%date, role, %reason, "refusing to store the response")
+        }
+        media::Outcome::Failed(reason) => tracing::warn!(%date, role, %reason, "media failed"),
+    }
+
+    Some(outcome)
 }
 
 async fn daily(
@@ -244,13 +326,19 @@ pub async fn step(
     }
 
     if cfg.thumbs.enabled && matches!(outcome, Outcome::Stored { .. } | Outcome::Updated { .. }) {
-        thumbnail(cfg, &clients.media, index, date).await;
+        thumbnail(cfg, &clients.media, &archive.media(), index, date).await;
     }
 
     Some(outcome)
 }
 
-async fn thumbnail(cfg: &Config, client: &Client, index: &ApodWriter, date: ApodDate) {
+async fn thumbnail(
+    cfg: &Config,
+    client: &Client,
+    store: &MediaStore,
+    index: &ApodWriter,
+    date: ApodDate,
+) {
     let media = match index.reader().entry(date).await {
         Ok(Some(entry)) => entry.media,
         Ok(None) => return,
@@ -262,8 +350,10 @@ async fn thumbnail(cfg: &Config, client: &Client, index: &ApodWriter, date: Apod
 
     tokio::time::sleep(jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
 
-    match thumbs::generate(cfg, client, index, date, &media, false).await {
-        Ok(thumbs::Generated::Written) => tracing::debug!(%date, "thumbnail written"),
+    match thumbs::generate(cfg, client, store, index, date, &media, false).await {
+        Ok(thumbs::Generated::Written(source)) => {
+            tracing::debug!(%date, ?source, "thumbnail made")
+        }
         Ok(thumbs::Generated::Adopted) => tracing::debug!(%date, "thumbnail already on disk"),
         Ok(thumbs::Generated::NotApplicable) => return,
         Ok(thumbs::Generated::Failed(reason)) => {

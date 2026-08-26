@@ -1,5 +1,6 @@
 use crate::archive::ArchiveStore;
 use crate::config::Config;
+use crate::media;
 use crate::progress;
 use crate::{reparse, workers};
 use anyhow::Result;
@@ -98,14 +99,38 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!("  not published   {}", counts.absent);
     println!("  failed          {}", counts.failed);
     println!("  html on disk    {on_disk}");
-    println!(
-        "  bytes           {:.1} MB",
-        counts.bytes as f64 / 1_048_576.0
-    );
+    println!("  bytes           {}", size(counts.bytes));
     println!(
         "  next target     {}",
         match archive.next_target(today).await? {
             Some(date) => date.to_string(),
+            None => "complete".to_owned(),
+        }
+    );
+    println!();
+
+    let store = archive.media();
+    let targets = media::targets(&index.all_media().await?);
+    let media_counts = store.counts().await?;
+    let next_media = store.next_target(&targets, cfg.media.max_attempts).await?;
+    println!("media");
+    println!(
+        "  stored          {} of {} ({:.1}%)",
+        media_counts.stored,
+        targets.len(),
+        percent(media_counts.stored, targets.len())
+    );
+    println!(
+        "  not fetched     {}",
+        targets.len() as i64 - media_counts.stored - media_counts.missing - media_counts.failed
+    );
+    println!("  gone            {}", media_counts.missing);
+    println!("  failed          {}", media_counts.failed);
+    println!("  bytes           {}", size(media_counts.bytes));
+    println!(
+        "  next target     {}",
+        match &next_media {
+            Some(target) => format!("{} {}", target.date, target.url),
             None => "complete".to_owned(),
         }
     );
@@ -146,6 +171,16 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     }
 
     Ok(())
+}
+
+fn size(bytes: i64) -> String {
+    const GB: f64 = 1_073_741_824.0;
+    const MB: f64 = 1_048_576.0;
+
+    match bytes as f64 {
+        bytes if bytes >= GB => format!("{:.1} GB", bytes / GB),
+        bytes => format!("{:.1} MB", bytes / MB),
+    }
 }
 
 fn percent(part: i64, whole: usize) -> f64 {

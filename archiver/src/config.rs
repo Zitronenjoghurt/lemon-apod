@@ -12,6 +12,7 @@ const LEGACY_ARCHIVE_URL: Option<&str> = Some(
 pub struct Config {
     pub html_dir: PathBuf,
     pub thumb_dir: PathBuf,
+    pub media_dir: PathBuf,
     pub archive_db: PathBuf,
     pub index_db: PathBuf,
     pub sky_db: PathBuf,
@@ -29,6 +30,7 @@ pub struct Config {
     pub backfill: Backfill,
     pub daily: Daily,
     pub recheck_per_day: u32,
+    pub media: MediaArchive,
     pub thumbs: Thumbs,
     pub sky: Sky,
     pub notify: Notify,
@@ -107,6 +109,16 @@ pub struct Daily {
 }
 
 #[derive(Debug, Clone)]
+pub struct MediaArchive {
+    pub enabled: bool,
+    pub max_bytes: u64,
+    pub max_attempts: u32,
+    pub timeout: Duration,
+    pub delay_min: Duration,
+    pub delay_max: Duration,
+}
+
+#[derive(Debug, Clone)]
 pub struct Thumbs {
     pub enabled: bool,
     pub max_width: u32,
@@ -127,6 +139,7 @@ impl Config {
         Ok(Self {
             html_dir: env_or("APOD_HTML_DIR", data_dir.join("html"))?,
             thumb_dir: env_or("APOD_THUMB_DIR", data_dir.join("thumbs"))?,
+            media_dir: env_or("APOD_MEDIA_DIR", data_dir.join("media"))?,
             archive_db: env_or("APOD_ARCHIVE_DB", data_dir.join("archive.db"))?,
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
             sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
@@ -172,6 +185,15 @@ impl Config {
             },
 
             recheck_per_day: env_or("APOD_RECHECK_PER_DAY", 0)?,
+
+            media: MediaArchive {
+                enabled: env_or("APOD_MEDIA_ENABLED", true)?,
+                max_bytes: env_or("APOD_MEDIA_MAX_BYTES", 512 * 1_048_576u64)?,
+                max_attempts: env_or("APOD_MEDIA_MAX_ATTEMPTS", 8)?,
+                timeout: secs("APOD_MEDIA_TIMEOUT_SECS", 600)?,
+                delay_min: millis("APOD_MEDIA_DELAY_MIN_MS", 10_000)?,
+                delay_max: millis("APOD_MEDIA_DELAY_MAX_MS", 20_000)?,
+            },
 
             sky: Sky {
                 enabled: env_or("APOD_SKY_ENABLED", true)?,
@@ -253,6 +275,14 @@ impl Config {
             "APOD_BACKFILL_DELAY_MIN_SECS must not exceed APOD_BACKFILL_DELAY_MAX_SECS"
         );
         anyhow::ensure!(
+            self.media.delay_min <= self.media.delay_max,
+            "APOD_MEDIA_DELAY_MIN_MS must not exceed APOD_MEDIA_DELAY_MAX_MS"
+        );
+        anyhow::ensure!(
+            self.media.max_bytes > 0,
+            "APOD_MEDIA_MAX_BYTES must be greater than zero"
+        );
+        anyhow::ensure!(
             self.thumbs.delay_min <= self.thumbs.delay_max,
             "APOD_THUMB_DELAY_MIN_SECS must not exceed APOD_THUMB_DELAY_MAX_SECS"
         );
@@ -303,6 +333,10 @@ impl Config {
     pub fn thumb_path(&self, date: apod_core::ApodDate) -> PathBuf {
         self.thumb_dir.join(date.thumb_path())
     }
+
+    pub fn media_path(&self, stored_path: &str) -> PathBuf {
+        self.media_dir.join(stored_path)
+    }
 }
 
 fn env_or<T>(key: &str, default: T) -> Result<T>
@@ -321,6 +355,10 @@ where
 
 fn secs(key: &str, default: u64) -> Result<Duration> {
     Ok(Duration::from_secs(env_or(key, default)?))
+}
+
+fn millis(key: &str, default: u64) -> Result<Duration> {
+    Ok(Duration::from_millis(env_or(key, default)?))
 }
 
 fn optional(key: &str) -> Option<String> {

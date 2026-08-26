@@ -152,7 +152,9 @@ async fn fetch(client: &Client, url: &str) -> Result<Vec<u8>> {
     match client.get_limited(url, BODY_LIMIT).await? {
         Response::Body(bytes) => Ok(bytes),
         Response::NotFound => anyhow::bail!("{url} returned 404"),
-        Response::Redirected { status, .. } => anyhow::bail!("{url} returned {status}"),
+        Response::Redirected { status, .. } | Response::Refused { status } => {
+            anyhow::bail!("{url} returned {status}")
+        }
     }
 }
 

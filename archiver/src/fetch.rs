@@ -57,6 +57,13 @@ pub async fn fetch_and_store(
             );
             return Ok(Outcome::Redirected { status, location });
         }
+        Ok(Response::Refused { status }) => {
+            let error = anyhow::anyhow!("{url} returned {status}");
+            archive
+                .record_failure(date, &url, Some(status), &format!("{error:#}"), now)
+                .await?;
+            return Err(error.context(format!("fetching {date}")));
+        }
         Err(error) => {
             archive
                 .record_failure(date, &url, None, &format!("{error:#}"), now)
@@ -128,7 +135,9 @@ pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
             .with_context(|| format!("creating {}", parent.display()))?;
     }
 
-    let temp = path.with_extension("html.tmp");
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = std::path::PathBuf::from(temp);
     std::fs::write(&temp, bytes).with_context(|| format!("writing {}", temp.display()))?;
     std::fs::rename(&temp, path).with_context(|| format!("moving into {}", path.display()))?;
 
@@ -197,6 +206,13 @@ mod tests {
         write_atomically(&path, b"replaced").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"replaced");
         assert!(!path.with_extension("html.tmp").exists());
+
+        let jpg = dir.join("2024/03/2024-03-05/x.jpg");
+        let png = dir.join("2024/03/2024-03-05/x.png");
+        write_atomically(&jpg, b"jpeg bytes").unwrap();
+        write_atomically(&png, b"png bytes").unwrap();
+        assert_eq!(std::fs::read(&jpg).unwrap(), b"jpeg bytes");
+        assert_eq!(std::fs::read(&png).unwrap(), b"png bytes");
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

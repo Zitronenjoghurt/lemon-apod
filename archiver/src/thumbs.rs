@@ -1,26 +1,40 @@
 use crate::client::{Client, Limit, Response};
 use crate::config::Config;
+use crate::media::MediaStore;
 use crate::video;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodWriter, Media, Thumb, ThumbSource};
-use std::path::Path;
+use apod_core::{ApodDate, ApodWriter, Media, MediaKind, Thumb, ThumbSource};
+use std::path::{Path, PathBuf};
 
 pub enum Generated {
-    Written,
+    Written(Source),
     Adopted,
     NotApplicable,
     Failed(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Source {
+    Archive,
+    Network,
+}
+
 impl Generated {
     pub fn fetched(&self) -> bool {
-        matches!(self, Self::Written | Self::Failed(_))
+        matches!(self, Self::Written(Source::Network) | Self::Failed(_))
     }
 }
 
 enum Fetch {
+    Stored(PathBuf, Decode),
     Still(Vec<String>),
     Frame(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Decode {
+    Still,
+    Frame,
 }
 
 struct Encoded {
@@ -32,6 +46,7 @@ struct Encoded {
 pub async fn generate(
     cfg: &Config,
     client: &Client,
+    store: &MediaStore,
     index: &ApodWriter,
     date: ApodDate,
     media: &Media,
@@ -50,12 +65,29 @@ pub async fn generate(
         return Ok(Generated::Adopted);
     }
 
-    let fetch = match resolve_source(cfg, client, source).await {
-        Ok(fetch) => fetch,
-        Err(error) => return Ok(Generated::Failed(format!("{error:#}"))),
+    let fetch = match archived(cfg, store, media).await {
+        Some(fetch) => fetch,
+        None => match resolve_source(cfg, client, source).await {
+            Ok(fetch) => fetch,
+            Err(error) => return Ok(Generated::Failed(format!("{error:#}"))),
+        },
+    };
+    let from = match fetch {
+        Fetch::Stored(..) => Source::Archive,
+        _ => Source::Network,
     };
 
     let encoded = match fetch {
+        Fetch::Stored(path, decode) => std::fs::read(&path)
+            .with_context(|| format!("reading {}", path.display()))
+            .and_then(|bytes| match decode {
+                Decode::Still => encode(&bytes, cfg.thumbs.max_width, cfg.thumbs.quality),
+                Decode::Frame => video::poster_frame(&bytes)
+                    .with_context(|| format!("taking a frame from {}", path.display()))
+                    .and_then(|frame| {
+                        encode_frame(&frame, cfg.thumbs.max_width, cfg.thumbs.quality)
+                    }),
+            }),
         Fetch::Still(candidates) => {
             let limit = Limit {
                 max_bytes: cfg.thumbs.image_max_bytes,
@@ -74,7 +106,7 @@ pub async fn generate(
             match client.get_limited(&url, limit).await {
                 Err(error) => Err(error),
                 Ok(Response::NotFound) => Err(anyhow::anyhow!("{url} is gone")),
-                Ok(Response::Redirected { status, .. }) => {
+                Ok(Response::Redirected { status, .. } | Response::Refused { status }) => {
                     Err(anyhow::anyhow!("{url} returned {status}"))
                 }
                 Ok(Response::Body(bytes)) => video::poster_frame(&bytes)
@@ -100,9 +132,37 @@ pub async fn generate(
                     )),
                 )
                 .await?;
-            Ok(Generated::Written)
+            Ok(Generated::Written(from))
         }
     }
+}
+
+async fn archived(cfg: &Config, store: &MediaStore, media: &Media) -> Option<Fetch> {
+    let decode = match media.kind {
+        MediaKind::VideoMp4 => Decode::Frame,
+        _ => Decode::Still,
+    };
+
+    for url in [media.url.as_deref(), media.hd_url.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        let stored = match store.stored_path(url).await {
+            Ok(Some(stored)) => stored,
+            Ok(None) => continue,
+            Err(error) => {
+                tracing::warn!(%url, "could not look up the archived original: {error:#}");
+                return None;
+            }
+        };
+
+        let path = cfg.media_path(&stored);
+        if path.is_file() {
+            return Some(Fetch::Stored(path, decode));
+        }
+    }
+
+    None
 }
 
 fn adoptable(path: &Path) -> bool {
@@ -126,7 +186,7 @@ async fn download(client: &Client, candidates: &[String], limit: Limit) -> Resul
         match client.get_limited(url, limit).await {
             Ok(Response::Body(bytes)) => return Ok(bytes),
             Ok(Response::NotFound) => last = Some(anyhow::anyhow!("{url} is gone")),
-            Ok(Response::Redirected { status, .. }) => {
+            Ok(Response::Redirected { status, .. } | Response::Refused { status }) => {
                 last = Some(anyhow::anyhow!("{url} returned {status}"))
             }
             Err(error) => last = Some(error),
@@ -140,13 +200,22 @@ async fn resolve_source(cfg: &Config, client: &Client, source: ThumbSource) -> R
     match source {
         ThumbSource::Direct(url) => Ok(Fetch::Still(vec![url])),
         ThumbSource::Frame(url) => Ok(Fetch::Frame(url)),
-        ThumbSource::YouTube(id) => Ok(Fetch::Still(
-            cfg.thumbs
-                .youtube_templates
-                .iter()
-                .map(|template| template.replace("{id}", &id))
-                .collect(),
-        )),
+        source => Ok(Fetch::Still(poster_urls(cfg, client, &source).await?)),
+    }
+}
+
+pub async fn poster_urls(
+    cfg: &Config,
+    client: &Client,
+    source: &ThumbSource,
+) -> Result<Vec<String>> {
+    match source {
+        ThumbSource::YouTube(id) => Ok(cfg
+            .thumbs
+            .youtube_templates
+            .iter()
+            .map(|template| template.replace("{id}", id))
+            .collect()),
         ThumbSource::Vimeo(id) => {
             let endpoint = format!(
                 "{}?url=https://vimeo.com/{id}&width={}",
@@ -161,9 +230,10 @@ async fn resolve_source(cfg: &Config, client: &Client, source: ThumbSource) -> R
             payload
                 .get("thumbnail_url")
                 .and_then(|value| value.as_str())
-                .map(|url| Fetch::Still(vec![url.to_owned()]))
+                .map(|url| vec![url.to_owned()])
                 .context("vimeo oembed response carried no thumbnail_url")
         }
+        ThumbSource::Direct(url) | ThumbSource::Frame(url) => Ok(vec![url.clone()]),
         ThumbSource::None => anyhow::bail!("nothing to thumbnail"),
     }
 }
@@ -311,10 +381,124 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    async fn stored_for(url: &str, kind: MediaKind) -> (Config, MediaStore, std::path::PathBuf) {
+        use crate::media::{Role, Target};
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "apod-archived-source-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut cfg = Config::from_env().unwrap();
+        cfg.media_dir = dir.join("media");
+
+        let store = crate::archive::ArchiveStore::open(&dir.join("archive.db"))
+            .await
+            .unwrap()
+            .media();
+
+        let date = ApodDate::from_ymd(1995, 11, 6).unwrap();
+        let target = Target {
+            url: url.to_owned(),
+            date,
+            role: match kind {
+                MediaKind::VideoMp4 => Role::Video,
+                _ => Role::Image,
+            },
+        };
+        let path = crate::media::stored_path(date, &crate::media::file_name(url, &[]));
+        let on_disk = cfg.media_path(&path);
+        std::fs::create_dir_all(on_disk.parent().unwrap()).unwrap();
+        std::fs::write(&on_disk, jpeg(64, 48)).unwrap();
+
+        store
+            .record_stored(&target, &path, "hash", 1, "image/jpeg", 1)
+            .await
+            .unwrap();
+
+        (cfg, store, on_disk)
+    }
+
+    #[tokio::test]
+    async fn the_high_resolution_original_is_found_when_the_displayed_copy_was_never_archived() {
+        let hd = "https://apod.nasa.gov/apod/image/pillars3_hst_big.gif";
+        let (cfg, store, on_disk) = stored_for(hd, MediaKind::ImageGif).await;
+
+        let media = Media::new(
+            MediaKind::ImageGif,
+            Some("https://apod.nasa.gov/apod/image/pillars3_hst.gif".to_owned()),
+            Some(hd.to_owned()),
+        );
+
+        let Some(Fetch::Stored(path, Decode::Still)) = archived(&cfg, &store, &media).await else {
+            panic!(
+                "the displayed copy is the same format as the linked one, so it is never \
+                 archived; the lookup has to carry on to the high resolution file rather than \
+                 giving up and going to the network"
+            );
+        };
+        assert_eq!(path, on_disk);
+
+        std::fs::remove_dir_all(cfg.media_dir.parent().unwrap()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn the_displayed_copy_wins_when_it_is_the_one_on_disk() {
+        let displayed = "https://apod.nasa.gov/apod/image/anim.gif";
+        let (cfg, store, on_disk) = stored_for(displayed, MediaKind::ImageGif).await;
+
+        let media = Media::new(
+            MediaKind::ImageGif,
+            Some(displayed.to_owned()),
+            Some("https://apod.nasa.gov/apod/image/still.jpg".to_owned()),
+        );
+
+        let Some(Fetch::Stored(path, _)) = archived(&cfg, &store, &media).await else {
+            panic!("expected the archived displayed copy");
+        };
+        assert_eq!(
+            path, on_disk,
+            "an animation and its still frame are different pictures, so the thumbnail has to \
+             keep coming from the one the page shows"
+        );
+
+        std::fs::remove_dir_all(cfg.media_dir.parent().unwrap()).unwrap();
+    }
+
+    #[tokio::test]
+    async fn nothing_archived_means_nothing_to_read() {
+        let (cfg, store, _) = stored_for(
+            "https://apod.nasa.gov/apod/image/unrelated.jpg",
+            MediaKind::ImageJpg,
+        )
+        .await;
+
+        let media = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2608/new.jpg".to_owned()),
+            Some("https://apod.nasa.gov/apod/image/2608/new_big.jpg".to_owned()),
+        );
+
+        assert!(
+            archived(&cfg, &store, &media).await.is_none(),
+            "an entry published today has no original on disk yet and must fall through"
+        );
+
+        std::fs::remove_dir_all(cfg.media_dir.parent().unwrap()).unwrap();
+    }
+
     #[test]
     fn only_a_network_round_trip_needs_pacing() {
-        assert!(Generated::Written.fetched());
+        assert!(Generated::Written(Source::Network).fetched());
         assert!(Generated::Failed("gone".into()).fetched());
+        assert!(
+            !Generated::Written(Source::Archive).fetched(),
+            "a thumbnail made off local disk has nobody to be polite to"
+        );
         assert!(!Generated::Adopted.fetched());
         assert!(!Generated::NotApplicable.fetched());
     }

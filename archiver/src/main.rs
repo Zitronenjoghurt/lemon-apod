@@ -3,6 +3,7 @@ mod client;
 mod config;
 mod fetch;
 mod legacy;
+mod media;
 mod notify;
 mod pictures;
 mod progress;
@@ -62,6 +63,13 @@ enum Command {
         from: Option<ApodDate>,
         #[arg(long)]
         to: Option<ApodDate>,
+    },
+
+    /// Fetch the original pictures the archived pages point at, then exit.
+    Media {
+        /// Stop after this many files.
+        #[arg(long)]
+        limit: Option<usize>,
     },
 
     /// Generate thumbnails.
@@ -195,6 +203,7 @@ async fn main() -> Result<()> {
         Command::Backfill { limit } => backfill(cfg, limit).await,
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
         Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
+        Command::Media { limit } => media_backfill(cfg, limit).await,
         Command::Thumbs { force, limit } => thumbs(cfg, force, limit).await,
         Command::Pictures { force, show } => group_pictures(cfg, force, show).await,
         Command::Quality {
@@ -335,6 +344,67 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     Ok(())
 }
 
+async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
+    let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
+    let store = archive.media();
+
+    let scan = progress::spinner("reading", "working out which pictures the index points at");
+    let targets = media::targets(&index.all_media().await?);
+    scan.finish_and_clear();
+
+    let bar = progress::bar("media", limit.unwrap_or(targets.len()));
+    let (mut stored, mut adopted, mut missing, mut failed) = (0, 0, 0, 0);
+    let mut bytes = 0usize;
+    let mut done = 0;
+
+    while limit.is_none_or(|limit| done < limit) {
+        let Some(target) = store.next_target(&targets, cfg.media.max_attempts).await? else {
+            break;
+        };
+
+        bar.set_message(target.date.to_string());
+        let outcome = workers::media_step(&cfg, &clients.media, &store, &targets, &target).await;
+        done += 1;
+        bar.inc(1);
+
+        let paced = match outcome {
+            Some(media::Outcome::Stored { bytes: size }) => {
+                stored += 1;
+                bytes += size;
+                true
+            }
+            Some(media::Outcome::Adopted { bytes: size }) => {
+                adopted += 1;
+                bytes += size;
+                false
+            }
+            Some(media::Outcome::Missing) => {
+                missing += 1;
+                true
+            }
+            _ => {
+                failed += 1;
+                true
+            }
+        };
+
+        if paced && limit.is_none_or(|limit| done < limit) {
+            tokio::time::sleep(workers::jitter(cfg.media.delay_min, cfg.media.delay_max)).await;
+        }
+    }
+
+    progress::done(
+        &bar,
+        format!(
+            "stored {stored}, adopted {adopted}, gone {missing}, failed {failed}, {:.1} MB",
+            bytes as f64 / 1_048_576.0
+        ),
+    );
+    Ok(())
+}
+
 async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
@@ -404,6 +474,7 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
         Redirects::Follow,
     )?;
     let index = ApodWriter::open(&cfg.index_db).await?;
+    let store = ArchiveStore::open(&cfg.archive_db).await?.media();
 
     let measured = measure_existing(&cfg, &index).await?;
     if measured > 0 {
@@ -423,7 +494,7 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
     };
 
     let bar = progress::bar("thumbs", targets.len());
-    let (mut written, mut adopted, mut skipped, mut failed) = (0, 0, 0, 0);
+    let (mut made, mut downloaded, mut adopted, mut skipped, mut failed) = (0, 0, 0, 0, 0);
     let mut pace = false;
 
     for (date, media) in targets {
@@ -432,13 +503,14 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
         }
 
         bar.set_message(date.to_string());
-        let outcome = thumbs::generate(&cfg, &client, &index, *date, media, force).await?;
+        let outcome = thumbs::generate(&cfg, &client, &store, &index, *date, media, force).await?;
         pace = outcome.fetched();
 
         match outcome {
-            thumbs::Generated::Written => {
-                written += 1;
-                tracing::debug!(%date, "thumbnail written");
+            thumbs::Generated::Written(source) => {
+                made += 1;
+                downloaded += i32::from(source == thumbs::Source::Network);
+                tracing::debug!(%date, ?source, "thumbnail made");
             }
             thumbs::Generated::Adopted => {
                 adopted += 1;
@@ -455,7 +527,10 @@ async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {
 
     progress::done(
         &bar,
-        format!("written {written}, adopted {adopted}, skipped {skipped}, failed {failed}"),
+        format!(
+            "made {made}, {downloaded} of them needed a download, adopted {adopted}, \
+             skipped {skipped}, failed {failed}"
+        ),
     );
 
     let report = pictures::refresh(&cfg, &index, false).await?;

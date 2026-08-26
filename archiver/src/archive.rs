@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use apod_core::db::{Db, DbConfig};
 use apod_core::ApodDate;
+use apod_core::db::{Db, DbConfig};
 use serde::{Deserialize, Serialize};
-use sqlx::migrate::Migrator;
 use sqlx::Row;
+use sqlx::migrate::Migrator;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -48,6 +48,10 @@ impl ArchiveStore {
             .await
             .with_context(|| format!("migrating {}", path.display()))?;
         Ok(Self { db })
+    }
+
+    pub fn media(&self) -> crate::media::MediaStore {
+        crate::media::MediaStore::new(self.db.clone())
     }
 
     pub async fn get(&self, date: ApodDate) -> Result<Option<FetchRecord>> {
