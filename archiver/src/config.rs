@@ -4,6 +4,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
+const LEGACY_ARCHIVE_URL: Option<&str> = Some(
+    "https://github.com/Zitronenjoghurt/apod-legacy-html/raw/refs/heads/main/legacy-html.tar.zst",
+);
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub html_dir: PathBuf,
@@ -16,6 +20,7 @@ pub struct Config {
     pub baseline_dir: PathBuf,
 
     pub source_base_url: String,
+    pub legacy_archive_url: Option<String>,
     pub user_agent: String,
     pub fetch_timeout: Duration,
     pub fetch_max_retries: u32,
@@ -133,6 +138,8 @@ impl Config {
                 "APOD_SOURCE_BASE_URL",
                 "https://apod.nasa.gov/apod".to_owned(),
             )?,
+            legacy_archive_url: optional("APOD_LEGACY_ARCHIVE_URL")
+                .or_else(|| LEGACY_ARCHIVE_URL.map(str::to_owned)),
             user_agent: env_or(
                 "APOD_USER_AGENT",
                 format!(

@@ -122,7 +122,7 @@ fn sanity_check(body: &[u8], min_bytes: usize) -> Result<(), String> {
     }
 }
 
-fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
+pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
@@ -135,7 +135,7 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn sha256(bytes: &[u8]) -> String {
+pub fn sha256(bytes: &[u8]) -> String {
     use std::fmt::Write;
 
     Sha256::digest(bytes)

@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
-use apod_core::ApodDate;
 use apod_core::db::{Db, DbConfig};
+use apod_core::ApodDate;
+use serde::{Deserialize, Serialize};
 use sqlx::migrate::Migrator;
+use sqlx::Row;
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -20,6 +22,16 @@ impl FetchRecord {
     pub fn is_absent(&self) -> bool {
         self.http_status == Some(404)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FetchRow {
+    pub date: ApodDate,
+    pub url: String,
+    pub http_status: Option<u16>,
+    pub sha256: Option<String>,
+    pub bytes: Option<i64>,
+    pub fetched_at: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,6 +164,62 @@ impl ArchiveStore {
             .into_iter()
             .map(|days| ApodDate::from_days(days as i32))
             .collect())
+    }
+
+    pub async fn fetch_rows(&self) -> Result<Vec<FetchRow>> {
+        let rows = sqlx::query(
+            "SELECT date_id, url, http_status, sha256, bytes, fetched_at
+             FROM fetches ORDER BY date_id",
+        )
+        .fetch_all(self.db.reader())
+        .await
+        .context("reading fetch state")?;
+
+        Ok(rows
+            .iter()
+            .map(|row| FetchRow {
+                date: ApodDate::from_days(row.get::<i64, _>("date_id") as i32),
+                url: row.get("url"),
+                http_status: row
+                    .get::<Option<i64>, _>("http_status")
+                    .map(|status| status as u16),
+                sha256: row.get("sha256"),
+                bytes: row.get("bytes"),
+                fetched_at: row.get("fetched_at"),
+            })
+            .collect())
+    }
+
+    pub async fn seed(&self, rows: &[FetchRow]) -> Result<usize> {
+        let mut tx = self
+            .db
+            .writer()?
+            .begin()
+            .await
+            .context("opening the seed transaction")?;
+        let mut seeded = 0;
+
+        for row in rows {
+            let done = sqlx::query(
+                "INSERT INTO fetches (date_id, url, http_status, sha256, bytes, fetched_at,
+                                      last_checked_at, error)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6, NULL)
+                 ON CONFLICT(date_id) DO NOTHING",
+            )
+            .bind(row.date.days())
+            .bind(&row.url)
+            .bind(row.http_status.map(i64::from))
+            .bind(&row.sha256)
+            .bind(row.bytes)
+            .bind(row.fetched_at)
+            .execute(&mut *tx)
+            .await
+            .context("seeding fetch state")?;
+            seeded += done.rows_affected() as usize;
+        }
+
+        tx.commit().await.context("committing seeded fetch state")?;
+        Ok(seeded)
     }
 
     pub async fn counts(&self) -> Result<Counts> {

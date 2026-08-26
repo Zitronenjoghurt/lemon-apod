@@ -4,7 +4,8 @@ API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p a
 COMPOSE = docker compose -f docker/compose.yaml
 
 .PHONY: help check test fmt lint api web dev backfill status quality reparse thumbs pictures sky \
-        notify rating rating-import rating-export docker seed up down logs ps shell
+        notify rating rating-import rating-export legacy-export legacy-import docker seed up \
+        down logs ps shell
 
 help:
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -60,6 +61,12 @@ rating-import: ## Load baseline/rating into ./data/votes.db as priors. Run this 
 
 rating-export: ## Fit what has been collected and write baseline/rating back out, ready to commit
 	$(ARCHIVER) rating export
+
+legacy-export: ## Pack ./data/html and its fetch state into a snapshot. OUT=<dir> to place it
+	$(ARCHIVER) legacy-export --out $(or $(OUT),$(CURDIR))
+
+legacy-import: ## Restore a snapshot into ./data. FROM=<path|url>, SHA=<hash>, FORCE=1 to replace differing pages
+	$(ARCHIVER) legacy-import $(FROM) $(if $(SHA),--sha256 $(SHA)) $(if $(FORCE),--force)
 
 notify: ## Send what is due. DRY=1 lists it instead, SEED=1 records it as sent without sending
 	$(ARCHIVER) notify $(if $(DRY),--dry-run) $(if $(SEED),--seed)

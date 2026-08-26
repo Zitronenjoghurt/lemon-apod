@@ -22,9 +22,12 @@ sqlx = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.11.0"
+tar = "0.4.46"
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 webp = "0.3.1"
+zstd = "0.13.3"
 re_mp4 = "0.5.1"
 openh264 = "0.9.7"
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }

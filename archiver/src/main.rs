@@ -2,6 +2,7 @@ mod archive;
 mod client;
 mod config;
 mod fetch;
+mod legacy;
 mod notify;
 mod pictures;
 mod progress;
@@ -22,6 +23,7 @@ use archive::ArchiveStore;
 use clap::{Parser, Subcommand};
 use client::{Client, Clients, Redirects};
 use config::Config;
+use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser)]
@@ -91,6 +93,25 @@ enum Command {
         warning: Option<String>,
         #[arg(long, default_value_t = 50)]
         limit: usize,
+    },
+
+    /// Pack the legacy HTML and its fetch state into a snapshot that restores anywhere.
+    LegacyExport {
+        /// Where to write the tarball and its manifest.
+        #[arg(long, default_value = ".")]
+        out: PathBuf,
+    },
+
+    /// Restore a legacy snapshot. Takes a path or a URL, and defaults to the published release.
+    LegacyImport {
+        /// A local tarball or a URL. Defaults to APOD_LEGACY_ARCHIVE_URL.
+        source: Option<String>,
+        /// Refuse the snapshot unless it hashes to this. Published in SHA256SUMS.
+        #[arg(long)]
+        sha256: Option<String>,
+        /// Replace local pages that differ from the snapshot instead of refusing.
+        #[arg(long)]
+        force: bool,
     },
 
     /// Poll the launch and space weather feeds once into sky.db, then exit.
@@ -184,6 +205,12 @@ async fn main() -> Result<()> {
             let index = ApodWriter::open(&cfg.index_db).await?;
             report::quality(&cfg, index.reader(), date, warning.as_deref(), limit).await
         }
+        Command::LegacyExport { out } => legacy::export(&cfg, &out).await,
+        Command::LegacyImport {
+            source,
+            sha256,
+            force,
+        } => legacy::import(&cfg, source, sha256, force).await,
         Command::Sky => sky::poll(&cfg).await,
         Command::Rating(command) => match command {
             RatingCommand::Import => rating::import(&cfg).await,
