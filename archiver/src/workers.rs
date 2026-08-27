@@ -3,6 +3,7 @@ use crate::client::{Client, Clients};
 use crate::config::{Config, Daily};
 use crate::fetch::{self, Outcome};
 use crate::media::{self, MediaStore};
+use crate::modern;
 use crate::pictures;
 use crate::shutdown::{self, Shutdown};
 use crate::thumbs;
@@ -40,19 +41,37 @@ pub async fn run(cfg: Config) -> Result<()> {
             shutdown.clone(),
         )));
     } else {
-        tracing::info!("backfill disabled");
+        tracing::info!("legacy backfill disabled");
     }
 
-    if cfg.fetch_legacy && cfg.daily.enabled {
-        handles.push(tokio::spawn(daily(
+    if cfg.fetch_modern && cfg.backfill.enabled {
+        handles.push(tokio::spawn(backfill_modern(
             cfg.clone(),
-            clients.clone(),
+            clients.source.clone(),
             archive.clone(),
-            index.clone(),
             shutdown.clone(),
         )));
     } else {
-        tracing::info!("daily poll disabled");
+        tracing::info!("modern backfill disabled");
+    }
+
+    for source in Source::ALL {
+        let enabled = match source {
+            Source::Legacy => cfg.fetch_legacy,
+            Source::Modern => cfg.fetch_modern,
+        };
+        if enabled && cfg.daily.enabled {
+            handles.push(tokio::spawn(daily(
+                cfg.clone(),
+                clients.clone(),
+                archive.clone(),
+                index.clone(),
+                shutdown.clone(),
+                source,
+            )));
+        } else {
+            tracing::info!("{source} daily poll disabled");
+        }
     }
 
     if cfg.fetch_legacy && cfg.recheck_per_day > 0 {
@@ -177,6 +196,85 @@ async fn backfill(
     Ok(())
 }
 
+async fn backfill_modern(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    mut shutdown: Shutdown,
+) -> Result<()> {
+    while !shutdown.is_triggered() {
+        let today = today_in(cfg.daily.timezone);
+
+        let bound = match archive
+            .next_target(
+                today,
+                Source::Modern,
+                cfg.retry_backoff_max,
+                Utc::now().timestamp(),
+            )
+            .await?
+        {
+            Next::Fetch(date) => date,
+            Next::Waiting(wait) => {
+                tracing::warn!(
+                    ?wait,
+                    "every date left has failed and is waiting out its retry backoff"
+                );
+                if !shutdown.sleep(wait.min(MAX_SLEEP)).await {
+                    break;
+                }
+                continue;
+            }
+            Next::Complete => {
+                tracing::info!("the modern archive is complete back to {}", ApodDate::START);
+                if !shutdown.sleep(MAX_SLEEP).await {
+                    break;
+                }
+                continue;
+            }
+        };
+
+        let wait =
+            match modern_step(&cfg, &client, &archive, modern::Window::back_from(bound)).await {
+                Some(pass) => modern::delay(&cfg, pass.elapsed),
+                None => MAX_SLEEP,
+            };
+
+        if !shutdown.sleep(wait).await {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn modern_step(
+    cfg: &Config,
+    client: &Client,
+    archive: &ArchiveStore,
+    window: modern::Window,
+) -> Option<modern::Pass> {
+    match modern::fetch_window(cfg, client, archive, window).await {
+        Ok(pass) => {
+            tracing::info!(
+                records = pass.records,
+                stored = pass.stored,
+                unchanged = pass.unchanged,
+                absent = pass.absent,
+                warned = pass.warned,
+                misfiled = pass.misfiled,
+                oldest = pass.oldest.map(|date| date.to_string()),
+                "modern window recorded"
+            );
+            Some(pass)
+        }
+        Err(error) => {
+            tracing::warn!("the modern window was not recorded: {error:#}");
+            None
+        }
+    }
+}
+
 async fn media_backfill(
     cfg: Config,
     client: Client,
@@ -252,13 +350,14 @@ async fn daily(
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
+    source: Source,
 ) -> Result<()> {
     while !shutdown.is_triggered() {
         let now = Utc::now().with_timezone(&cfg.daily.timezone);
         let today = ApodDate::from(now.date_naive());
 
         if archive
-            .get(today, Source::Legacy)
+            .get(today, source)
             .await?
             .is_some_and(|record| record.is_success())
         {
@@ -283,19 +382,37 @@ async fn daily(
         }
 
         if now - window_start > chrono::TimeDelta::from_std(cfg.daily.window)? {
-            tracing::warn!(%today, "publication window elapsed without an entry");
+            tracing::warn!(%today, %source, "publication window elapsed without an entry");
             if !sleep_until(&mut shutdown, next_window(&cfg, now)).await {
                 break;
             }
             continue;
         }
 
-        let kept_waiting = match step(&cfg, &clients, &archive, &index, today).await {
-            Some(Outcome::Stored { .. } | Outcome::Updated { .. }) => {
-                regroup(&index).await;
-                sleep_until(&mut shutdown, next_window(&cfg, now)).await
+        let fetched = match source {
+            Source::Legacy => {
+                let stored = matches!(
+                    step(&cfg, &clients, &archive, &index, today).await,
+                    Some(Outcome::Stored { .. } | Outcome::Updated { .. })
+                );
+                if stored {
+                    regroup(&index).await;
+                }
+                stored
             }
-            _ => shutdown.sleep(cfg.daily.interval).await,
+            Source::Modern => modern_step(
+                &cfg,
+                &clients.source,
+                &archive,
+                modern::Window::today(today),
+            )
+            .await
+            .is_some_and(|pass| pass.stored > 0),
+        };
+
+        let kept_waiting = match fetched {
+            true => sleep_until(&mut shutdown, next_window(&cfg, now)).await,
+            false => shutdown.sleep(cfg.daily.interval).await,
         };
 
         if !kept_waiting {

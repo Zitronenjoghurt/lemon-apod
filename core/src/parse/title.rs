@@ -1,4 +1,6 @@
+use crate::date::ApodDate;
 use crate::html::collapse;
+use chrono::NaiveDate;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::sync::LazyLock;
@@ -13,11 +15,55 @@ static TRAILING_CREDIT: LazyLock<Regex> =
 static TEASER_LABEL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)^tomorrow['\u{2019}]s\s+picture\b").unwrap());
 
+static MODERN_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(\d{4})\s+([A-Za-z]+)(?:\s+(\d{1,2}))?\s*[\u{2013}\u{2014}-]\s*").unwrap()
+});
+
 const BOILERPLATE: &[&str] = &[
     "astronomy picture of the day",
     "astronomy picture of the day archive",
     "discover the cosmos!",
 ];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModernTitle {
+    pub date: Option<ApodDate>,
+    pub title: String,
+}
+
+pub fn modern(rendered: &str) -> ModernTitle {
+    let decoded = collapse(
+        &Html::parse_fragment(rendered)
+            .root_element()
+            .text()
+            .collect::<String>(),
+    );
+    let body = decoded
+        .strip_prefix("APOD:")
+        .map(str::trim_start)
+        .unwrap_or(&decoded);
+
+    let Some(prefix) = MODERN_PREFIX.captures(body) else {
+        return ModernTitle {
+            date: None,
+            title: body.to_owned(),
+        };
+    };
+
+    let date = prefix.get(3).and_then(|day| {
+        NaiveDate::parse_from_str(
+            &format!("{} {} {}", &prefix[1], &prefix[2], day.as_str()),
+            "%Y %B %d",
+        )
+        .ok()
+        .map(ApodDate::from)
+    });
+
+    ModernTitle {
+        date,
+        title: body[prefix.get(0).unwrap().end()..].to_owned(),
+    }
+}
 
 pub fn parse(doc: &Html) -> Option<String> {
     from_center(doc)
@@ -76,6 +122,69 @@ fn clean(raw: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn modern_date(rendered: &str) -> Option<String> {
+        modern(rendered).date.map(|date| date.to_string())
+    }
+
+    #[test]
+    fn reads_the_date_and_the_title_out_of_a_modern_title() {
+        let parsed =
+            modern("APOD: 2026 August 26 &#8211; JWST Images The Lion&#8217;s Head Nebula");
+        assert_eq!(
+            parsed.date.map(|d| d.to_string()).as_deref(),
+            Some("2026-08-26")
+        );
+        assert_eq!(parsed.title, "JWST Images The Lion\u{2019}s Head Nebula");
+    }
+
+    #[test]
+    fn a_hyphen_separates_as_well_as_an_en_dash() {
+        let parsed = modern("APOD: 2007 February 17 - Supernova Remnant and Shock Wave");
+        assert_eq!(
+            parsed.date.map(|d| d.to_string()).as_deref(),
+            Some("2007-02-17")
+        );
+        assert_eq!(parsed.title, "Supernova Remnant and Shock Wave");
+    }
+
+    #[test]
+    fn a_prefix_missing_its_day_still_yields_the_title() {
+        let parsed = modern("APOD: 2026 April &#8211; Caught in the Web");
+        assert_eq!(
+            parsed.date, None,
+            "a date the source never wrote is not one to invent"
+        );
+        assert_eq!(parsed.title, "Caught in the Web");
+    }
+
+    #[test]
+    fn a_title_that_was_never_prefixed_is_left_whole() {
+        let parsed = modern("Albert Einstein: 1879 - 1955");
+        assert_eq!(parsed.date, None);
+        assert_eq!(
+            parsed.title, "Albert Einstein: 1879 - 1955",
+            "the oldest entries predate the prefix and their titles are not date ranges"
+        );
+    }
+
+    #[test]
+    fn the_title_keeps_the_punctuation_that_follows_the_separator() {
+        assert_eq!(
+            modern("APOD: 2007 July 16 - Manhattanhenge: A New York Sunset").title,
+            "Manhattanhenge: A New York Sunset"
+        );
+        assert_eq!(
+            modern_date("APOD: 2007 July 16 - Manhattanhenge: A New York Sunset").as_deref(),
+            Some("2007-07-16")
+        );
+    }
+
+    #[test]
+    fn a_month_or_day_that_is_not_one_yields_no_date() {
+        assert_eq!(modern_date("APOD: 2026 Smarch 3 - Nowhere"), None);
+        assert_eq!(modern_date("APOD: 2026 February 31 - Nowhere"), None);
+    }
 
     #[test]
     fn takes_the_title_from_the_second_center_block() {

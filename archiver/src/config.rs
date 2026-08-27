@@ -11,6 +11,7 @@ const LEGACY_ARCHIVE_URL: Option<&str> = Some(
 #[derive(Debug, Clone)]
 pub struct Config {
     pub html_dir: PathBuf,
+    pub json_dir: PathBuf,
     pub thumb_dir: PathBuf,
     pub media_dir: PathBuf,
     pub archive_db: PathBuf,
@@ -24,6 +25,9 @@ pub struct Config {
     pub legacy_archive_url: Option<String>,
     pub modern_api_url: String,
     pub modern_category: u32,
+    pub modern_per_page: u32,
+    pub modern_delay_multiplier: u32,
+    pub modern_delay_min: Duration,
     pub user_agent: String,
     pub fetch_legacy: bool,
     pub fetch_modern: bool,
@@ -143,6 +147,7 @@ impl Config {
 
         Ok(Self {
             html_dir: env_or("APOD_HTML_DIR", data_dir.join("html"))?,
+            json_dir: env_or("APOD_JSON_DIR", data_dir.join("json"))?,
             thumb_dir: env_or("APOD_THUMB_DIR", data_dir.join("thumbs"))?,
             media_dir: env_or("APOD_MEDIA_DIR", data_dir.join("media"))?,
             archive_db: env_or("APOD_ARCHIVE_DB", data_dir.join("archive.db"))?,
@@ -163,6 +168,9 @@ impl Config {
                 "https://science.nasa.gov/wp-json/wp/v2/image-article".to_owned(),
             )?,
             modern_category: env_or("APOD_MODERN_CATEGORY", 22766)?,
+            modern_per_page: env_or("APOD_MODERN_PER_PAGE", 100)?,
+            modern_delay_multiplier: env_or("APOD_MODERN_DELAY_MULTIPLIER", 10)?,
+            modern_delay_min: secs("APOD_MODERN_DELAY_MIN_SECS", 60)?,
             user_agent: env_or(
                 "APOD_USER_AGENT",
                 format!(
@@ -293,6 +301,20 @@ impl Config {
              every image article science.nasa.gov holds, not APOD"
         );
         anyhow::ensure!(
+            (1..=100).contains(&self.modern_per_page),
+            "APOD_MODERN_PER_PAGE must be between 1 and 100; the endpoint refuses more and a \
+             request that names more comes back empty"
+        );
+        anyhow::ensure!(
+            self.modern_delay_multiplier >= 1,
+            "APOD_MODERN_DELAY_MULTIPLIER must be at least 1; a slow response means a loaded \
+             server and the delay is meant to grow with it"
+        );
+        anyhow::ensure!(
+            !self.modern_delay_min.is_zero(),
+            "APOD_MODERN_DELAY_MIN_SECS must be greater than zero"
+        );
+        anyhow::ensure!(
             !self.retry_backoff_max.is_zero(),
             "APOD_RETRY_BACKOFF_MAX_SECS must be greater than zero; a ceiling of zero retries a \
              permanently failing date on every tick, which is what the backoff exists to stop"
@@ -355,6 +377,15 @@ impl Config {
         Ok(())
     }
 
+    pub fn require_modern(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.fetch_modern,
+            "APOD_FETCH_MODERN is false, so science.nasa.gov is not contacted. Set \
+             APOD_FETCH_MODERN=true to archive the modern records"
+        );
+        Ok(())
+    }
+
     pub fn page_url(&self, date: apod_core::ApodDate) -> String {
         format!(
             "{}/ap{}.html",
@@ -365,6 +396,10 @@ impl Config {
 
     pub fn html_path(&self, date: apod_core::ApodDate) -> PathBuf {
         self.html_dir.join(date.html_path())
+    }
+
+    pub fn json_path(&self, date: apod_core::ApodDate) -> PathBuf {
+        self.json_dir.join(date.json_path())
     }
 
     pub fn thumb_path(&self, date: apod_core::ApodDate) -> PathBuf {
@@ -459,6 +494,46 @@ mod tests {
     fn defaults_the_publication_window_to_midnight() {
         let daily = config().daily;
         assert_eq!((daily.start_hour, daily.start_minute), (0, 0));
+    }
+
+    #[test]
+    fn each_source_is_switched_off_by_its_own_flag() {
+        let mut cfg = config();
+        cfg.fetch_legacy = false;
+        cfg.fetch_modern = false;
+
+        let legacy = cfg.require_legacy().unwrap_err().to_string();
+        assert!(legacy.contains("APOD_FETCH_LEGACY"), "{legacy}");
+        let modern = cfg.require_modern().unwrap_err().to_string();
+        assert!(modern.contains("APOD_FETCH_MODERN"), "{modern}");
+
+        cfg.fetch_modern = true;
+        assert!(cfg.require_modern().is_ok());
+        assert!(
+            cfg.require_legacy().is_err(),
+            "one flag says nothing about the other"
+        );
+    }
+
+    #[test]
+    fn refuses_a_page_size_the_endpoint_would_not_serve() {
+        let mut cfg = config();
+        cfg.modern_per_page = 500;
+
+        let refused = cfg.validated().unwrap_err().to_string();
+        assert!(refused.contains("APOD_MODERN_PER_PAGE"), "{refused}");
+    }
+
+    #[test]
+    fn defaults_the_modern_endpoint_to_the_apod_category() {
+        let cfg = config();
+        assert_eq!(cfg.modern_category, 22766);
+        assert_eq!(cfg.modern_per_page, 100);
+        assert_eq!(cfg.json_dir, PathBuf::from("/tmp/apod-test/json"));
+        assert_eq!(
+            cfg.json_path(ApodDate::from_ymd(2024, 3, 5).unwrap()),
+            PathBuf::from("/tmp/apod-test/json/2024/03/2024-03-05.json")
+        );
     }
 
     #[test]

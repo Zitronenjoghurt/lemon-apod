@@ -1,3 +1,4 @@
+use crate::archive::Source;
 use crate::client::{Client, Limit, Response};
 use crate::config::Config;
 use crate::fetch::{self, sha256};
@@ -31,6 +32,13 @@ impl Role {
 
     fn wants_video(self) -> bool {
         matches!(self, Self::Video)
+    }
+}
+
+pub fn source_of(url: &str) -> Source {
+    match url.contains("science.nasa.gov") {
+        true => Source::Modern,
+        false => Source::Legacy,
     }
 }
 
@@ -475,9 +483,10 @@ impl MediaStore {
         sqlx::query(
             "INSERT INTO media (url, date_id, role, source, path, http_status, sha256, bytes,
                                 content_type, fetched_at, last_checked_at, attempts, error)
-             VALUES (?1, ?2, ?3, 'legacy', ?4, 200, ?5, ?6, ?7, ?8, ?8, 1, NULL)
+             VALUES (?1, ?2, ?3, ?4, ?5, 200, ?6, ?7, ?8, ?9, ?9, 1, NULL)
              ON CONFLICT(url) DO UPDATE SET
-               date_id = excluded.date_id, role = excluded.role, path = excluded.path,
+               date_id = excluded.date_id, role = excluded.role, source = excluded.source,
+               path = excluded.path,
                http_status = 200, sha256 = excluded.sha256, bytes = excluded.bytes,
                content_type = excluded.content_type, fetched_at = excluded.fetched_at,
                last_checked_at = excluded.last_checked_at, attempts = media.attempts + 1,
@@ -486,6 +495,7 @@ impl MediaStore {
         .bind(&target.url)
         .bind(target.date.days())
         .bind(target.role.as_str())
+        .bind(source_of(&target.url).as_str())
         .bind(path)
         .bind(sha256)
         .bind(bytes as i64)
@@ -507,15 +517,16 @@ impl MediaStore {
         sqlx::query(
             "INSERT INTO media (url, date_id, role, source, http_status, last_checked_at,
                                 attempts, error)
-             VALUES (?1, ?2, ?3, 'legacy', ?4, ?5, 1, ?6)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7)
              ON CONFLICT(url) DO UPDATE SET
-               date_id = excluded.date_id, role = excluded.role,
+               date_id = excluded.date_id, role = excluded.role, source = excluded.source,
                http_status = excluded.http_status, last_checked_at = excluded.last_checked_at,
                attempts = media.attempts + 1, error = excluded.error",
         )
         .bind(&target.url)
         .bind(target.date.days())
         .bind(target.role.as_str())
+        .bind(source_of(&target.url).as_str())
         .bind(status.map(i64::from))
         .bind(now)
         .bind(error)
@@ -696,6 +707,23 @@ mod tests {
                 ("https://player.vimeo.com/video/98765", "poster"),
             ],
             "an interactive embed is not a picture and there is nothing to store for it"
+        );
+    }
+
+    #[test]
+    fn the_host_says_which_side_of_the_archive_a_file_came_from() {
+        assert_eq!(
+            source_of("https://assets.science.nasa.gov/content/dam/x/y.jpg"),
+            Source::Modern
+        );
+        assert_eq!(
+            source_of("https://apod.nasa.gov/apod/image/2403/m31.jpg"),
+            Source::Legacy
+        );
+        assert_eq!(
+            source_of("https://www.youtube.com/embed/abc123"),
+            Source::Legacy,
+            "an embed the legacy pages have always pointed at is not part of the migration"
         );
     }
 

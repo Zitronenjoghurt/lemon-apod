@@ -83,7 +83,8 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     let scan = progress::spinner("reading", "counting the archive");
     let today = workers::today_in(cfg.daily.timezone);
     let publishable = today.iter_desc().count();
-    let on_disk = reparse::archived_dates(&cfg.html_dir)?.len();
+    let on_disk = reparse::archived_dates(&cfg.html_dir, "html")?.len();
+    let json_on_disk = reparse::archived_dates(&cfg.json_dir, "json")?.len();
     let now = chrono::Utc::now().timestamp();
     let stored = archive.stored_dates().await?;
     scan.finish_and_clear();
@@ -97,6 +98,7 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
         percent(stored, publishable)
     );
     println!("  html on disk    {on_disk}");
+    println!("  json on disk    {json_on_disk}");
     for source in Source::ALL {
         let counts = archive.counts(source).await?;
         println!("  {source}");
@@ -105,7 +107,14 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
             counts.stored,
             percent(counts.stored, publishable)
         );
-        println!("    not published {}", counts.absent);
+        println!(
+            "    {} {}",
+            match source {
+                Source::Legacy => "not published",
+                Source::Modern => "not migrated ",
+            },
+            counts.absent
+        );
         println!("    redirected    {}", counts.redirected);
         println!("    failed        {}", counts.failed);
         println!("    bytes         {}", size(counts.bytes));

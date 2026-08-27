@@ -49,15 +49,15 @@ pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result
     Ok(report)
 }
 
-pub fn archived_dates(html_dir: &Path) -> Result<Vec<ApodDate>> {
+pub fn archived_dates(dir: &Path, extension: &str) -> Result<Vec<ApodDate>> {
     let mut dates = Vec::new();
-    collect(html_dir, &mut dates)?;
+    collect(dir, extension, &mut dates)?;
     dates.sort_unstable();
     dates.dedup();
     Ok(dates)
 }
 
-fn collect(dir: &Path, out: &mut Vec<ApodDate>) -> Result<()> {
+fn collect(dir: &Path, extension: &str, out: &mut Vec<ApodDate>) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
@@ -66,8 +66,8 @@ fn collect(dir: &Path, out: &mut Vec<ApodDate>) -> Result<()> {
         let path = entry?.path();
 
         if path.is_dir() {
-            collect(&path, out)?;
-        } else if path.extension().is_some_and(|ext| ext == "html")
+            collect(&path, extension, out)?;
+        } else if path.extension().is_some_and(|ext| ext == extension)
             && let Some(stem) = path.file_stem().and_then(|stem| stem.to_str())
             && let Ok(date) = stem.parse::<ApodDate>()
         {
@@ -93,11 +93,21 @@ mod tests {
         std::fs::write(root.join("1995/06/1995-06-16.html"), "x").unwrap();
         std::fs::write(root.join("2024/03/notes.txt"), "x").unwrap();
         std::fs::write(root.join("2024/03/2024-03-06.html.tmp"), "x").unwrap();
+        std::fs::write(root.join("2024/03/2024-03-07.json"), "x").unwrap();
 
-        let dates = archived_dates(&root).unwrap();
+        let dates = archived_dates(&root, "html").unwrap();
         assert_eq!(
             dates.iter().map(ToString::to_string).collect::<Vec<_>>(),
             vec!["1995-06-16", "2024-03-05"]
+        );
+        assert_eq!(
+            archived_dates(&root, "json")
+                .unwrap()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            vec!["2024-03-07"],
+            "the two sides live under the same date directories and must not be counted together"
         );
 
         std::fs::remove_dir_all(&root).unwrap();
@@ -106,7 +116,7 @@ mod tests {
     #[test]
     fn an_empty_archive_is_not_an_error() {
         assert!(
-            archived_dates(Path::new("/nonexistent/apod"))
+            archived_dates(Path::new("/nonexistent/apod"), "html")
                 .unwrap()
                 .is_empty()
         );

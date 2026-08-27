@@ -3,12 +3,13 @@ ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q --profile cli -p apod-archiver --
 API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p apod-api
 COMPOSE = docker compose -f docker/compose.yaml
 
-.PHONY: help check test fmt lint api web dev backfill status quality reparse media thumbs \
+.PHONY: help check test fmt lint api web dev backfill backfill-modern status quality reparse \
+        media thumbs \
         pictures sky notify rating rating-import rating-export legacy-export legacy-import \
         docker seed up down logs ps shell
 
 help:
-	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
 check: fmt lint test ## Everything CI runs
 
@@ -34,6 +35,9 @@ dev: ## Vite dev server (proxies /api to a locally running apod-api)
 
 backfill: ## Fetch a few pages into ./data. Respect the rate limit, this hits NASA
 	$(ARCHIVER) backfill --limit $(or $(N),5)
+
+backfill-modern: ## Fetch modern API records into ./data/json. N=<n> requests, this hits NASA
+	$(ARCHIVER) backfill-modern $(if $(N),--limit $(N))
 
 status: ## Coverage and index health
 	$(ARCHIVER) status

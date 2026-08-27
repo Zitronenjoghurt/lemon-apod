@@ -86,6 +86,10 @@ impl ApodDate {
         format!("{}/{}.webp", self.format("%Y/%m"), self)
     }
 
+    pub fn json_path(self) -> String {
+        format!("{}/{}.json", self.format("%Y/%m"), self)
+    }
+
     pub const fn next(self) -> Self {
         Self(self.0 + 1)
     }
@@ -175,6 +179,7 @@ mod tests {
         );
         assert_eq!(date.html_path(), "2024/03/2024-03-05.html");
         assert_eq!(date.thumb_path(), "2024/03/2024-03-05.webp");
+        assert_eq!(date.json_path(), "2024/03/2024-03-05.json");
     }
 
     #[test]

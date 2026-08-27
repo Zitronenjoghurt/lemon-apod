@@ -4,6 +4,7 @@ mod config;
 mod fetch;
 mod legacy;
 mod media;
+mod modern;
 mod notify;
 mod pictures;
 mod progress;
@@ -42,6 +43,13 @@ enum Command {
     /// Fetch missing pages now, newest first, then exit.
     Backfill {
         /// Stop after this many pages.
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+
+    /// Fetch the modern API records for every date, newest first, then exit.
+    BackfillModern {
+        /// Stop after this many requests.
         #[arg(long)]
         limit: Option<usize>,
     },
@@ -201,6 +209,7 @@ async fn main() -> Result<()> {
     match cli.command.unwrap_or(Command::Run) {
         Command::Run => workers::run(cfg).await,
         Command::Backfill { limit } => backfill(cfg, limit).await,
+        Command::BackfillModern { limit } => backfill_modern(cfg, limit).await,
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
         Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
         Command::Media { limit } => media_backfill(cfg, limit).await,
@@ -363,6 +372,78 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     Ok(())
 }
 
+async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
+    cfg.require_modern()?;
+    let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let today = workers::today_in(cfg.daily.timezone);
+
+    let bar = match limit {
+        Some(limit) => progress::bar("modern", limit),
+        None => progress::spinner("modern", "fetching until the modern archive is complete"),
+    };
+
+    let (mut done, mut records, mut stored, mut absent, mut warned, mut misfiled) =
+        (0, 0, 0, 0, 0, 0);
+    while limit.is_none_or(|limit| done < limit) {
+        let bound = match archive
+            .next_target(
+                today,
+                Source::Modern,
+                cfg.retry_backoff_max,
+                chrono::Utc::now().timestamp(),
+            )
+            .await?
+        {
+            Next::Fetch(date) => date,
+            Next::Waiting(wait) => {
+                tracing::info!(
+                    ?wait,
+                    "nothing is due; the rest is waiting out a retry backoff"
+                );
+                break;
+            }
+            Next::Complete => {
+                tracing::info!("the modern archive is complete");
+                break;
+            }
+        };
+
+        bar.set_message(bound.to_string());
+        let Some(pass) = workers::modern_step(
+            &cfg,
+            &clients.source,
+            &archive,
+            modern::Window::back_from(bound),
+        )
+        .await
+        else {
+            break;
+        };
+
+        records += pass.records;
+        stored += pass.stored;
+        absent += pass.absent;
+        warned += pass.warned;
+        misfiled += pass.misfiled;
+        done += 1;
+        bar.inc(1);
+
+        if limit.is_none_or(|limit| done < limit) {
+            tokio::time::sleep(modern::delay(&cfg, pass.elapsed)).await;
+        }
+    }
+
+    progress::done(
+        &bar,
+        format!(
+            "{done} requests, {records} records, stored {stored}, absent {absent}, \
+             misfiled {misfiled}, warnings {warned}"
+        ),
+    );
+    Ok(())
+}
+
 async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
@@ -460,7 +541,7 @@ async fn reparse_range(
     let mut dates = if stale {
         index.stale_dates().await?
     } else {
-        reparse::archived_dates(&cfg.html_dir)?
+        reparse::archived_dates(&cfg.html_dir, "html")?
     };
     dates.retain(|date| from.is_none_or(|from| *date >= from) && to.is_none_or(|to| *date <= to));
     scan.finish_and_clear();

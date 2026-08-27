@@ -27,7 +27,7 @@ pub async fn export(cfg: &Config, out: &Path) -> Result<()> {
 
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let rows = archive.fetch_rows(Source::Legacy).await?;
-    let dates = reparse::archived_dates(&cfg.html_dir)?;
+    let dates = reparse::archived_dates(&cfg.html_dir, "html")?;
     ensure!(
         !dates.is_empty(),
         "{} holds no pages, so there is nothing to export",

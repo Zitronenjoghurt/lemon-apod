@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use apod_core::db::{Db, DbConfig};
 use apod_core::ApodDate;
+use apod_core::db::{Db, DbConfig};
 use serde::{Deserialize, Serialize};
-use sqlx::migrate::Migrator;
 use sqlx::Row;
+use sqlx::migrate::Migrator;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
@@ -263,6 +263,28 @@ impl ArchiveStore {
             Some(seconds) => Next::Waiting(Duration::from_secs(seconds as u64)),
             None => Next::Complete,
         })
+    }
+
+    pub async fn recorded_between(
+        &self,
+        source: Source,
+        from: ApodDate,
+        to: ApodDate,
+    ) -> Result<HashSet<ApodDate>> {
+        let rows: Vec<i64> = sqlx::query_scalar(
+            "SELECT date_id FROM fetches WHERE source = ?1 AND date_id BETWEEN ?2 AND ?3",
+        )
+        .bind(source.as_str())
+        .bind(from.days())
+        .bind(to.days())
+        .fetch_all(self.db.reader())
+        .await
+        .context("reading which dates are already recorded")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|days| ApodDate::from_days(days as i32))
+            .collect())
     }
 
     pub async fn recheck_candidates(&self, source: Source, limit: u32) -> Result<Vec<ApodDate>> {

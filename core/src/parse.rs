@@ -25,6 +25,8 @@ pub fn parse_bytes(date: ApodDate, bytes: &[u8]) -> Result<ApodEntry, ParseError
     parse_page(date, &text)
 }
 
+pub use title::{ModernTitle, modern as modern_title};
+
 pub fn attributes_anyone(raw: &str) -> bool {
     credit::attributes_anyone(&Html::parse_document(raw))
 }
