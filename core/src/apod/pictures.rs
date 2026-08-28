@@ -16,13 +16,27 @@ pub const MAX_DISTANCE: u32 = 8;
 /// or not at all.
 pub const MIN_DETAIL: u32 = 4;
 
-/// What identifies one entry's picture: the thumbnail's hash, and the media URL the page pointed
-/// at. Either may be missing, and an entry with neither cannot be grouped at all.
+/// What identifies one entry's picture: the thumbnail's hash, and every URL the picture has been
+/// addressed by. Either may be missing, and an entry with neither cannot be grouped at all.
+///
+/// There are two URLs because the migration moved the entries it covers to the surviving origin
+/// while the reruns it does not cover still name the dying host. Matching on the current URL alone
+/// would break exactly the pairs the encore view exists to show.
 #[derive(Debug, Clone)]
 pub struct Fingerprint {
     pub date: ApodDate,
     pub media_url: Option<String>,
+    pub legacy_media_url: Option<String>,
     pub phash: Option<Vec<u8>>,
+}
+
+impl Fingerprint {
+    fn urls(&self) -> impl Iterator<Item = &str> {
+        [self.media_url.as_deref(), self.legacy_media_url.as_deref()]
+            .into_iter()
+            .flatten()
+            .filter(|url| !url.is_empty())
+    }
 }
 
 /// One picture and every date it ran on, earliest first. A picture that ran once is not a group,
@@ -78,13 +92,12 @@ pub fn group(prints: &[Fingerprint]) -> Vec<PictureGroup> {
 
     let mut by_url: HashMap<&str, usize> = HashMap::new();
     for (index, print) in prints.iter().enumerate() {
-        let Some(url) = print.media_url.as_deref().filter(|url| !url.is_empty()) else {
-            continue;
-        };
-        match by_url.get(url) {
-            Some(&first) => union.join(first, index),
-            None => {
-                by_url.insert(url, index);
+        for url in print.urls() {
+            match by_url.get(url) {
+                Some(&first) => union.join(first, index),
+                None => {
+                    by_url.insert(url, index);
+                }
             }
         }
     }
@@ -166,8 +179,37 @@ mod tests {
         Fingerprint {
             date: date.parse().unwrap(),
             media_url: url.map(str::to_owned),
+            legacy_media_url: None,
             phash,
         }
+    }
+
+    fn migrated(date: &str, url: &str, legacy: &str) -> Fingerprint {
+        Fingerprint {
+            date: date.parse().unwrap(),
+            media_url: Some(url.to_owned()),
+            legacy_media_url: Some(legacy.to_owned()),
+            phash: None,
+        }
+    }
+
+    #[test]
+    fn a_rerun_still_groups_once_one_of_the_two_moves_to_the_surviving_host() {
+        let dam = "https://assets.science.nasa.gov/content/dam/x/m31.jpg";
+        let legacy = "https://apod.nasa.gov/apod/image/0501/m31.jpg";
+
+        let groups = group(&[
+            print("2005-01-04", Some(legacy), None),
+            migrated("2024-06-02", dam, legacy),
+        ]);
+
+        assert_eq!(
+            groups.len(),
+            1,
+            "the migration moved one of the pair and the encore is the same picture either way"
+        );
+        assert_eq!(groups[0].dates.len(), 2);
+        assert_eq!(groups[0].id().to_string(), "2005-01-04");
     }
 
     #[test]

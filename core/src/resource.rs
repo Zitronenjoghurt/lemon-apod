@@ -166,6 +166,10 @@ mod tests {
             keywords: Vec::new(),
             media: Media::new(MediaKind::ImageJpg, None, None),
             extra_media: Vec::new(),
+            legacy_media_url: None,
+            alt: None,
+            authors: Vec::new(),
+            provenance: crate::entry::Provenance::LegacyOnly,
             source_url: ApodDate::START.source_url(),
             picture: None,
         }

@@ -269,6 +269,10 @@ mod tests {
                 thumb_height: Some(320),
             },
             extra_media: Vec::new(),
+            legacy_media_url: None,
+            alt: None,
+            authors: Vec::new(),
+            provenance: apod_core::Provenance::LegacyOnly,
             source_url: "https://apod.nasa.gov/apod/ap260305.html".to_owned(),
             picture: None,
         }

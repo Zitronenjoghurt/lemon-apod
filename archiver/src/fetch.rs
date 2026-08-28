@@ -2,7 +2,7 @@ use crate::archive::{ArchiveStore, Failure, Source};
 use crate::client::{Client, Response};
 use crate::config::Config;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodWriter, parse};
+use apod_core::{ApodDate, ApodWriter};
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
@@ -126,10 +126,7 @@ pub async fn fetch_and_store(
         .record_success(date, Source::Legacy, &url, &digest, body.len(), now)
         .await?;
 
-    match parse::parse_bytes(date, &body) {
-        Ok(entry) => index.upsert(&entry).await?,
-        Err(error) => tracing::warn!(%date, "stored but could not parse: {error}"),
-    }
+    crate::entry::reindex(cfg, index, date).await?;
 
     Ok(if existed {
         Outcome::Updated { bytes: body.len() }
@@ -160,16 +157,27 @@ fn sanity_check(body: &[u8], min_bytes: usize) -> Result<(), String> {
 }
 
 pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
 
     let mut temp = path.as_os_str().to_owned();
-    temp.push(".tmp");
+    temp.push(format!(
+        ".{}-{}.tmp",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
     let temp = std::path::PathBuf::from(temp);
+
     std::fs::write(&temp, bytes).with_context(|| format!("writing {}", temp.display()))?;
-    std::fs::rename(&temp, path).with_context(|| format!("moving into {}", path.display()))?;
+    if let Err(error) = std::fs::rename(&temp, path) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(error).with_context(|| format!("moving into {}", path.display()));
+    }
 
     Ok(())
 }
@@ -235,7 +243,15 @@ mod tests {
 
         write_atomically(&path, b"replaced").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"replaced");
-        assert!(!path.with_extension("html.tmp").exists());
+        let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .filter(|name| name != "2024-03-05.html")
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files left behind: {leftovers:?}"
+        );
 
         let jpg = dir.join("2024/03/2024-03-05/x.jpg");
         let png = dir.join("2024/03/2024-03-05/x.png");
@@ -243,6 +259,34 @@ mod tests {
         write_atomically(&png, b"png bytes").unwrap();
         assert_eq!(std::fs::read(&jpg).unwrap(), b"jpeg bytes");
         assert_eq!(std::fs::read(&png).unwrap(), b"png bytes");
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn two_writers_racing_for_one_path_do_not_pull_the_file_from_each_other() {
+        let dir = std::env::temp_dir().join(format!("apod-atomic-race-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("2026/08/2026-08-28.html");
+
+        std::thread::scope(|scope| {
+            let writers: Vec<_> = (0..8)
+                .map(|_| scope.spawn(|| write_atomically(&path, b"the same bytes")))
+                .collect();
+            for writer in writers {
+                writer
+                    .join()
+                    .unwrap()
+                    .expect("a second writer must not lose its temp file to the first");
+            }
+        });
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"the same bytes");
+        let left = std::fs::read_dir(path.parent().unwrap()).unwrap().count();
+        assert_eq!(
+            left, 1,
+            "every temp file should have been renamed or removed"
+        );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

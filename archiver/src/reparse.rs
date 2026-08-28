@@ -1,17 +1,66 @@
 use crate::config::Config;
+use crate::entry::{self, Built};
 use crate::progress;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodEntry, ApodWriter, parse};
+use apod_core::{ApodDate, ApodWriter, Merged, Provenance};
 use std::path::Path;
 
 #[derive(Debug, Default)]
 pub struct Report {
     pub parsed: usize,
-    pub failed: Vec<(ApodDate, String)>,
+    pub both: usize,
+    pub legacy_only: usize,
+    pub modern_only: usize,
+    pub divergences: usize,
+    pub issues: usize,
+    pub lost: Vec<(ApodDate, String)>,
+    pub partial: Vec<(ApodDate, String)>,
+}
+
+impl Report {
+    fn record(&mut self, date: ApodDate, built: Built) -> Option<Merged> {
+        self.issues += built.issues.len();
+        self.divergences += built.divergences();
+
+        match built.provenance() {
+            Some(Provenance::Both) => self.both += 1,
+            Some(Provenance::LegacyOnly) => self.legacy_only += 1,
+            Some(Provenance::ModernOnly) => self.modern_only += 1,
+            None => {}
+        }
+
+        let failures: Vec<String> = [
+            built.legacy_failed.as_ref().map(|e| format!("legacy: {e}")),
+            built.modern_failed.as_ref().map(|e| format!("modern: {e}")),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        match built.merged {
+            Some(merged) => {
+                self.parsed += 1;
+                if !failures.is_empty() {
+                    self.partial.push((date, failures.join("; ")));
+                }
+                Some(merged)
+            }
+            None => {
+                self.lost.push((
+                    date,
+                    match failures.is_empty() {
+                        true => "no archived file for this date".to_owned(),
+                        false => failures.join("; "),
+                    },
+                ));
+                None
+            }
+        }
+    }
 }
 
 pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result<Report> {
-    let mut entries: Vec<ApodEntry> = Vec::with_capacity(dates.len());
+    let mut merged: Vec<Merged> = Vec::with_capacity(dates.len());
     let mut report = Report::default();
 
     let bar = progress::bar("parsing", dates.len());
@@ -19,34 +68,28 @@ pub async fn run(cfg: &Config, index: &ApodWriter, dates: &[ApodDate]) -> Result
         bar.set_message(date.to_string());
         bar.inc(1);
 
-        let path = cfg.html_path(date);
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                report
-                    .failed
-                    .push((date, format!("reading {}: {error}", path.display())));
-                continue;
-            }
-        };
-
-        match parse::parse_bytes(date, &bytes) {
-            Ok(entry) => entries.push(entry),
-            Err(error) => report.failed.push((date, error.to_string())),
+        if let Some(one) = report.record(date, entry::build(cfg, date)) {
+            merged.push(one);
         }
     }
     bar.finish_and_clear();
 
-    report.parsed = entries.len();
-
-    let writing = progress::spinner("indexing", format!("writing {} entries", entries.len()));
+    let writing = progress::spinner("indexing", format!("writing {} entries", merged.len()));
     index
-        .upsert_all(&entries)
+        .upsert_all(&merged)
         .await
         .context("writing the reparsed index")?;
     writing.finish_and_clear();
 
     Ok(report)
+}
+
+pub fn all_dates(cfg: &Config) -> Result<Vec<ApodDate>> {
+    let mut dates = archived_dates(&cfg.html_dir, "html")?;
+    dates.extend(archived_dates(&cfg.json_dir, "json")?);
+    dates.sort_unstable();
+    dates.dedup();
+    Ok(dates)
 }
 
 pub fn archived_dates(dir: &Path, extension: &str) -> Result<Vec<ApodDate>> {

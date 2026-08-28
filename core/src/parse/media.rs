@@ -16,15 +16,19 @@ static TWEET: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse(r#"blockquote.twitter-tweet a[href*="/status/"]"#).unwrap());
 
 pub fn parse(doc: &Html, base: &Url) -> (Media, Vec<Media>) {
-    let mut found: Vec<Media> = doc
+    parse_in(doc.root_element(), base)
+}
+
+pub fn parse_in(root: ElementRef<'_>, base: &Url) -> (Media, Vec<Media>) {
+    let mut found: Vec<Media> = root
         .select(&MEDIA)
         .enumerate()
-        .filter_map(|(index, el)| from_element(doc, el, base, index == 0))
+        .filter_map(|(index, el)| from_element(root, el, base, index == 0))
         .filter(|media| !media.is_empty())
         .collect();
 
     if found.is_empty() {
-        found.extend(tweet(doc, base));
+        found.extend(tweet(root, base));
     }
 
     if found.is_empty() {
@@ -35,11 +39,16 @@ pub fn parse(doc: &Html, base: &Url) -> (Media, Vec<Media>) {
     (found.remove(0), extra)
 }
 
-fn from_element(doc: &Html, el: ElementRef<'_>, base: &Url, primary: bool) -> Option<Media> {
+fn from_element(
+    root: ElementRef<'_>,
+    el: ElementRef<'_>,
+    base: &Url,
+    primary: bool,
+) -> Option<Media> {
     match el.value().name() {
         "img" => {
             let url = http_url(base, el.value().attr("src")?)?;
-            let hd = hd_link(doc, el, base, primary).filter(|hd| *hd != url);
+            let hd = hd_link(root, el, base, primary).filter(|hd| *hd != url);
             Some(Media::new(MediaKind::from_url(&url), Some(url), hd))
         }
         "iframe" => {
@@ -67,7 +76,7 @@ fn from_element(doc: &Html, el: ElementRef<'_>, base: &Url, primary: bool) -> Op
     }
 }
 
-fn hd_link(doc: &Html, img: ElementRef<'_>, base: &Url, primary: bool) -> Option<String> {
+fn hd_link(root: ElementRef<'_>, img: ElementRef<'_>, base: &Url, primary: bool) -> Option<String> {
     for ancestor in img.ancestors() {
         let Some(el) = ElementRef::wrap(ancestor) else {
             continue;
@@ -85,13 +94,13 @@ fn hd_link(doc: &Html, img: ElementRef<'_>, base: &Url, primary: bool) -> Option
         return None;
     }
 
-    doc.select(&ANCHORS)
+    root.select(&ANCHORS)
         .filter_map(|a| http_url(base, a.value().attr("href")?))
         .find(|url| is_image_link(url))
 }
 
-fn tweet(doc: &Html, base: &Url) -> Option<Media> {
-    let href = doc.select(&TWEET).next()?.value().attr("href")?;
+fn tweet(root: ElementRef<'_>, base: &Url) -> Option<Media> {
+    let href = root.select(&TWEET).next()?.value().attr("href")?;
     let url = http_url(base, href)?;
     let url = url.split('?').next().unwrap_or(&url).to_owned();
     Some(Media::new(MediaKind::Embed, Some(url), None))

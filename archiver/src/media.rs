@@ -16,6 +16,7 @@ const HASH_LEN: usize = 8;
 pub enum Role {
     Image,
     ImageAlt,
+    LegacyImage,
     Video,
     Poster,
 }
@@ -25,6 +26,7 @@ impl Role {
         match self {
             Self::Image => "image",
             Self::ImageAlt => "image_alt",
+            Self::LegacyImage => "legacy_image",
             Self::Video => "video",
             Self::Poster => "poster",
         }
@@ -49,9 +51,12 @@ pub struct Target {
     pub role: Role,
 }
 
-pub fn targets(entries: &[(ApodDate, Media)]) -> Vec<Target> {
-    let mut out: Vec<Target> = Vec::with_capacity(entries.len());
-    let mut seen: HashSet<String> = HashSet::with_capacity(entries.len());
+pub fn targets(
+    entries: &[(ApodDate, Media)],
+    origin_pairs: &[(ApodDate, String, String)],
+) -> Vec<Target> {
+    let mut out: Vec<Target> = Vec::with_capacity(entries.len() + origin_pairs.len());
+    let mut seen: HashSet<String> = HashSet::with_capacity(entries.len() + origin_pairs.len());
 
     for (date, media) in entries {
         let candidates = match media.kind {
@@ -88,6 +93,16 @@ pub fn targets(entries: &[(ApodDate, Media)]) -> Vec<Target> {
                     role,
                 });
             }
+        }
+    }
+
+    for (date, legacy, _) in origin_pairs {
+        if seen.insert(legacy.clone()) {
+            out.push(Target {
+                url: legacy.clone(),
+                date: *date,
+                role: Role::LegacyImage,
+            });
         }
     }
 
@@ -536,6 +551,29 @@ impl MediaStore {
         Ok(())
     }
 
+    pub async fn hashes(&self, urls: &[String]) -> Result<HashMap<String, String>> {
+        let mut found = HashMap::with_capacity(urls.len());
+
+        for chunk in urls.chunks(256) {
+            let placeholders = vec!["?"; chunk.len()].join(", ");
+            let mut query = sqlx::query_as::<_, (String, String)>(sqlx::AssertSqlSafe(format!(
+                "SELECT url, sha256 FROM media
+                     WHERE sha256 IS NOT NULL AND url IN ({placeholders})"
+            )));
+            for url in chunk {
+                query = query.bind(url);
+            }
+            found.extend(
+                query
+                    .fetch_all(self.db.reader())
+                    .await
+                    .context("reading digests")?,
+            );
+        }
+
+        Ok(found)
+    }
+
     pub async fn counts(&self) -> Result<Counts> {
         let (stored, missing, failed, bytes): (i64, i64, i64, i64) = sqlx::query_as(
             "SELECT
@@ -600,7 +638,7 @@ mod tests {
         )];
 
         assert_eq!(
-            roles(&targets(&entries)),
+            roles(&targets(&entries, &[])),
             [("https://apod.nasa.gov/apod/image/2403/big.jpg", "image")],
             "the displayed copy is a derivative of the linked one and is not worth a request"
         );
@@ -617,7 +655,7 @@ mod tests {
             ),
         )];
         assert_eq!(
-            roles(&targets(&differs)),
+            roles(&targets(&differs, &[])),
             [
                 ("https://apod.nasa.gov/apod/image/2403/still.jpg", "image"),
                 (
@@ -636,7 +674,7 @@ mod tests {
             ),
         )];
         assert_eq!(
-            targets(&same).len(),
+            targets(&same, &[]).len(),
             1,
             "jpeg and jpg are one format and must not read as two"
         );
@@ -656,12 +694,46 @@ mod tests {
             ),
         ];
 
-        let picked = targets(&entries);
+        let picked = targets(&entries, &[]);
         assert_eq!(picked.len(), 1);
         assert_eq!(
             picked[0].date,
             date(2006, 10, 5),
             "the first entry handed in wins, so the caller orders by date"
+        );
+    }
+
+    #[test]
+    fn the_legacy_copy_of_a_migrated_picture_is_archived_too() {
+        let origin = "https://assets.science.nasa.gov/content/dam/x_4000.jpg";
+        let legacy = "https://apod.nasa.gov/apod/image/2608/x_960.jpg";
+        let entries = vec![(
+            date(2026, 8, 25),
+            entry(MediaKind::ImageJpg, None, Some(origin)),
+        )];
+        let pairs = vec![(date(2026, 8, 25), legacy.to_owned(), origin.to_owned())];
+
+        let picked = targets(&entries, &pairs);
+        let urls: Vec<&str> = picked.iter().map(|t| t.url.as_str()).collect();
+        assert!(
+            urls.contains(&origin) && urls.contains(&legacy),
+            "both sides of the pair must be fetched or the decision 8 check has nothing to \
+             compare: {urls:?}"
+        );
+        assert_eq!(
+            picked
+                .iter()
+                .find(|t| t.url == legacy)
+                .map(|t| t.role.as_str()),
+            Some("legacy_image"),
+            "the legacy copy is told apart from the one the entry points at"
+        );
+
+        let repeated = targets(&entries, &[pairs[0].clone(), pairs[0].clone()]);
+        assert_eq!(
+            repeated.len(),
+            picked.len(),
+            "one URL is one file however many pairs name it"
         );
     }
 
@@ -700,7 +772,7 @@ mod tests {
         ];
 
         assert_eq!(
-            roles(&targets(&entries)),
+            roles(&targets(&entries, &[])),
             [
                 ("https://apod.nasa.gov/apod/image/2403/clip.mp4", "video"),
                 ("https://www.youtube.com/embed/abc123", "poster"),

@@ -5,6 +5,7 @@ use crate::date::ApodDate;
 use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
 use crate::media::{Media, Thumb};
+use crate::merge::Merged;
 use crate::{resource, text};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
@@ -36,11 +37,11 @@ impl ApodWriter {
         self.reader.db()
     }
 
-    pub async fn upsert_all(&self, entries: &[ApodEntry]) -> ApodResult<()> {
+    pub async fn upsert_all(&self, merged: &[Merged]) -> ApodResult<()> {
         let mut tx = self.db().writer()?.begin().await?;
 
-        for entry in entries {
-            write_entry(&mut tx, entry).await?;
+        for merged in merged {
+            write_entry(&mut tx, merged).await?;
         }
 
         sqlx::query(
@@ -55,8 +56,8 @@ impl ApodWriter {
         Ok(())
     }
 
-    pub async fn upsert(&self, entry: &ApodEntry) -> ApodResult<()> {
-        self.upsert_all(std::slice::from_ref(entry)).await
+    pub async fn upsert_sole(&self, entry: &ApodEntry) -> ApodResult<()> {
+        self.upsert_all(&[entry.clone().into()]).await
     }
 
     pub async fn set_thumb(&self, date: ApodDate, thumb: Option<&Thumb>) -> ApodResult<()> {
@@ -128,19 +129,22 @@ impl ApodWriter {
     }
 
     pub async fn fingerprints(&self) -> ApodResult<Vec<Fingerprint>> {
-        let rows: Vec<(i64, Option<String>, Option<Vec<u8>>)> =
-            sqlx::query_as("SELECT date_id, media_url, phash FROM entries ORDER BY date_id")
-                .fetch_all(self.db().reader())
-                .await?;
+        let rows = sqlx::query(
+            "SELECT date_id, media_url, legacy_media_url, phash FROM entries ORDER BY date_id",
+        )
+        .fetch_all(self.db().reader())
+        .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|(days, media_url, phash)| Fingerprint {
-                date: ApodDate::from_days(days as i32),
-                media_url,
-                phash,
+        rows.iter()
+            .map(|row| {
+                Ok(Fingerprint {
+                    date: ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
+                    media_url: row.try_get(1)?,
+                    legacy_media_url: row.try_get(2)?,
+                    phash: row.try_get(3)?,
+                })
             })
-            .collect())
+            .collect()
     }
 
     pub async fn regroup_pictures(&self) -> ApodResult<Vec<PictureGroup>> {
@@ -254,20 +258,26 @@ impl ApodWriter {
     }
 }
 
-async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> ApodResult<()> {
+async fn write_entry(tx: &mut Transaction<'_, Sqlite>, merged: &Merged) -> ApodResult<()> {
+    let entry = &merged.entry;
     let keywords = (!entry.keywords.is_empty())
         .then(|| serde_json::to_string(&entry.keywords))
         .transpose()?;
     let credits = (!entry.credits.is_empty())
         .then(|| serde_json::to_string(&entry.credits))
         .transpose()?;
+    let authors = (!entry.authors.is_empty())
+        .then(|| serde_json::to_string(&entry.authors))
+        .transpose()?;
 
     sqlx::query(
         "INSERT INTO entries (date_id, date, title, title_raw, explanation_html, explanation_text,
                               credits, credit_text, has_copyright, license_url, tomorrow_teaser,
                               keywords, media_kind, media_url, media_hd_url, source_url,
-                              parser_version, parsed_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+                              parser_version, parsed_at, legacy_media_url, alt, authors,
+                              provenance)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+                 ?19, ?20, ?21, ?22)
          ON CONFLICT(date_id) DO UPDATE SET
            date = excluded.date, title = excluded.title, title_raw = excluded.title_raw,
            explanation_html = excluded.explanation_html,
@@ -278,7 +288,8 @@ async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> Apo
            keywords = excluded.keywords, media_kind = excluded.media_kind,
            media_url = excluded.media_url, media_hd_url = excluded.media_hd_url,
            source_url = excluded.source_url, parser_version = excluded.parser_version,
-           parsed_at = excluded.parsed_at",
+           parsed_at = excluded.parsed_at, legacy_media_url = excluded.legacy_media_url,
+           alt = excluded.alt, authors = excluded.authors, provenance = excluded.provenance",
     )
     .bind(entry.date.days())
     .bind(entry.date.to_string())
@@ -298,6 +309,10 @@ async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> Apo
     .bind(&entry.source_url)
     .bind(PARSER_VERSION)
     .bind(chrono::Utc::now().timestamp())
+    .bind(&entry.legacy_media_url)
+    .bind(&entry.alt)
+    .bind(authors)
+    .bind(entry.provenance.to_string())
     .execute(&mut **tx)
     .await?;
 
@@ -319,7 +334,32 @@ async fn write_entry(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> Apo
         .await?;
     }
 
+    write_divergences(tx, merged).await?;
     write_derived(tx, entry).await
+}
+
+async fn write_divergences(tx: &mut Transaction<'_, Sqlite>, merged: &Merged) -> ApodResult<()> {
+    let date_id = merged.entry.date.days();
+
+    sqlx::query("DELETE FROM divergences WHERE date_id = ?1")
+        .bind(date_id)
+        .execute(&mut **tx)
+        .await?;
+
+    for divergence in &merged.divergences {
+        sqlx::query(
+            "INSERT INTO divergences (date_id, field, legacy_value, modern_value)
+             VALUES (?1, ?2, ?3, ?4)",
+        )
+        .bind(date_id)
+        .bind(divergence.field)
+        .bind(&divergence.legacy)
+        .bind(&divergence.modern)
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    Ok(())
 }
 
 async fn write_derived(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> ApodResult<()> {

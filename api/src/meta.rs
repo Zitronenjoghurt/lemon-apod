@@ -479,6 +479,10 @@ mod tests {
                 None,
             ),
             extra_media: Vec::new(),
+            legacy_media_url: None,
+            alt: None,
+            authors: Vec::new(),
+            provenance: apod_core::Provenance::LegacyOnly,
             source_url: date.source_url(),
             picture: None,
         }

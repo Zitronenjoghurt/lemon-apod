@@ -7,6 +7,7 @@ pub mod decode;
 pub mod entry;
 pub mod html;
 pub mod media;
+pub mod merge;
 #[cfg(feature = "notify-data")]
 pub mod notify;
 pub mod parse;
@@ -31,11 +32,12 @@ pub use apod::{
 pub use date::ApodDate;
 #[cfg(feature = "data")]
 pub use db::{Access, Db, DbConfig, DbError, DbResult};
-pub use entry::{ApodEntry, ApodSummary, Credit, Matched, SearchHit};
+pub use entry::{ApodEntry, ApodSummary, Credit, Matched, Provenance, SearchHit};
 pub use media::{KindFilter, Media, MediaKind, Thumb, ThumbSource};
+pub use merge::{Divergence, Merged, merge};
 pub use parse::{ParseError, parse_page};
 pub use quality::{QualityWarning, quality_control};
 
 pub const APOD_BASE_URL: &str = "https://apod.nasa.gov/apod/";
 
-pub const PARSER_VERSION: u32 = 5;
+pub const PARSER_VERSION: u32 = 6;

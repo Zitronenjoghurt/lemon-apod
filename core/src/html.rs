@@ -43,6 +43,9 @@ impl Fragment {
 pub struct Options<'a> {
     pub start_after: Option<&'a Regex>,
     pub stop_at: &'a [&'a str],
+    /// End the window where this many line breaks run together, which is how a source that puts
+    /// its whole page body in one paragraph separates the prose from what follows it.
+    pub stop_after_breaks: Option<usize>,
 }
 
 /// Extract an element's inline content as sanitized HTML plus the same content as plain text.
@@ -82,8 +85,7 @@ struct Piece {
     /// Byte range within [`Flat::text`]. Always on character boundaries.
     range: Range<usize>,
     stack: Vec<Rc<Tag>>,
-    /// A `<br>` stood immediately before this piece.
-    break_before: bool,
+    breaks: usize,
 }
 
 struct Tag {
@@ -98,7 +100,7 @@ pub fn flatten(el: ElementRef<'_>, base: &Url) -> Flat {
         pieces: Vec::new(),
         stack: Vec::new(),
         pending_space: false,
-        pending_break: false,
+        pending_breaks: 0,
     };
     builder.children(el);
 
@@ -113,13 +115,28 @@ impl Flat {
         &self.text
     }
 
-    /// The range [`Options`] selects: everything after `start_after`, up to the first `stop_at`.
+    /// The range [`Options`] selects: everything after `start_after`, up to the first `stop_at`
+    /// or paragraph break, whichever comes first.
     pub fn window(&self, opts: &Options<'_>) -> Option<Range<usize>> {
         let start = match opts.start_after {
             Some(marker) => marker.find(&self.text)?.end(),
             None => 0,
         };
-        Some(start..self.stop(start, opts.stop_at))
+
+        let mut stop = self.stop(start, opts.stop_at);
+        if let Some(breaks) = opts.stop_after_breaks {
+            stop = stop.min(self.paragraph_break(start, breaks));
+        }
+        Some(start..stop)
+    }
+
+    /// Where the first run of at least `breaks` line breaks begins after `from`, or the end of
+    /// the text. A break at the very start belongs to the marker, not to a paragraph.
+    fn paragraph_break(&self, from: usize, breaks: usize) -> usize {
+        self.pieces
+            .iter()
+            .find(|piece| piece.breaks >= breaks && piece.range.start > from)
+            .map_or(self.text.len(), |piece| piece.range.start)
     }
 
     /// Where the first `stop_at` needle appears at or after `from`, or the end of the text.
@@ -162,7 +179,7 @@ impl Flat {
             }
 
             if let Some(previous) = previous_end {
-                if piece.break_before {
+                if piece.breaks > 0 {
                     out.html.push_str("<br>");
                 }
                 if previous < start {
@@ -210,7 +227,7 @@ struct Builder<'a> {
     pieces: Vec<Piece>,
     stack: Vec<Rc<Tag>>,
     pending_space: bool,
-    pending_break: bool,
+    pending_breaks: usize,
 }
 
 impl Builder<'_> {
@@ -236,7 +253,7 @@ impl Builder<'_> {
         }
 
         if name == "br" {
-            self.pending_break = true;
+            self.pending_breaks += 1;
             self.pending_space = true;
             return;
         }
@@ -303,7 +320,7 @@ impl Builder<'_> {
         self.pieces.push(Piece {
             range: start..self.text.len(),
             stack: self.stack.clone(),
-            break_before: std::mem::take(&mut self.pending_break),
+            breaks: std::mem::take(&mut self.pending_breaks),
         });
     }
 }
@@ -402,6 +419,7 @@ mod tests {
         let opts = Options {
             start_after: Some(&marker),
             stop_at: &["tomorrow's picture"],
+            stop_after_breaks: None,
         };
         let out = run(
             "<p><b>Explanation:</b> The <a href='x.html'>galaxy</a> is big. \
@@ -420,6 +438,7 @@ mod tests {
         let opts = Options {
             start_after: Some(&marker),
             stop_at: &[],
+            stop_after_breaks: None,
         };
         assert!(run("<p>no marker here</p>", &opts).is_none());
     }
@@ -448,6 +467,7 @@ mod tests {
         let opts = Options {
             start_after: Some(&marker),
             stop_at: &[],
+            stop_after_breaks: None,
         };
         let out = run(
             r#"<center><b>Image Credit &amp;
@@ -466,6 +486,7 @@ mod tests {
         let opts = Options {
             start_after: None,
             stop_at: &["tomorrow's picture"],
+            stop_after_breaks: None,
         };
         let out = run(
             "<p>The prose. <b>Tomorrow's</b> picture: something else</p>",
@@ -492,6 +513,27 @@ mod tests {
     fn a_separator_between_two_tag_runs_belongs_to_neither() {
         let out = run("<p><b>one</b> <i>two</i></p>", &Options::default()).unwrap();
         assert_eq!(out.html, "<b>one</b> <i>two</i>");
+    }
+
+    #[test]
+    fn a_run_of_breaks_ends_the_window_but_a_single_one_does_not() {
+        let opts = |breaks| Options {
+            start_after: None,
+            stop_at: &[],
+            stop_after_breaks: breaks,
+        };
+
+        let one_line = "<p>The prose<br>runs on.<br><br>An announcement below it.</p>";
+        assert_eq!(
+            run(one_line, &opts(Some(2))).unwrap().text,
+            "The prose runs on.",
+            "a source that puts its whole body in one paragraph separates it with a blank line"
+        );
+        assert_eq!(
+            run(one_line, &opts(None)).unwrap().text,
+            "The prose runs on. An announcement below it.",
+            "and a source that does not ask for the boundary keeps everything"
+        );
     }
 
     #[test]

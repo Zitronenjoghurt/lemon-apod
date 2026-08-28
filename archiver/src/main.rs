@@ -1,6 +1,7 @@
 mod archive;
 mod client;
 mod config;
+mod entry;
 mod fetch;
 mod legacy;
 mod media;
@@ -376,6 +377,7 @@ async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
     cfg.require_modern()?;
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let index = ApodWriter::open(&cfg.index_db).await?;
     let today = workers::today_in(cfg.daily.timezone);
 
     let bar = match limit {
@@ -414,6 +416,7 @@ async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
             &cfg,
             &clients.source,
             &archive,
+            &index,
             modern::Window::back_from(bound),
         )
         .await
@@ -451,7 +454,10 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     let store = archive.media();
 
     let scan = progress::spinner("reading", "working out which pictures the index points at");
-    let targets = media::targets(&index.all_media().await?);
+    let targets = media::targets(
+        &index.all_media().await?,
+        &index.reader().origin_pairs().await?,
+    );
     scan.finish_and_clear();
 
     let bar = progress::bar("media", limit.unwrap_or(targets.len()));
@@ -541,30 +547,44 @@ async fn reparse_range(
     let mut dates = if stale {
         index.stale_dates().await?
     } else {
-        reparse::archived_dates(&cfg.html_dir, "html")?
+        reparse::all_dates(&cfg)?
     };
     dates.retain(|date| from.is_none_or(|from| *date >= from) && to.is_none_or(|to| *date <= to));
     scan.finish_and_clear();
 
     let report = reparse::run(&cfg, &index, &dates).await?;
-    println!("parsed {}", report.parsed);
+    println!(
+        "parsed {} ({} from both files, {} legacy only, {} modern only)",
+        report.parsed, report.both, report.legacy_only, report.modern_only
+    );
+    println!(
+        "{} divergences recorded, {} quality notices",
+        report.divergences, report.issues
+    );
 
     let grouping = progress::spinner("grouping", "comparing every picture against every other");
     let pictures = index.regroup_pictures().await?;
     grouping.finish_and_clear();
     println!("{} pictures have been shown more than once", pictures.len());
 
-    if !report.failed.is_empty() {
-        println!("failed {}:", report.failed.len());
-        for (date, error) in report.failed.iter().take(50) {
-            println!("  {date}  {error}");
-        }
-        if report.failed.len() > 50 {
-            println!("  ... and {} more", report.failed.len() - 50);
-        }
-    }
+    listed("no entry", &report.lost);
+    listed("one side unreadable", &report.partial);
 
     Ok(())
+}
+
+fn listed(what: &str, dates: &[(ApodDate, String)]) {
+    if dates.is_empty() {
+        return;
+    }
+
+    println!("{what} {}:", dates.len());
+    for (date, error) in dates.iter().take(50) {
+        println!("  {date}  {error}");
+    }
+    if dates.len() > 50 {
+        println!("  ... and {} more", dates.len() - 50);
+    }
 }
 
 async fn thumbs(cfg: Config, force: bool, limit: Option<usize>) -> Result<()> {

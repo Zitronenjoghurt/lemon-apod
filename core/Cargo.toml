@@ -7,10 +7,10 @@ edition.workspace = true
 [features]
 default = []
 data = ["dep:sqlx"]
-data-read = ["data", "dep:serde_json"]
+data-read = ["data"]
 data-write = ["data-read"]
 notify-data = ["data"]
-rating = ["dep:serde_json"]
+rating = []
 rating-data = ["rating", "data"]
 sky = []
 sky-data = ["sky", "data"]
@@ -21,12 +21,11 @@ encoding_rs = "0.8.35"
 regex = "1.13.1"
 scraper = "0.27.0"
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 url = "2.5.8"
 
 [dev-dependencies]
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

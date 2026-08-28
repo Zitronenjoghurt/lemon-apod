@@ -1,6 +1,59 @@
 use crate::date::ApodDate;
 use crate::media::Media;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Provenance {
+    #[default]
+    LegacyOnly,
+    ModernOnly,
+    Both,
+}
+
+impl Provenance {
+    pub fn of(legacy: bool, modern: bool) -> Option<Self> {
+        match (legacy, modern) {
+            (true, true) => Some(Self::Both),
+            (true, false) => Some(Self::LegacyOnly),
+            (false, true) => Some(Self::ModernOnly),
+            (false, false) => None,
+        }
+    }
+
+    pub fn has_legacy(self) -> bool {
+        matches!(self, Self::LegacyOnly | Self::Both)
+    }
+
+    pub fn has_modern(self) -> bool {
+        matches!(self, Self::ModernOnly | Self::Both)
+    }
+}
+
+impl fmt::Display for Provenance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::LegacyOnly => "legacy_only",
+            Self::ModernOnly => "modern_only",
+            Self::Both => "both",
+        })
+    }
+}
+
+impl FromStr for Provenance {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "legacy_only" => Self::LegacyOnly,
+            "modern_only" => Self::ModernOnly,
+            "both" => Self::Both,
+            _ => return Err(()),
+        })
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApodEntry {
@@ -30,7 +83,21 @@ pub struct ApodEntry {
     /// Additional media on multi-image entries, in page order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub extra_media: Vec<Media>,
-    /// The page on apod.nasa.gov this was archived from.
+    /// Where the legacy page pointed its own media, kept once the modern origin took over
+    /// `media`. Provenance only: the host it names is decommissioned.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legacy_media_url: Option<String>,
+    /// Descriptive alt text, which only the modern source has, and only where it is not the
+    /// boilerplate every older record carries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alt: Option<String>,
+    /// The authors and editors credited for the entry itself, as distinct from the image.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+    /// Which archived files this entry was built from.
+    #[serde(default)]
+    pub provenance: Provenance,
+    /// The page this was archived from.
     pub source_url: String,
     /// Set when this entry's picture ran on more than one date. The value is the date it first
     /// ran, which is also how the picture is addressed. Filled in by readers, not by the parser:

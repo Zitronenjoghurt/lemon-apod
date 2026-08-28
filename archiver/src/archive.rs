@@ -233,6 +233,20 @@ impl ArchiveStore {
         Ok(())
     }
 
+    pub async fn owed(&self, today: ApodDate, source: Source) -> Result<usize> {
+        let seen: HashSet<i64> = self
+            .attempted(source)
+            .await?
+            .iter()
+            .map(|row| row.date_id)
+            .collect();
+
+        Ok(today
+            .iter_desc()
+            .filter(|date| !seen.contains(&i64::from(date.days())))
+            .count())
+    }
+
     pub async fn next_target(
         &self,
         today: ApodDate,
@@ -498,6 +512,33 @@ mod tests {
             .fetch_one(store.db.reader())
             .await
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn owed_counts_the_dates_never_asked_for() {
+        let store = store().await;
+        let today = date(1995, 6, 25);
+
+        let all = store.owed(today, Source::Legacy).await.unwrap();
+        assert_eq!(
+            all,
+            today.iter_desc().count(),
+            "nothing has been asked for yet"
+        );
+
+        succeed(&store, today, 1).await;
+        fail(&store, date(1995, 6, 24), 500, 1).await;
+        assert_eq!(
+            store.owed(today, Source::Legacy).await.unwrap(),
+            all - 2,
+            "a date that failed has still been asked for, so it is no longer owed a first ask"
+        );
+
+        assert_eq!(
+            store.owed(today, Source::Modern).await.unwrap(),
+            all,
+            "the two sources are counted apart"
+        );
     }
 
     #[tokio::test]

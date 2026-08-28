@@ -1,6 +1,6 @@
 use crate::html::{self, Fragment, Options};
 use regex::Regex;
-use scraper::Html;
+use scraper::{ElementRef, Html};
 use std::sync::LazyLock;
 use url::Url;
 
@@ -18,10 +18,43 @@ const STOPS: &[&str] = &[
     "< archive",
 ];
 
+/// What separates the prose from whatever APOD appended below it on a migrated record. Those
+/// additions are open-ended (a lecture, a gallery, a stream, the move announcement itself), so the
+/// boundary has to be the paragraph break they all sit behind rather than a list of the ones seen
+/// so far.
+const PARAGRAPH: usize = 2;
+
+pub(super) fn strip_label(text: &str) -> &str {
+    match MARKER.find(text) {
+        Some(found) if found.start() == 0 => &text[found.end()..],
+        _ => text,
+    }
+}
+
+/// Read the prose out of a container the caller already found, which is what the modern record
+/// needs: its article body is one paragraph inside a page of navigation and footers.
+pub(super) fn from_element(container: ElementRef<'_>, base: &Url) -> Option<Fragment> {
+    let read = |start_after| {
+        html::sanitize(
+            container,
+            base,
+            &Options {
+                start_after,
+                stop_at: STOPS,
+                stop_after_breaks: Some(PARAGRAPH),
+            },
+        )
+        .filter(|fragment| !fragment.is_empty())
+    };
+
+    read(Some(&MARKER)).or_else(|| read(None))
+}
+
 pub fn parse(doc: &Html, base: &Url) -> Option<Fragment> {
     let options = Options {
         start_after: Some(&MARKER),
         stop_at: STOPS,
+        stop_after_breaks: None,
     };
 
     super::containers(doc, |text| MARKER.is_match(text))

@@ -3,8 +3,11 @@
 //! This is the inner loop of parser refinement: point it at raw HTML, read the result, adjust the
 //! extractors, run it again. Nothing here touches the network.
 //!
+//! Either archived file works, and which one it is comes from the extension.
+//!
 //! ```text
 //! cargo run -p apod-core --example parse -- 2024-03-05=/path/to/ap240305.html
+//! cargo run -p apod-core --example parse -- 2026-08-25=data/json/2026/08/2026-08-25.json
 //! ```
 
 use apod_core::{ApodDate, parse, quality};
@@ -12,21 +15,32 @@ use apod_core::{ApodDate, parse, quality};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
-        eprintln!("usage: parse <YYYY-MM-DD>=<file.html> [...]");
+        eprintln!("usage: parse <YYYY-MM-DD>=<file.html|file.json> [...]");
         std::process::exit(2);
     }
 
     for arg in args {
         let Some((date, path)) = arg.split_once('=') else {
-            eprintln!("expected <YYYY-MM-DD>=<file.html>, got '{arg}'");
+            eprintln!("expected <YYYY-MM-DD>=<file.html|file.json>, got '{arg}'");
             continue;
         };
 
         let date: ApodDate = date.parse().expect("valid date");
         let bytes = std::fs::read(path).expect("readable file");
 
+        let modern = path.ends_with(".json");
+        let parsed = match modern {
+            true => parse::parse_json_bytes(date, &bytes).map(|modern| {
+                for issue in &modern.issues {
+                    println!("  notice    {issue}");
+                }
+                modern.entry
+            }),
+            false => parse::parse_bytes(date, &bytes),
+        };
+
         println!("\n=== {date} ({path}) ===");
-        match parse::parse_bytes(date, &bytes) {
+        match parsed {
             Err(error) => println!("  PARSE FAILED: {error}"),
             Ok(entry) => {
                 println!("  title      {}", entry.title);
@@ -45,9 +59,14 @@ fn main() {
                 println!("  expl len   {}", entry.explanation_text.chars().count());
                 println!("  expl text  {}", entry.summary_text(220));
                 println!("  expl html  {}", truncate(&entry.explanation_html, 260));
+                println!("  alt        {:?}", entry.alt);
+                println!("  authors    {:?}", entry.authors);
 
-                let attributed = parse::bytes_attribute_anyone(&bytes);
-                let issues = quality::quality_control(&entry, Some(attributed));
+                let attributed = match modern {
+                    true => None,
+                    false => Some(parse::bytes_attribute_anyone(&bytes)),
+                };
+                let issues = quality::quality_control(&entry, attributed);
                 if issues.is_empty() {
                     println!("  quality    clean");
                 } else {

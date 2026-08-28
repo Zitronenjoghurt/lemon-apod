@@ -3,7 +3,7 @@ use super::query::fts_query;
 use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbError};
-use crate::entry::{ApodEntry, ApodSummary, Matched, SearchHit};
+use crate::entry::{ApodEntry, ApodSummary, Matched, Provenance, SearchHit};
 use crate::media::{KindFilter, Media, MediaKind, Thumb};
 use sqlx::sqlite::{SqliteArguments, SqliteRow};
 use sqlx::{Arguments, AssertSqlSafe, Row};
@@ -235,9 +235,6 @@ impl ApodReader {
             .collect();
         let snippet_column = columns.len();
 
-        // The three short columns come back highlighted whole, which is how a hit in the credit
-        // or the keywords becomes something the reader can be shown rather than a result that
-        // looks unrelated to what they typed.
         let sql = format!(
             "SELECT {columns},
                     snippet(entries_fts, 1, char(2), char(3), '…', {tokens}),
@@ -366,6 +363,43 @@ impl ApodReader {
             .await?)
     }
 
+    pub async fn provenance_counts(&self) -> ApodResult<Vec<(Provenance, i64)>> {
+        let rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT provenance, COUNT(*) FROM entries GROUP BY provenance ORDER BY 2 DESC",
+        )
+        .fetch_all(self.db.reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|(name, count)| Some((name.parse().ok()?, count)))
+            .collect())
+    }
+
+    pub async fn divergence_counts(&self) -> ApodResult<Vec<(String, i64)>> {
+        Ok(sqlx::query_as(
+            "SELECT field, COUNT(*) FROM divergences GROUP BY field ORDER BY 2 DESC, 1",
+        )
+        .fetch_all(self.db.reader())
+        .await?)
+    }
+
+    pub async fn origin_pairs(&self) -> ApodResult<Vec<(ApodDate, String, String)>> {
+        let rows: Vec<(i64, String, String)> = sqlx::query_as(
+            "SELECT date_id, legacy_media_url, media_url FROM entries
+             WHERE legacy_media_url IS NOT NULL AND media_url IS NOT NULL
+               AND media_kind IN ('image_jpg', 'image_png', 'image_gif')
+             ORDER BY date_id",
+        )
+        .fetch_all(self.db.reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|(days, legacy, modern)| (ApodDate::from_days(days as i32), legacy, modern))
+            .collect())
+    }
+
     pub async fn thumb_count(&self) -> ApodResult<i64> {
         Ok(
             sqlx::query_scalar("SELECT COUNT(*) FROM entries WHERE thumb_path IS NOT NULL")
@@ -444,6 +478,10 @@ impl ApodReader {
                 read_thumb(row, 13)?,
             ),
             extra_media: Vec::new(),
+            legacy_media_url: row.try_get(18)?,
+            alt: row.try_get(19)?,
+            authors: from_json(row.try_get(20)?),
+            provenance: row.try_get::<String, _>(21)?.parse().unwrap_or_default(),
             source_url: row.try_get(16)?,
             picture: read_picture(row, 17)?,
         })

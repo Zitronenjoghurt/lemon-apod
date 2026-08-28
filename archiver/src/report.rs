@@ -1,5 +1,6 @@
 use crate::archive::{ArchiveStore, Next, Source};
 use crate::config::Config;
+use crate::entry;
 use crate::media;
 use crate::progress;
 use crate::{reparse, workers};
@@ -37,7 +38,12 @@ pub async fn quality(
             .flatten()
             .map(|bytes| apod_core::parse::bytes_attribute_anyone(&bytes));
 
-        let issues: Vec<_> = quality::quality_control(&entry, attributed)
+        let mut found = quality::quality_control(&entry, attributed);
+        if entry.provenance.has_modern() {
+            found.extend(entry::build(cfg, *date).issues);
+        }
+
+        let issues: Vec<_> = found
             .into_iter()
             .filter(|issue| warning.is_none_or(|want| issue.warning.to_string() == want))
             .collect();
@@ -125,7 +131,7 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
                 .await?
             {
                 Next::Fetch(date) => date.to_string(),
-                Next::Waiting(wait) => format!("waiting {}", duration(wait)),
+                Next::Waiting(wait) => format!("waiting {}", workers::duration(wait)),
                 Next::Complete => "complete".to_owned(),
             }
         );
@@ -133,7 +139,10 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!();
 
     let store = archive.media();
-    let targets = media::targets(&index.all_media().await?);
+    let targets = media::targets(
+        &index.all_media().await?,
+        &index.reader().origin_pairs().await?,
+    );
     let media_counts = store.counts().await?;
     let next_media = store.next_target(&targets, cfg.media.max_attempts).await?;
     println!("media");
@@ -157,6 +166,8 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
             None => "complete".to_owned(),
         }
     );
+    let (compared, agree) = origin_agreement(index, &store).await?;
+    println!("  origin matches  {agree} of {compared} pictures archived from both hosts");
     println!();
 
     let indexed = index.reader().count().await?;
@@ -173,6 +184,19 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     );
     println!("  parser version  {PARSER_VERSION}");
     println!("  stale entries   {stale}");
+    for (provenance, count) in index.reader().provenance_counts().await? {
+        println!("  {:<16}{count}", provenance.to_string());
+    }
+
+    let divergences = index.reader().divergence_counts().await?;
+    println!();
+    println!("divergences");
+    if divergences.is_empty() {
+        println!("  none recorded; reparse has not run since the merge landed");
+    }
+    for (field, count) in &divergences {
+        println!("  {field:<17}{count}");
+    }
 
     if pictures.hashed < thumbnails {
         println!(
@@ -196,6 +220,33 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     Ok(())
 }
 
+async fn origin_agreement(index: &ApodWriter, store: &media::MediaStore) -> Result<(usize, usize)> {
+    let pairs = index.reader().origin_pairs().await?;
+    let urls: Vec<String> = pairs
+        .iter()
+        .flat_map(|(_, legacy, modern)| [legacy.clone(), modern.clone()])
+        .collect();
+    let hashes = store.hashes(&urls).await?;
+
+    let mut compared = 0;
+    let mut agree = 0;
+    for (date, legacy, modern) in pairs {
+        let (Some(legacy), Some(modern)) = (hashes.get(&legacy), hashes.get(&modern)) else {
+            continue;
+        };
+        compared += 1;
+        match legacy == modern {
+            true => agree += 1,
+            false => tracing::warn!(
+                %date,
+                "the origin copy is not byte-identical to the legacy one, which decision 8 assumes"
+            ),
+        }
+    }
+
+    Ok((compared, agree))
+}
+
 fn size(bytes: i64) -> String {
     const GB: f64 = 1_073_741_824.0;
     const MB: f64 = 1_048_576.0;
@@ -203,14 +254,6 @@ fn size(bytes: i64) -> String {
     match bytes as f64 {
         bytes if bytes >= GB => format!("{:.1} GB", bytes / GB),
         bytes => format!("{:.1} MB", bytes / MB),
-    }
-}
-
-fn duration(wait: std::time::Duration) -> String {
-    match wait.as_secs() {
-        seconds if seconds >= 3600 => format!("{:.1}h", seconds as f64 / 3600.0),
-        seconds if seconds >= 60 => format!("{:.0}m", seconds as f64 / 60.0),
-        seconds => format!("{seconds}s"),
     }
 }
 

@@ -6,7 +6,8 @@ use apod_core::apod::{
 };
 use apod_core::db::DbConfig;
 use apod_core::{
-    ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, KindFilter, Media, MediaKind, Thumb,
+    ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, KindFilter, Media, MediaKind, Provenance,
+    Thumb,
 };
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -45,6 +46,10 @@ fn entry(date: &str, title: &str, explanation: &str) -> ApodEntry {
             None,
         ),
         extra_media: Vec::new(),
+        legacy_media_url: None,
+        alt: None,
+        authors: Vec::new(),
+        provenance: Provenance::LegacyOnly,
         source_url: date.source_url(),
         picture: None,
     }
@@ -53,9 +58,9 @@ fn entry(date: &str, title: &str, explanation: &str) -> ApodEntry {
 async fn seeded(rows: &[(&str, &str, &str)]) -> (ApodWriter, PathBuf) {
     let path = temp_db();
     let writer = ApodWriter::open(&path).await.unwrap();
-    let entries: Vec<_> = rows
+    let entries: Vec<apod_core::Merged> = rows
         .iter()
-        .map(|(date, title, explanation)| entry(date, title, explanation))
+        .map(|(date, title, explanation)| entry(date, title, explanation).into())
         .collect();
     writer.upsert_all(&entries).await.unwrap();
     (writer, path)
@@ -235,7 +240,7 @@ async fn roundtrips_an_entry_including_extra_media() {
         Some("https://apod.nasa.gov/apod/image/y.png".into()),
         None,
     )];
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     let loaded = writer.reader().entry(original.date).await.unwrap().unwrap();
     assert_eq!(loaded.title, "Crab Nebula");
@@ -260,7 +265,7 @@ async fn credit_text_indexes_every_role_but_stores_them_apart() {
         html: "Ada Lovelace".into(),
         text: "Ada Lovelace".into(),
     });
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     let hits = writer
         .reader()
@@ -283,7 +288,7 @@ async fn reparsing_preserves_thumbnails() {
     let writer = ApodWriter::open(&path).await.unwrap();
 
     let mut original = entry("2024-03-05", "Crab Nebula", "A supernova remnant.");
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
     writer
         .set_thumb(
             original.date,
@@ -293,7 +298,7 @@ async fn reparsing_preserves_thumbnails() {
         .unwrap();
 
     original.title = "Crab Nebula, Corrected".into();
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     let loaded = writer.reader().entry(original.date).await.unwrap().unwrap();
     assert_eq!(loaded.title, "Crab Nebula, Corrected");
@@ -312,10 +317,10 @@ async fn updating_an_entry_drops_its_old_text_from_the_index() {
     let writer = ApodWriter::open(&path).await.unwrap();
 
     let mut original = entry("2024-03-05", "Crab Nebula", "A supernova remnant.");
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     original.explanation_text = "Now about galaxies instead.".into();
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     let stale = writer
         .reader()
@@ -645,7 +650,7 @@ async fn a_kind_filter_selects_a_whole_group_of_kinds() {
     for (date, kind) in kinds {
         let mut row = entry(date, "Something", "A moving picture.");
         row.media = Media::new(kind, Some("https://example.test/x".into()), None);
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
     }
 
     let video = Filters {
@@ -750,7 +755,7 @@ async fn writing_an_entry_catalogues_its_words_and_its_links() {
                               planet, seen <a href="http://example.com/pic">again</a>."#
         .into();
     row.credits[0].html = r#"<a href="https://example.com/pic">Jane Doe</a>"#.into();
-    writer.upsert(&row).await.unwrap();
+    writer.upsert_sole(&row).await.unwrap();
 
     let reader = writer.reader();
 
@@ -836,11 +841,11 @@ async fn rewriting_an_entry_takes_its_old_words_and_links_out_of_the_totals() {
     let mut row = entry("2024-03-05", "Saturn", "A ringed planet.");
     row.explanation_html = r#"<a href="https://example.com/old">old</a>"#.into();
     row.credits.clear();
-    writer.upsert(&row).await.unwrap();
+    writer.upsert_sole(&row).await.unwrap();
 
     row.explanation_text = "A distant galaxy.".into();
     row.explanation_html = r#"<a href="https://example.com/new">new</a>"#.into();
-    writer.upsert(&row).await.unwrap();
+    writer.upsert_sole(&row).await.unwrap();
 
     let reader = writer.reader();
     assert!(
@@ -880,7 +885,7 @@ async fn deleting_an_entry_drains_it_from_every_total() {
 
     let mut row = entry("2024-03-05", "Saturn", "A ringed planet.");
     row.explanation_html = r#"<a href="https://example.com/x">x</a>"#.into();
-    writer.upsert(&row).await.unwrap();
+    writer.upsert_sole(&row).await.unwrap();
 
     let db = writer.reader().db();
     sqlx::query("DELETE FROM entries WHERE date_id = ?1")
@@ -922,7 +927,7 @@ async fn one_resource_gathers_references_from_every_entry_that_links_it() {
         row.explanation_html =
             format!(r#"<a href="https://en.wikipedia.org/wiki/Crab_Nebula">{anchor}</a>"#);
         row.credits.clear();
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
     }
 
     let reader = writer.reader();
@@ -1067,7 +1072,7 @@ async fn deleting_an_entry_takes_its_extra_media_with_it() {
         Some("https://apod.nasa.gov/apod/image/y.png".into()),
         None,
     )];
-    writer.upsert(&original).await.unwrap();
+    writer.upsert_sole(&original).await.unwrap();
 
     let db = writer.reader().db();
     sqlx::query("DELETE FROM entries WHERE date_id = ?1")
@@ -1100,7 +1105,7 @@ async fn a_rerun_picture_is_findable_from_any_of_its_dates() {
     for (date, url, phash) in runs {
         let mut row = entry(date, "Saturn at Night", "The ringed planet.");
         row.media = Media::new(MediaKind::ImageJpg, Some(url.to_owned()), None);
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         writer
             .set_thumb(
                 row.date,
@@ -1177,7 +1182,7 @@ async fn a_rerun_picture_is_findable_from_any_of_its_dates() {
         Some("image/1801/saturn.jpg".to_owned()),
         None,
     );
-    writer.upsert(&earlier).await.unwrap();
+    writer.upsert_sole(&earlier).await.unwrap();
     writer
         .set_phash(earlier.date, Some(&[1u8; 32]))
         .await
@@ -1237,13 +1242,13 @@ async fn an_encore_reports_what_each_appearance_changed() {
             html: "NASA".into(),
             text: "NASA".into(),
         }];
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         writer.set_phash(row.date, Some(&[3u8; 32])).await.unwrap();
     }
 
     let mut other = entry("2020-01-01", "Orion", "A different picture.");
     other.media = Media::new(MediaKind::ImageJpg, Some("orion.jpg".to_owned()), None);
-    writer.upsert(&other).await.unwrap();
+    writer.upsert_sole(&other).await.unwrap();
     writer
         .set_phash(other.date, Some(&[200u8; 32]))
         .await
@@ -1400,7 +1405,7 @@ async fn only_pictures_worth_playing_reach_a_game() {
     for (date, kind, thumbed) in rows {
         let mut row = entry(date, "Something", "A picture of something.");
         row.media = Media::new(kind, Some(format!("https://example.test/{date}")), None);
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         if thumbed {
             writer
                 .set_thumb(
@@ -1441,7 +1446,7 @@ async fn only_pictures_worth_playing_reach_a_game() {
     ] {
         let mut row = entry(date, "Something", &prose);
         row.media = Media::new(kind, Some(format!("https://example.test/{date}")), None);
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         writer
             .set_thumb(
                 row.date,
@@ -1558,7 +1563,7 @@ async fn a_rerun_that_changed_only_its_credit_label_is_reported_as_changed() {
             text: "Rune Rysstad".into(),
         }];
         row.media = Media::new(MediaKind::ImageJpg, Some(url.to_owned()), None);
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         writer
             .set_thumb(
                 row.date,
@@ -1633,7 +1638,7 @@ async fn a_rerun_that_moved_only_its_high_resolution_file_is_reported_as_changed
             Some(url.to_owned()),
             Some(hd.to_owned()),
         );
-        writer.upsert(&row).await.unwrap();
+        writer.upsert_sole(&row).await.unwrap();
         writer
             .set_thumb(
                 row.date,

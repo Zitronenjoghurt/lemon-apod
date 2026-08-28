@@ -28,11 +28,13 @@ pub enum QualityWarning {
     CreditMissing,
     CreditRoleSuspicious,
     EmptyField,
+    ExplanationMismatch,
     ExplanationSuspiciouslyShort,
     LeadingWhitespace,
     MultiWhitespace,
     NoMedia,
     NonAbsoluteLink,
+    TitleDateMismatch,
     TitleIsTeaserLabel,
     TitleMultiline,
     TitleSuspiciouslyLong,
@@ -47,11 +49,13 @@ impl fmt::Display for QualityWarning {
             Self::CreditMissing => "credit_missing",
             Self::CreditRoleSuspicious => "credit_role_suspicious",
             Self::EmptyField => "empty_field",
+            Self::ExplanationMismatch => "explanation_mismatch",
             Self::ExplanationSuspiciouslyShort => "explanation_suspiciously_short",
             Self::LeadingWhitespace => "leading_whitespace",
             Self::MultiWhitespace => "multi_whitespace",
             Self::NoMedia => "no_media",
             Self::NonAbsoluteLink => "non_absolute_link",
+            Self::TitleDateMismatch => "title_date_mismatch",
             Self::TitleIsTeaserLabel => "title_is_teaser_label",
             Self::TitleMultiline => "title_multiline",
             Self::TitleSuspiciouslyLong => "title_suspiciously_long",
@@ -72,6 +76,10 @@ impl fmt::Display for QualityIssue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.field, self.warning)
     }
+}
+
+pub fn issue(warning: QualityWarning, field: &'static str) -> QualityIssue {
+    QualityIssue { warning, field }
 }
 
 pub fn quality_control(entry: &ApodEntry, attributed: Option<bool>) -> Vec<QualityIssue> {
@@ -165,7 +173,7 @@ fn push(issues: &mut Vec<QualityIssue>, warning: QualityWarning, field: &'static
 mod tests {
     use super::*;
     use crate::date::ApodDate;
-    use crate::entry::Credit;
+    use crate::entry::{Credit, Provenance};
     use crate::media::{Media, MediaKind};
 
     fn entry() -> ApodEntry {
@@ -190,6 +198,10 @@ mod tests {
             keywords: Vec::new(),
             media: Media::new(MediaKind::ImageJpg, Some("https://x/y.jpg".into()), None),
             extra_media: Vec::new(),
+            legacy_media_url: None,
+            alt: None,
+            authors: Vec::new(),
+            provenance: Provenance::LegacyOnly,
             source_url: ApodDate::START.source_url(),
             picture: None,
         }

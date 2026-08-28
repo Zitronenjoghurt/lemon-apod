@@ -1,7 +1,7 @@
 use crate::entry::Credit;
 use crate::html::{self, Flat};
 use regex::Regex;
-use scraper::Html;
+use scraper::{ElementRef, Html};
 use std::ops::Range;
 use std::sync::LazyLock;
 use url::Url;
@@ -158,7 +158,10 @@ pub fn attributes_anyone(doc: &Html) -> bool {
 
 fn labelled(doc: &Html, base: &Url) -> Option<Credits> {
     let container = super::find_container(doc, |text| labels(text).iter().any(Label::is_credit))?;
+    from_element(container, base)
+}
 
+pub(super) fn from_element(container: ElementRef<'_>, base: &Url) -> Option<Credits> {
     let flat = html::flatten(container, base);
     let labels = labels(flat.text());
     let first = labels.iter().position(Label::is_credit)?;

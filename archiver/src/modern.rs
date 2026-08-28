@@ -3,7 +3,7 @@ use crate::client::{Client, Response};
 use crate::config::Config;
 use crate::fetch::{sha256, write_atomically};
 use anyhow::{Context, Result, bail, ensure};
-use apod_core::{ApodDate, parse};
+use apod_core::{ApodDate, ApodWriter, parse};
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use std::collections::HashSet;
@@ -72,9 +72,9 @@ impl Window {
         }
     }
 
-    pub fn today(today: ApodDate) -> Self {
+    pub fn only(date: ApodDate) -> Self {
         Self {
-            bound: today,
+            bound: date,
             daily: true,
         }
     }
@@ -85,10 +85,7 @@ impl Window {
             cfg.modern_api_url.trim_end_matches('/'),
             cfg.modern_category,
             cfg.modern_per_page,
-            match self.daily {
-                true => self.bound.next(),
-                false => self.bound.next().next(),
-            }
+            self.bound.next()
         );
         if self.daily {
             url.push_str(&format!("&after={}T00:00:00", self.bound.prev()));
@@ -140,6 +137,7 @@ pub async fn fetch_window(
     cfg: &Config,
     client: &Client,
     archive: &ArchiveStore,
+    index: &ApodWriter,
     window: Window,
 ) -> Result<Pass> {
     let url = window.url(cfg);
@@ -274,7 +272,17 @@ pub async fn fetch_window(
         }
 
         pass.records += 1;
-        match store(cfg, archive, key, header.id, element.get().as_bytes(), now).await? {
+        match store(
+            cfg,
+            archive,
+            index,
+            key,
+            header.id,
+            element.get().as_bytes(),
+            now,
+        )
+        .await?
+        {
             true => pass.stored += 1,
             false => pass.unchanged += 1,
         }
@@ -314,6 +322,7 @@ pub async fn fetch_window(
 async fn store(
     cfg: &Config,
     archive: &ArchiveStore,
+    index: &ApodWriter,
     date: ApodDate,
     id: u64,
     bytes: &[u8],
@@ -334,6 +343,7 @@ async fn store(
     archive
         .record_success(date, Source::Modern, &url, &digest, bytes.len(), now)
         .await?;
+    crate::entry::reindex(cfg, index, date).await?;
 
     Ok(true)
 }
@@ -342,6 +352,7 @@ async fn store(
 mod tests {
     use super::*;
     use crate::client::Redirects;
+    use apod_core::ApodWriter;
     use std::path::Path;
     use std::sync::atomic::{AtomicU32, Ordering};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -509,6 +520,30 @@ mod tests {
     }
 
     #[test]
+    fn a_window_asks_for_the_bound_and_nothing_newer() {
+        let cfg = config(
+            &temp("url"),
+            "https://example.test/wp/v2/image-article",
+            100,
+        );
+
+        assert_eq!(
+            Window::back_from(date(2023, 2, 13)).url(&cfg),
+            "https://example.test/wp/v2/image-article?categories=22766&per_page=100\
+             &before=2023-02-14T00:00:00",
+            "records are stamped at midnight and `before` is exclusive, so the day after the \
+             bound is what includes the bound; the day after that re-fetches a stored date"
+        );
+
+        assert_eq!(
+            Window::only(date(2023, 2, 13)).url(&cfg),
+            "https://example.test/wp/v2/image-article?categories=22766&per_page=100\
+             &before=2023-02-14T00:00:00&after=2023-02-12T00:00:00",
+            "the daily window brackets its own date from both sides"
+        );
+    }
+
+    #[test]
     fn a_window_never_concludes_about_the_oldest_date_it_returned() {
         let window = Window::back_from(date(1995, 6, 25));
         assert_eq!(
@@ -530,7 +565,7 @@ mod tests {
 
     #[test]
     fn the_daily_window_speaks_for_its_own_date_alone() {
-        let window = Window::today(date(2026, 8, 26));
+        let window = Window::only(date(2026, 8, 26));
         assert_eq!(
             window.covered(date(2026, 8, 25), true),
             Some((date(2026, 8, 26), date(2026, 8, 26))),
@@ -582,9 +617,10 @@ mod tests {
         let api = serving(format!("[\n  {ELEMENT}\n]")).await;
         let cfg = config(&dir, &api, 1);
         let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
         let day = date(2026, 8, 26);
 
-        let pass = fetch_window(&cfg, &client(), &archive, Window::back_from(day))
+        let pass = fetch_window(&cfg, &client(), &archive, &index, Window::back_from(day))
             .await
             .unwrap();
         assert_eq!((pass.records, pass.stored, pass.absent), (1, 1, 0));
@@ -602,7 +638,7 @@ mod tests {
             Some(crate::fetch::sha256(ELEMENT.as_bytes()))
         );
 
-        let again = fetch_window(&cfg, &client(), &archive, Window::back_from(day))
+        let again = fetch_window(&cfg, &client(), &archive, &index, Window::back_from(day))
             .await
             .unwrap();
         assert_eq!(
@@ -620,11 +656,13 @@ mod tests {
         let api = serving(format!("[{MANHATTANHENGE},{LAGOON}]")).await;
         let cfg = config(&dir, &api, 2);
         let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
 
         let pass = fetch_window(
             &cfg,
             &client(),
             &archive,
+            &index,
             Window::back_from(date(2007, 7, 16)),
         )
         .await
@@ -667,9 +705,10 @@ mod tests {
         let api = serving("[]".to_owned()).await;
         let cfg = config(&dir, &api, 5);
         let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
         let day = date(1995, 6, 25);
 
-        let refused = fetch_window(&cfg, &client(), &archive, Window::back_from(day))
+        let refused = fetch_window(&cfg, &client(), &archive, &index, Window::back_from(day))
             .await
             .unwrap_err();
         assert!(
@@ -678,7 +717,7 @@ mod tests {
         );
         assert_eq!(archive.counts(Source::Modern).await.unwrap().absent, 0);
 
-        let quiet = fetch_window(&cfg, &client(), &archive, Window::today(day))
+        let quiet = fetch_window(&cfg, &client(), &archive, &index, Window::only(day))
             .await
             .expect("a day APOD skipped is not a broken endpoint");
         assert_eq!((quiet.records, quiet.absent), (0, 0));
@@ -697,9 +736,10 @@ mod tests {
         .await;
         let cfg = config(&dir, &api, 5);
         let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
         let day = date(2026, 8, 26);
 
-        let refused = fetch_window(&cfg, &client(), &archive, Window::back_from(day))
+        let refused = fetch_window(&cfg, &client(), &archive, &index, Window::back_from(day))
             .await
             .unwrap_err();
         assert!(
@@ -729,9 +769,10 @@ mod tests {
         .await;
         let cfg = config(&dir, &api, 5);
         let archive = ArchiveStore::open(&dir.join("archive.db")).await.unwrap();
+        let index = ApodWriter::open(&dir.join("apod.db")).await.unwrap();
         let today = date(1995, 6, 25);
 
-        let pass = fetch_window(&cfg, &client(), &archive, Window::back_from(today))
+        let pass = fetch_window(&cfg, &client(), &archive, &index, Window::back_from(today))
             .await
             .unwrap();
         assert_eq!(pass.stored, 1);

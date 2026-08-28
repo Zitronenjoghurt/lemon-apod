@@ -8,11 +8,13 @@ use crate::pictures;
 use crate::shutdown::{self, Shutdown};
 use crate::thumbs;
 use anyhow::Result;
-use apod_core::{ApodDate, ApodWriter};
+use apod_core::{ApodDate, ApodWriter, Media};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rand::RngExt;
+use std::collections::HashSet;
 use std::time::Duration;
+use tracing::Instrument;
 
 const MAX_SLEEP: Duration = Duration::from_secs(900);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
@@ -32,89 +34,141 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::info!("modern fetching disabled; science.nasa.gov will not be contacted");
     }
 
-    if cfg.fetch_legacy && cfg.backfill.enabled {
-        handles.push(tokio::spawn(backfill(
-            cfg.clone(),
-            clients.clone(),
-            archive.clone(),
-            index.clone(),
-            shutdown.clone(),
-        )));
-    } else {
-        tracing::info!("legacy backfill disabled");
-    }
-
-    if cfg.fetch_modern && cfg.backfill.enabled {
-        handles.push(tokio::spawn(backfill_modern(
-            cfg.clone(),
-            clients.source.clone(),
-            archive.clone(),
-            shutdown.clone(),
-        )));
-    } else {
-        tracing::info!("modern backfill disabled");
-    }
-
     for source in Source::ALL {
         let enabled = match source {
             Source::Legacy => cfg.fetch_legacy,
             Source::Modern => cfg.fetch_modern,
         };
-        if enabled && cfg.daily.enabled {
-            handles.push(tokio::spawn(daily(
-                cfg.clone(),
-                clients.clone(),
-                archive.clone(),
-                index.clone(),
-                shutdown.clone(),
-                source,
-            )));
+        if !enabled {
+            continue;
+        }
+
+        let walk = Walk::new(source, &clients);
+
+        if cfg.backfill.enabled {
+            tracing::info!(
+                %source,
+                pace = %walk.pace(&cfg),
+                "backfill starting, newest owed date first"
+            );
+            handles.push(tokio::spawn(
+                backfill(
+                    cfg.clone(),
+                    walk.clone(),
+                    archive.clone(),
+                    index.clone(),
+                    shutdown.clone(),
+                )
+                .instrument(tracing::info_span!("backfill", %source)),
+            ));
         } else {
-            tracing::info!("{source} daily poll disabled");
+            tracing::info!(%source, "backfill disabled");
+        }
+
+        if cfg.daily.enabled {
+            tracing::info!(
+                %source,
+                opens = %format!(
+                    "{:02}:{:02} {}",
+                    cfg.daily.start_hour, cfg.daily.start_minute, cfg.daily.timezone
+                ),
+                retry = %duration(cfg.daily.interval),
+                gives_up_after = %duration(cfg.daily.window),
+                "daily poll starting"
+            );
+            handles.push(tokio::spawn(
+                daily(
+                    cfg.clone(),
+                    walk.clone(),
+                    archive.clone(),
+                    index.clone(),
+                    shutdown.clone(),
+                )
+                .instrument(tracing::info_span!("daily", %source)),
+            ));
+        } else {
+            tracing::info!(%source, "daily poll disabled");
+        }
+
+        if cfg.recheck_per_day > 0 {
+            tracing::info!(%source, per_day = cfg.recheck_per_day, "re-check starting");
+            handles.push(tokio::spawn(
+                recheck(
+                    cfg.clone(),
+                    walk,
+                    archive.clone(),
+                    index.clone(),
+                    shutdown.clone(),
+                )
+                .instrument(tracing::info_span!("recheck", %source)),
+            ));
+        } else {
+            tracing::info!(%source, "re-check disabled");
         }
     }
 
-    if cfg.fetch_legacy && cfg.recheck_per_day > 0 {
-        handles.push(tokio::spawn(recheck(
-            cfg.clone(),
-            clients.clone(),
-            archive.clone(),
-            index.clone(),
-            shutdown.clone(),
-        )));
-    } else {
-        tracing::info!("re-check disabled");
-    }
-
     if cfg.media.enabled {
-        handles.push(tokio::spawn(media_backfill(
-            cfg.clone(),
-            clients.media.clone(),
-            archive.clone(),
-            index.clone(),
-            shutdown.clone(),
-        )));
+        tracing::info!(
+            every = %range(cfg.media.delay_min, cfg.media.delay_max),
+            max_attempts = cfg.media.max_attempts,
+            "media archive starting"
+        );
+        handles.push(tokio::spawn(
+            media_backfill(
+                cfg.clone(),
+                clients.media.clone(),
+                archive.clone(),
+                index.clone(),
+                shutdown.clone(),
+            )
+            .instrument(tracing::info_span!("media")),
+        ));
     } else {
         tracing::info!("media archive disabled");
     }
 
+    if cfg.thumbs.enabled {
+        tracing::info!(
+            every = %range(cfg.thumbs.delay_min, cfg.thumbs.delay_max),
+            "thumbnail gap filler starting"
+        );
+        handles.push(tokio::spawn(
+            thumb_backfill(
+                cfg.clone(),
+                clients.media.clone(),
+                archive.clone(),
+                index.clone(),
+                shutdown.clone(),
+            )
+            .instrument(tracing::info_span!("thumbs")),
+        ));
+    } else {
+        tracing::info!("thumbnails disabled");
+    }
+
     if cfg.sky.enabled {
-        handles.push(tokio::spawn(crate::sky::run(
-            cfg.clone(),
-            clients.media.clone(),
-            shutdown.clone(),
-        )));
+        tracing::info!(
+            every = %duration(cfg.sky.interval),
+            "sky feeds starting"
+        );
+        handles.push(tokio::spawn(
+            crate::sky::run(cfg.clone(), clients.media.clone(), shutdown.clone())
+                .instrument(tracing::info_span!("sky")),
+        ));
     } else {
         tracing::info!("sky feeds disabled");
     }
 
     if cfg.notify.enabled {
-        tracing::info!(topics = ?cfg.notify.topics(), "notifications enabled");
-        handles.push(tokio::spawn(crate::notify::run(
-            cfg.clone(),
-            clients.media.clone(),
-            shutdown.clone(),
-        )));
+        tracing::info!(
+            topics = ?cfg.notify.topics(),
+            every = %duration(cfg.notify.interval),
+            "notifications starting"
+        );
+        handles.push(tokio::spawn(
+            crate::notify::run(cfg.clone(), clients.media.clone(), shutdown.clone())
+                .instrument(tracing::info_span!("notify")),
+        ));
     } else {
         tracing::info!("notifications disabled");
     }
@@ -136,40 +190,134 @@ pub async fn run(cfg: Config) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Reach {
+    Only(ApodDate),
+    Back(ApodDate),
+}
+
+impl Reach {
+    fn date(self) -> ApodDate {
+        match self {
+            Self::Only(date) | Self::Back(date) => date,
+        }
+    }
+}
+
+struct Advance {
+    stored: bool,
+    wait: Duration,
+}
+
+#[derive(Clone)]
+struct Walk {
+    source: Source,
+    clients: Clients,
+}
+
+impl Walk {
+    fn new(source: Source, clients: &Clients) -> Self {
+        Self {
+            source,
+            clients: clients.clone(),
+        }
+    }
+
+    fn pace(&self, cfg: &Config) -> String {
+        match self.source {
+            Source::Legacy => format!(
+                "one date every {}",
+                range(cfg.backfill.delay_min, cfg.backfill.delay_max)
+            ),
+            Source::Modern => format!(
+                "up to {} dates every {} or more",
+                cfg.modern_per_page,
+                duration(cfg.modern_delay_min)
+            ),
+        }
+    }
+
+    async fn advance(
+        &self,
+        cfg: &Config,
+        archive: &ArchiveStore,
+        index: &ApodWriter,
+        reach: Reach,
+    ) -> Advance {
+        match self.source {
+            Source::Legacy => Advance {
+                stored: matches!(
+                    step(cfg, &self.clients, archive, index, reach.date()).await,
+                    Some(Outcome::Stored { .. } | Outcome::Updated { .. })
+                ),
+                wait: jitter(cfg.backfill.delay_min, cfg.backfill.delay_max),
+            },
+            Source::Modern => {
+                let window = match reach {
+                    Reach::Only(date) => modern::Window::only(date),
+                    Reach::Back(date) => modern::Window::back_from(date),
+                };
+
+                let Some(pass) =
+                    modern_step(cfg, &self.clients.source, archive, index, window).await
+                else {
+                    return Advance {
+                        stored: false,
+                        wait: MAX_SLEEP,
+                    };
+                };
+
+                if pass.stored > 0
+                    && cfg.thumbs.enabled
+                    && let Reach::Only(date) = reach
+                {
+                    thumbnail_now(cfg, &self.clients.media, &archive.media(), index, date).await;
+                }
+
+                Advance {
+                    stored: pass.stored > 0,
+                    wait: modern::delay(cfg, pass.elapsed),
+                }
+            }
+        }
+    }
+}
+
 async fn backfill(
     cfg: Config,
-    clients: Clients,
+    walk: Walk,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
 ) -> Result<()> {
+    let source = walk.source;
     let mut caught_up = false;
 
     while !shutdown.is_triggered() {
         let today = today_in(cfg.daily.timezone);
 
-        let date = match archive
-            .next_target(
-                today,
-                Source::Legacy,
-                cfg.retry_backoff_max,
-                Utc::now().timestamp(),
-            )
+        let bound = match archive
+            .next_target(today, source, cfg.retry_backoff_max, Utc::now().timestamp())
             .await?
         {
             Next::Fetch(date) => date,
             Next::Waiting(wait) => {
+                let wait = wait.min(MAX_SLEEP);
                 tracing::warn!(
-                    ?wait,
-                    "every date left has failed and is waiting out its retry backoff"
+                    wait = %duration(wait),
+                    "every date left has failed; waiting out the retry backoff"
                 );
-                if !shutdown.sleep(wait.min(MAX_SLEEP)).await {
+                if !shutdown.sleep(wait).await {
                     break;
                 }
                 continue;
             }
             Next::Complete => {
-                tracing::info!("archive is complete back to {}", ApodDate::START);
+                tracing::info!(
+                    back_to = %ApodDate::START,
+                    looking_again_in = %duration(MAX_SLEEP),
+                    "archive is complete; nothing owed"
+                );
                 if !caught_up {
                     caught_up = true;
                     regroup(&index).await;
@@ -183,64 +331,20 @@ async fn backfill(
 
         caught_up = false;
 
-        step(&cfg, &clients, &archive, &index, date).await;
+        let owed = archive.owed(today, source).await?;
+        tracing::info!(%bound, dates_owed = owed, "asking for the next batch");
 
-        if !shutdown
-            .sleep(jitter(cfg.backfill.delay_min, cfg.backfill.delay_max))
-            .await
+        let advance = walk
+            .advance(&cfg, &archive, &index, Reach::Back(bound))
+            .await;
+
+        if !tick(
+            &mut shutdown,
+            advance.wait,
+            "pausing before the next request",
+        )
+        .await
         {
-            break;
-        }
-    }
-
-    Ok(())
-}
-
-async fn backfill_modern(
-    cfg: Config,
-    client: Client,
-    archive: ArchiveStore,
-    mut shutdown: Shutdown,
-) -> Result<()> {
-    while !shutdown.is_triggered() {
-        let today = today_in(cfg.daily.timezone);
-
-        let bound = match archive
-            .next_target(
-                today,
-                Source::Modern,
-                cfg.retry_backoff_max,
-                Utc::now().timestamp(),
-            )
-            .await?
-        {
-            Next::Fetch(date) => date,
-            Next::Waiting(wait) => {
-                tracing::warn!(
-                    ?wait,
-                    "every date left has failed and is waiting out its retry backoff"
-                );
-                if !shutdown.sleep(wait.min(MAX_SLEEP)).await {
-                    break;
-                }
-                continue;
-            }
-            Next::Complete => {
-                tracing::info!("the modern archive is complete back to {}", ApodDate::START);
-                if !shutdown.sleep(MAX_SLEEP).await {
-                    break;
-                }
-                continue;
-            }
-        };
-
-        let wait =
-            match modern_step(&cfg, &client, &archive, modern::Window::back_from(bound)).await {
-                Some(pass) => modern::delay(&cfg, pass.elapsed),
-                None => MAX_SLEEP,
-            };
-
-        if !shutdown.sleep(wait).await {
             break;
         }
     }
@@ -252,9 +356,10 @@ pub async fn modern_step(
     cfg: &Config,
     client: &Client,
     archive: &ArchiveStore,
+    index: &ApodWriter,
     window: modern::Window,
 ) -> Option<modern::Pass> {
-    match modern::fetch_window(cfg, client, archive, window).await {
+    match modern::fetch_window(cfg, client, archive, index, window).await {
         Ok(pass) => {
             tracing::info!(
                 records = pass.records,
@@ -283,28 +388,105 @@ async fn media_backfill(
     mut shutdown: Shutdown,
 ) -> Result<()> {
     let store = archive.media();
-    let mut targets = media::targets(&index.all_media().await?);
+    let mut targets = media::targets(
+        &index.all_media().await?,
+        &index.reader().origin_pairs().await?,
+    );
 
     while !shutdown.is_triggered() {
         let Some(target) = store.next_target(&targets, cfg.media.max_attempts).await? else {
             tracing::info!(
                 files = targets.len(),
+                rescanning_in = %duration(MAX_SLEEP),
                 "every picture the index knows about is stored"
             );
             if !shutdown.sleep(MAX_SLEEP).await {
                 break;
             }
-            targets = media::targets(&index.all_media().await?);
+            targets = media::targets(
+                &index.all_media().await?,
+                &index.reader().origin_pairs().await?,
+            );
             continue;
         };
 
         media_step(&cfg, &client, &store, &targets, &target).await;
 
-        if !shutdown
-            .sleep(jitter(cfg.media.delay_min, cfg.media.delay_max))
-            .await
-        {
+        let wait = jitter(cfg.media.delay_min, cfg.media.delay_max);
+        if !tick(&mut shutdown, wait, "pausing before the next file").await {
             break;
+        }
+    }
+
+    Ok(())
+}
+
+async fn thumb_backfill(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
+    let store = archive.media();
+    let mut written_off: HashSet<ApodDate> = HashSet::new();
+
+    while !shutdown.is_triggered() {
+        let missing = index.missing_thumbs().await?;
+        let outstanding = missing
+            .iter()
+            .filter(|(date, _)| !written_off.contains(date))
+            .count();
+
+        if outstanding > 0 {
+            tracing::info!(
+                count = outstanding,
+                written_off = written_off.len(),
+                "filling in missing thumbnails"
+            );
+        }
+
+        let mut made_any = false;
+
+        for (date, media) in &missing {
+            if written_off.contains(date) {
+                continue;
+            }
+
+            let outcome = thumbnail(&cfg, &client, &store, &index, *date, media).await;
+            let paced = match &outcome {
+                Some(thumbs::Generated::Written(source)) => {
+                    made_any = true;
+                    *source == thumbs::Source::Network
+                }
+                Some(thumbs::Generated::Adopted) => {
+                    made_any = true;
+                    false
+                }
+                Some(thumbs::Generated::NotApplicable) => false,
+                Some(thumbs::Generated::Failed(_)) | None => {
+                    written_off.insert(*date);
+                    true
+                }
+            };
+
+            if paced {
+                let wait = jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max);
+                if !tick(&mut shutdown, wait, "pausing before the next thumbnail").await {
+                    return Ok(());
+                }
+            }
+        }
+
+        if !made_any {
+            tracing::info!(
+                written_off = written_off.len(),
+                looking_again_in = %duration(MAX_SLEEP),
+                "every entry that can have a thumbnail has one"
+            );
+            if !shutdown.sleep(MAX_SLEEP).await {
+                break;
+            }
         }
     }
 
@@ -346,12 +528,13 @@ pub async fn media_step(
 
 async fn daily(
     cfg: Config,
-    clients: Clients,
+    walk: Walk,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
-    source: Source,
 ) -> Result<()> {
+    let source = walk.source;
+
     while !shutdown.is_triggered() {
         let now = Utc::now().with_timezone(&cfg.daily.timezone);
         let today = ApodDate::from(now.date_naive());
@@ -361,13 +544,24 @@ async fn daily(
             .await?
             .is_some_and(|record| record.is_success())
         {
-            if !sleep_until(&mut shutdown, next_window(&cfg, now)).await {
+            if !sleep_until(
+                &mut shutdown,
+                next_window(&cfg, now),
+                "today is already stored; waiting for tomorrow's window",
+            )
+            .await
+            {
                 break;
             }
             continue;
         }
 
         let Some(window_start) = window_on(&cfg.daily, now.date_naive()) else {
+            tracing::warn!(
+                %today,
+                wait = %duration(MAX_SLEEP),
+                "this date has no publication window in the configured timezone"
+            );
             if !shutdown.sleep(MAX_SLEEP).await {
                 break;
             }
@@ -375,44 +569,57 @@ async fn daily(
         };
 
         if now < window_start {
-            if !sleep_until(&mut shutdown, window_start.with_timezone(&Utc)).await {
+            if !sleep_until(
+                &mut shutdown,
+                window_start.with_timezone(&Utc),
+                "waiting for today's publication window to open",
+            )
+            .await
+            {
                 break;
             }
             continue;
         }
 
         if now - window_start > chrono::TimeDelta::from_std(cfg.daily.window)? {
-            tracing::warn!(%today, %source, "publication window elapsed without an entry");
-            if !sleep_until(&mut shutdown, next_window(&cfg, now)).await {
+            tracing::warn!(%today, "publication window elapsed without an entry");
+            if !sleep_until(
+                &mut shutdown,
+                next_window(&cfg, now),
+                "giving up on today; waiting for tomorrow's window",
+            )
+            .await
+            {
                 break;
             }
             continue;
         }
 
-        let fetched = match source {
-            Source::Legacy => {
-                let stored = matches!(
-                    step(&cfg, &clients, &archive, &index, today).await,
-                    Some(Outcome::Stored { .. } | Outcome::Updated { .. })
-                );
-                if stored {
-                    regroup(&index).await;
-                }
-                stored
-            }
-            Source::Modern => modern_step(
-                &cfg,
-                &clients.source,
-                &archive,
-                modern::Window::today(today),
-            )
-            .await
-            .is_some_and(|pass| pass.stored > 0),
-        };
+        let advance = walk
+            .advance(&cfg, &archive, &index, Reach::Only(today))
+            .await;
 
-        let kept_waiting = match fetched {
-            true => sleep_until(&mut shutdown, next_window(&cfg, now)).await,
-            false => shutdown.sleep(cfg.daily.interval).await,
+        if advance.stored {
+            regroup(&index).await;
+        }
+
+        let kept_waiting = match advance.stored {
+            true => {
+                sleep_until(
+                    &mut shutdown,
+                    next_window(&cfg, now),
+                    "today is stored; waiting for tomorrow's window",
+                )
+                .await
+            }
+            false => {
+                tick(
+                    &mut shutdown,
+                    cfg.daily.interval,
+                    "nothing published yet; asking again shortly",
+                )
+                .await
+            }
         };
 
         if !kept_waiting {
@@ -425,16 +632,20 @@ async fn daily(
 
 async fn recheck(
     cfg: Config,
-    clients: Clients,
+    walk: Walk,
     archive: ArchiveStore,
     index: ApodWriter,
     mut shutdown: Shutdown,
 ) -> Result<()> {
     let interval = Duration::from_secs(86_400 / u64::from(cfg.recheck_per_day).max(1));
+    let source = walk.source;
 
-    while shutdown.sleep(interval).await {
-        for date in archive.recheck_candidates(Source::Legacy, 1).await? {
-            step(&cfg, &clients, &archive, &index, date).await;
+    while tick(&mut shutdown, interval, "waiting for the next re-check").await {
+        let candidates = archive.recheck_candidates(source, 1).await?;
+        tracing::debug!(count = candidates.len(), "re-checking the oldest entries");
+        for date in candidates {
+            walk.advance(&cfg, &archive, &index, Reach::Only(date))
+                .await;
         }
     }
 
@@ -471,13 +682,46 @@ pub async fn step(
     }
 
     if cfg.thumbs.enabled && matches!(outcome, Outcome::Stored { .. } | Outcome::Updated { .. }) {
-        thumbnail(cfg, &clients.media, &archive.media(), index, date).await;
+        thumbnail_now(cfg, &clients.media, &archive.media(), index, date).await;
     }
 
     Some(outcome)
 }
 
 async fn thumbnail(
+    cfg: &Config,
+    client: &Client,
+    store: &MediaStore,
+    index: &ApodWriter,
+    date: ApodDate,
+    media: &Media,
+) -> Option<thumbs::Generated> {
+    let generated = match thumbs::generate(cfg, client, store, index, date, media, false).await {
+        Ok(generated) => generated,
+        Err(error) => {
+            tracing::warn!(%date, "thumbnail failed: {error:#}");
+            return None;
+        }
+    };
+
+    match &generated {
+        thumbs::Generated::Written(source) => tracing::debug!(%date, ?source, "thumbnail made"),
+        thumbs::Generated::Adopted => tracing::debug!(%date, "thumbnail already on disk"),
+        thumbs::Generated::NotApplicable => return Some(generated),
+        thumbs::Generated::Failed(reason) => {
+            tracing::warn!(%date, %reason, "thumbnail failed");
+            return Some(generated);
+        }
+    }
+
+    if let Err(error) = pictures::store(cfg, index, date).await {
+        tracing::warn!(%date, "could not hash the thumbnail: {error:#}");
+    }
+
+    Some(generated)
+}
+
+async fn thumbnail_now(
     cfg: &Config,
     client: &Client,
     store: &MediaStore,
@@ -494,26 +738,7 @@ async fn thumbnail(
     };
 
     tokio::time::sleep(jitter(cfg.thumbs.delay_min, cfg.thumbs.delay_max)).await;
-
-    match thumbs::generate(cfg, client, store, index, date, &media, false).await {
-        Ok(thumbs::Generated::Written(source)) => {
-            tracing::debug!(%date, ?source, "thumbnail made")
-        }
-        Ok(thumbs::Generated::Adopted) => tracing::debug!(%date, "thumbnail already on disk"),
-        Ok(thumbs::Generated::NotApplicable) => return,
-        Ok(thumbs::Generated::Failed(reason)) => {
-            tracing::warn!(%date, %reason, "thumbnail failed");
-            return;
-        }
-        Err(error) => {
-            tracing::warn!(%date, "thumbnail failed: {error:#}");
-            return;
-        }
-    }
-
-    if let Err(error) = pictures::store(cfg, index, date).await {
-        tracing::warn!(%date, "could not hash the thumbnail: {error:#}");
-    }
+    thumbnail(cfg, client, store, index, date, &media).await;
 }
 
 async fn regroup(index: &ApodWriter) {
@@ -523,6 +748,26 @@ async fn regroup(index: &ApodWriter) {
             "grouped the pictures that have been shown more than once"
         ),
         Err(error) => tracing::warn!("could not group pictures: {error:#}"),
+    }
+}
+
+async fn tick(shutdown: &mut Shutdown, wait: Duration, doing: &str) -> bool {
+    tracing::debug!(wait = %duration(wait), "{doing}");
+    shutdown.sleep(wait).await
+}
+
+pub fn duration(wait: Duration) -> String {
+    match wait.as_secs() {
+        seconds if seconds >= 3600 => format!("{:.1}h", seconds as f64 / 3600.0),
+        seconds if seconds >= 60 => format!("{:.0}m", seconds as f64 / 60.0),
+        seconds => format!("{seconds}s"),
+    }
+}
+
+fn range(min: Duration, max: Duration) -> String {
+    match min >= max {
+        true => duration(min),
+        false => format!("{} to {}", duration(min), duration(max)),
     }
 }
 
@@ -549,7 +794,15 @@ fn next_window(cfg: &Config, now: DateTime<Tz>) -> DateTime<Utc> {
         .unwrap_or_else(|| Utc::now() + chrono::TimeDelta::hours(1))
 }
 
-async fn sleep_until(shutdown: &mut Shutdown, target: DateTime<Utc>) -> bool {
+async fn sleep_until(shutdown: &mut Shutdown, target: DateTime<Utc>, doing: &str) -> bool {
+    if let Ok(wait) = (target - Utc::now()).to_std() {
+        tracing::info!(
+            wait = %duration(wait),
+            until = %target.format("%Y-%m-%d %H:%M UTC"),
+            "{doing}"
+        );
+    }
+
     loop {
         let Ok(remaining) = (target - Utc::now()).to_std() else {
             return true;
@@ -565,6 +818,30 @@ async fn sleep_until(shutdown: &mut Shutdown, target: DateTime<Utc>) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_wait_reads_as_the_unit_a_person_would_say_it_in() {
+        assert_eq!(duration(Duration::from_secs(0)), "0s");
+        assert_eq!(duration(Duration::from_secs(45)), "45s");
+        assert_eq!(duration(Duration::from_secs(59)), "59s");
+        assert_eq!(duration(Duration::from_secs(60)), "1m");
+        assert_eq!(duration(Duration::from_secs(900)), "15m");
+        assert_eq!(duration(Duration::from_secs(3600)), "1.0h");
+        assert_eq!(duration(Duration::from_secs(6 * 3600)), "6.0h");
+    }
+
+    #[test]
+    fn a_jittered_delay_reads_as_the_range_it_draws_from() {
+        assert_eq!(
+            range(Duration::from_secs(10), Duration::from_secs(30)),
+            "10s to 30s"
+        );
+        assert_eq!(
+            range(Duration::from_secs(60), Duration::from_secs(60)),
+            "1m",
+            "a fixed delay is one number, not a range of one"
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -621,6 +898,6 @@ mod tests {
             stop.send(true).unwrap();
         });
 
-        assert!(!sleep_until(&mut shutdown, target).await);
+        assert!(!sleep_until(&mut shutdown, target, "waiting").await);
     }
 }

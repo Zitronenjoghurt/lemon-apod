@@ -8,6 +8,7 @@ use url::Url;
 
 mod credit;
 mod explanation;
+pub mod json;
 mod media;
 mod meta;
 mod title;
@@ -18,6 +19,10 @@ pub enum ParseError {
     TitleNotFound,
     #[error("no explanation found")]
     ExplanationNotFound,
+    #[error("the record holds no article body")]
+    NoArticleBody,
+    #[error("the record is not the JSON an APOD entry is stored as: {0}")]
+    NotJson(#[from] serde_json::Error),
 }
 
 pub fn parse_bytes(date: ApodDate, bytes: &[u8]) -> Result<ApodEntry, ParseError> {
@@ -25,6 +30,7 @@ pub fn parse_bytes(date: ApodDate, bytes: &[u8]) -> Result<ApodEntry, ParseError
     parse_page(date, &text)
 }
 
+pub use json::{Modern, parse_json_bytes};
 pub use title::{ModernTitle, modern as modern_title};
 
 pub fn attributes_anyone(raw: &str) -> bool {
@@ -58,12 +64,16 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
         keywords: meta::keywords(&doc),
         media,
         extra_media,
+        legacy_media_url: None,
+        alt: None,
+        authors: Vec::new(),
+        provenance: crate::entry::Provenance::LegacyOnly,
         source_url: date.source_url(),
         picture: None,
     })
 }
 
-fn page_base(date: ApodDate) -> Url {
+pub(crate) fn page_base(date: ApodDate) -> Url {
     Url::parse(&date.source_url())
         .unwrap_or_else(|_| Url::parse(APOD_BASE_URL).expect("APOD_BASE_URL is a valid URL"))
 }
