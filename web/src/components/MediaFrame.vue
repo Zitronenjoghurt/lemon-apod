@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ApodCredit from './ApodCredit.vue'
-import { aspectRatio, isImage, type Media } from '@/api/types'
+import { aspectRatio, isImage, isUndisplayableImage, type Media } from '@/api/types'
 
 const props = defineProps<{
   media: Media
@@ -75,8 +75,12 @@ const fullResolution = computed(() => {
 const placeholderLabel = computed(() => {
   if (props.media.kind === 'none') return 'No media on this entry'
   if (props.media.kind === 'embed') return 'Open the interactive embed'
-  return 'View on apod.nasa.gov'
+  return 'Open the original file'
 })
+
+const undisplayable = computed(
+  () => isUndisplayableImage(props.media.kind) && !!props.media.thumb_url,
+)
 
 const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url && !failed.value)
 const ratio = computed(() => aspectRatio(props.media))
@@ -150,6 +154,17 @@ const frameStyle = computed(() => ({
         <i aria-hidden="true" class="pi pi-search-plus" />
       </template>
     </Image>
+
+    <template v-else-if="undisplayable">
+      <div class="frame reserved">
+        <img :alt="title" :src="media.thumb_url ?? ''" class="full ready" decoding="async" />
+      </div>
+      <p class="tiff-note">
+        NASA's copy of this picture is a TIFF, which browsers do not display. The image above is the
+        thumbnail generated from it.
+        <a :href="media.url ?? '#'" rel="noopener" target="_blank">Open the original file</a>.
+      </p>
+    </template>
 
     <video
       v-else-if="media.kind === 'video_mp4' && media.url"
@@ -414,6 +429,13 @@ video.frame,
 .facade:hover .play i {
   transform: scale(1.08);
   background: rgb(0 0 0 / 0.75);
+}
+
+.tiff-note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
 .placeholder-card {

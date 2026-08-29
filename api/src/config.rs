@@ -12,7 +12,9 @@ pub struct Config {
     pub index_db: PathBuf,
     pub sky_db: PathBuf,
     pub votes_db: PathBuf,
+    pub archive_db: PathBuf,
     pub thumb_dir: PathBuf,
+    pub html_dir: PathBuf,
     pub static_dir: PathBuf,
 
     pub bind: IpAddr,
@@ -262,7 +264,9 @@ impl Config {
             index_db: env_or("APOD_DB", data_dir.join("apod.db"))?,
             sky_db: env_or("APOD_SKY_DB", data_dir.join("sky.db"))?,
             votes_db: env_or("APOD_VOTES_DB", data_dir.join("votes.db"))?,
+            archive_db: env_or("APOD_ARCHIVE_DB", data_dir.join("archive.db"))?,
             thumb_dir: env_or("APOD_THUMB_DIR", data_dir.join("thumbs"))?,
+            html_dir: env_or("APOD_HTML_DIR", data_dir.join("html"))?,
             static_dir: env_or("APOD_STATIC_DIR", "./static".into())?,
 
             bind: env_or("APOD_BIND", IpAddr::from([0, 0, 0, 0]))?,

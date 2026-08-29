@@ -1,4 +1,6 @@
-use super::model::{Filters, KindCount, Order, Page, SearchResults, Stats};
+use super::model::{
+    FieldDivergence, Filters, KindCount, Listing, Order, Page, SearchResults, Stats,
+};
 use super::query::fts_query;
 use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
 use crate::date::ApodDate;
@@ -384,11 +386,77 @@ impl ApodReader {
         .await?)
     }
 
+    pub async fn entries_by_year(&self) -> ApodResult<Vec<(i32, i64)>> {
+        Ok(sqlx::query_as(
+            "SELECT CAST(substr(date, 1, 4) AS INTEGER) AS year, COUNT(*)
+             FROM entries GROUP BY year ORDER BY year",
+        )
+        .fetch_all(self.db.reader())
+        .await?)
+    }
+
+    pub async fn divergent_entries(&self) -> ApodResult<i64> {
+        Ok(
+            sqlx::query_scalar("SELECT COUNT(DISTINCT date_id) FROM divergences")
+                .fetch_one(self.db.reader())
+                .await?,
+        )
+    }
+
+    pub async fn divergences(
+        &self,
+        field: Option<&str>,
+        offset: usize,
+        limit: usize,
+    ) -> ApodResult<Listing<FieldDivergence>> {
+        let total: i64 = match field {
+            Some(field) => {
+                sqlx::query_scalar("SELECT COUNT(*) FROM divergences WHERE field = ?1")
+                    .bind(field)
+                    .fetch_one(self.db.reader())
+                    .await?
+            }
+            None => {
+                sqlx::query_scalar("SELECT COUNT(*) FROM divergences")
+                    .fetch_one(self.db.reader())
+                    .await?
+            }
+        };
+
+        let rows = sqlx::query(
+            "SELECT d.date_id, e.title, d.field, d.legacy_value, d.modern_value
+             FROM divergences d JOIN entries e ON e.date_id = d.date_id
+             WHERE (?1 IS NULL OR d.field = ?1)
+             ORDER BY d.date_id DESC, d.field LIMIT ?2 OFFSET ?3",
+        )
+        .bind(field)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(self.db.reader())
+        .await?;
+
+        Ok(Listing {
+            items: rows
+                .iter()
+                .map(|row| {
+                    Ok(FieldDivergence {
+                        date: ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
+                        title: row.try_get(1)?,
+                        field: row.try_get(2)?,
+                        legacy: row.try_get(3)?,
+                        modern: row.try_get(4)?,
+                    })
+                })
+                .collect::<ApodResult<_>>()?,
+            total,
+        })
+    }
+
     pub async fn origin_pairs(&self) -> ApodResult<Vec<(ApodDate, String, String)>> {
         let rows: Vec<(i64, String, String)> = sqlx::query_as(
             "SELECT date_id, legacy_media_url, media_url FROM entries
              WHERE legacy_media_url IS NOT NULL AND media_url IS NOT NULL
-               AND media_kind IN ('image_jpg', 'image_png', 'image_gif')
+               AND media_kind IN ('image_jpg', 'image_png', 'image_gif', 'image_tiff')
              ORDER BY date_id",
         )
         .fetch_all(self.db.reader())

@@ -55,7 +55,8 @@ struct Ticket {
 struct Side {
     #[serde(flatten)]
     entry: ApodSummary,
-    source_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_url: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     credit: Vec<String>,
     dates: Vec<ApodDate>,
@@ -84,7 +85,6 @@ struct BoardRow {
     #[serde(skip_serializing_if = "is_nothing")]
     inherited: f64,
     dates: Vec<ApodDate>,
-    source_url: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     credit: Vec<String>,
 }
@@ -309,7 +309,7 @@ async fn side(state: &ServerState, picture: ApodDate) -> ApiResult<Side> {
         .ok_or(ApiError::NotFound)?;
 
     Ok(Side {
-        source_url: picture.source_url(),
+        source_url: entry.official_url().map(str::to_owned),
         credit: credit_lines(&entry.credits),
         dates: state.store.picture_dates(picture).await?,
         entry: entry.to_summary(),
@@ -464,7 +464,6 @@ async fn board_rows(
             dates: runs
                 .remove(&score.picture)
                 .unwrap_or_else(|| vec![score.picture]),
-            source_url: score.picture.source_url(),
             credit: credit_lines(&found.credits),
             entry: found.summary,
         })

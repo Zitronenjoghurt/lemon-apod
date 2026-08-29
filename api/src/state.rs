@@ -1,3 +1,4 @@
+use crate::archive::Archive;
 use crate::config::Config;
 use crate::meta::Shell;
 use crate::rating::Rating;
@@ -17,6 +18,7 @@ const HEALTH_TTL: Duration = Duration::from_secs(2);
 pub struct ServerState {
     pub config: Arc<Config>,
     pub store: ApodReader,
+    pub archive: Archive,
     pub sky: Sky,
     pub rating: Option<Arc<Rating>>,
     pub shell: Arc<Shell>,
@@ -25,6 +27,7 @@ pub struct ServerState {
     pub rss: Cached,
     pub timeline: Cached,
     pub coverage: Cached,
+    pub migration: Cached,
     pub health: Cached,
 }
 
@@ -49,6 +52,7 @@ impl ServerState {
 
         Ok(Self {
             rating,
+            archive: Archive::new(config.archive_db.clone()),
             shell: Arc::new(Shell::load(&config)?),
             sky: Sky::new(
                 config.sky_db.clone(),
@@ -59,6 +63,7 @@ impl ServerState {
             rss: Cached::new(Duration::from_secs(config.cache_feed_secs)),
             timeline: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             coverage: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
+            migration: Cached::new(Duration::from_secs(config.cache_timeline_secs)),
             health: Cached::new(HEALTH_TTL),
             store,
             config: Arc::new(config),

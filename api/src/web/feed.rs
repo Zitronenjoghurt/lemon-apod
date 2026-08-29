@@ -3,6 +3,7 @@ use crate::api::response;
 use crate::config::Publish;
 use crate::schedule;
 use crate::state::ServerState;
+use apod_core::original::APOD_HOME;
 use apod_core::{ApodEntry, Filters, Order};
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -188,7 +189,7 @@ fn content_html(base: &str, entry: &ApodEntry) -> String {
 
     html.push_str(&format!(
         "<p>From NASA's <a href=\"{source}\">Astronomy Picture of the Day</a></p>",
-        source = super::escape(&entry.source_url),
+        source = super::escape(entry.official_url().unwrap_or(APOD_HOME)),
     ));
 
     html.push_str("<p>");
@@ -338,7 +339,9 @@ mod tests {
 
         assert!(name > image, "the name follows the picture: {html}");
         assert!(
-            html.contains("<a href=\"https://apod.nasa.gov/apod/ap260305.html\">Astronomy Picture of the Day</a>"),
+            html.contains(&format!(
+                "<a href=\"{APOD_HOME}\">Astronomy Picture of the Day</a>"
+            )),
             "{html}"
         );
     }

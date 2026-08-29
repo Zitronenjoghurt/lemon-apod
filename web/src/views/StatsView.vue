@@ -347,7 +347,6 @@ function count(value: number | undefined): string {
       </div>
 
       <div v-else-if="years.length" class="charts">
-        <YearChart :points="series((y) => y.entries)" label="Entries published" />
         <YearChart
           :decimals="1"
           :points="series((y) => y.avg_words)"

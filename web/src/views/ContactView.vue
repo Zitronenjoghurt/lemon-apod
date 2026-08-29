@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useStatus } from '@/composables/useStatus'
-import { MASTODON_URL, REPO_URL } from '@/utils/links'
+import { APOD_ABOUT_URL, MASTODON_URL, REPO_URL } from '@/utils/links'
 
 defineOptions({ name: 'ContactView' })
 
@@ -288,14 +288,8 @@ const elsewhere = computed(() => [
         <p class="muted note">
           The archive's contents belong to NASA and the people credited on each entry. Anything
           wrong with a picture or its text is worth taking up with
-          <a
-            data-ours
-            href="https://apod.nasa.gov/apod/lib/about_apod.html"
-            rel="noopener"
-            target="_blank"
-          >
-            APOD itself</a
-          >. Anything wrong with how this site shows them is on me.
+          <a data-ours :href="APOD_ABOUT_URL" rel="noopener" target="_blank"> APOD itself</a>.
+          Anything wrong with how this site shows them is on me.
         </p>
       </section>
     </div>

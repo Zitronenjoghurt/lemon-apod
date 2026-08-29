@@ -11,11 +11,11 @@ pub mod write;
 
 pub use games::{Deal, GameEntry};
 pub use model::{
-    AnchorCount, Appearance, Changed, Cloze, ClozePiece, Coverage, EntryLength, Filters, HostCount,
-    KindCount, LengthBucket, Listing, MonthCount, Order, Page, Picture, PictureAppearances,
-    PictureFilters, PictureOrder, PictureSummary, Resource, ResourceFilters, ResourceOrder,
-    ResourceRef, ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary, Timeline, Word,
-    WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
+    AnchorCount, Appearance, Changed, Cloze, ClozePiece, Coverage, EntryLength, FieldDivergence,
+    Filters, HostCount, KindCount, LengthBucket, Listing, MonthCount, Order, Page, Picture,
+    PictureAppearances, PictureFilters, PictureOrder, PictureSummary, Resource, ResourceFilters,
+    ResourceOrder, ResourceRef, ResourceRefs, ResourceSummary, SearchResults, Stats, TextSummary,
+    Timeline, Word, WordEntry, WordFilters, WordOrder, WordUse, YearCount, YearStats,
 };
 pub use pictures::{Fingerprint, PictureGroup};
 pub use read::{ApodError, ApodReader, ApodResult, Snippet};

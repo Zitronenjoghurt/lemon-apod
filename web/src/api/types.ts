@@ -2,6 +2,7 @@ export type MediaKind =
   | 'image_jpg'
   | 'image_png'
   | 'image_gif'
+  | 'image_tiff'
   | 'video_mp4'
   | 'youtube'
   | 'vimeo'
@@ -38,9 +39,13 @@ export interface ApodEntry {
   media: Media
   extra_media?: Media[]
   source_url: string
-  /** Set when this picture ran on more than one date. The value is the date it first ran. */
+  provenance: Provenance
+  alt?: string
+  authors?: string[]
   picture?: string
 }
+
+export type Provenance = 'legacy_only' | 'modern_only' | 'both'
 
 export interface ApodSummary {
   date: string
@@ -539,7 +544,8 @@ export interface WordsRound extends GamePicture {
 export interface Reveal extends ApodSummary {
   picture: string
   dates: string[]
-  source_url: string
+  /** Absent where APOD's current site has no page for the date. Fall back to `APOD_URL`. */
+  source_url?: string
 }
 
 export interface MatchAnswer {
@@ -559,6 +565,10 @@ export const IMAGE_KINDS: MediaKind[] = ['image_jpg', 'image_png', 'image_gif']
 export const VIDEO_KINDS: MediaKind[] = ['video_mp4', 'youtube', 'vimeo']
 
 export type KindFilter = 'image' | 'video' | MediaKind
+
+export function isUndisplayableImage(kind: MediaKind): boolean {
+  return kind === 'image_tiff'
+}
 
 export function isImage(kind: MediaKind): boolean {
   return IMAGE_KINDS.includes(kind)
@@ -586,7 +596,8 @@ export interface RatingProgress {
 }
 
 export interface BallotSide extends ApodSummary {
-  source_url: string
+  /** Absent where APOD's current site has no page for the date. Fall back to `APOD_URL`. */
+  source_url?: string
   credit?: string[]
   dates: string[]
 }
@@ -620,7 +631,6 @@ export interface BoardRow extends ApodSummary {
   comparisons: number
   inherited?: number
   dates: string[]
-  source_url: string
   credit?: string[]
 }
 
@@ -669,4 +679,48 @@ export interface Gap {
   source?: { label: string; url: string }
   previous: string | null
   next: string | null
+}
+
+export interface ProvenanceCount {
+  provenance: Provenance
+  entries: number
+}
+
+export interface FieldCount {
+  field: string
+  entries: number
+}
+
+export interface CoverageSplit {
+  carried: number
+  absent: number
+  unchecked: number
+}
+
+export interface YearSplit extends CoverageSplit {
+  year: number
+  entries: number
+}
+
+export interface MigrationCoverage extends CoverageSplit {
+  entries: number
+  years: YearSplit[]
+  absent_dates: string[]
+}
+
+export interface Migration {
+  entries: number
+  provenance: ProvenanceCount[]
+  coverage: MigrationCoverage | null
+  divergences: FieldCount[]
+  divergent_entries: number
+  differences: number
+}
+
+export interface FieldDivergence {
+  date: string
+  title: string
+  field: string
+  legacy?: string
+  modern?: string
 }

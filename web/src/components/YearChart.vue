@@ -62,6 +62,11 @@ function format(value: number): string {
   })
 }
 
+const seen = computed(() => ({
+  low: Math.min(...values.value),
+  high: Math.max(...values.value),
+}))
+
 const years = computed(() => ({
   first: props.points[0]?.year,
   last: props.points.at(-1)?.year,
@@ -70,10 +75,10 @@ const years = computed(() => ({
 const at = ref<number>()
 
 function read(event: PointerEvent) {
-  const width = (event.currentTarget as SVGElement).getBoundingClientRect().width
-  if (!width || !props.points.length) return
+  const box = (event.currentTarget as SVGElement).getBoundingClientRect()
+  if (!box.width || !props.points.length) return
 
-  const share = event.offsetX / width
+  const share = (event.clientX - box.left) / box.width
   at.value = Math.min(props.points.length - 1, Math.max(0, Math.floor(share * props.points.length)))
 }
 
@@ -93,7 +98,7 @@ const marker = computed(() => {
       <span class="name">{{ label }}</span>
       <span :class="{ live: reading }" class="muted range">
         <template v-if="reading">{{ reading.year }}: {{ format(reading.value) }}</template>
-        <template v-else>{{ format(low) }} to {{ format(high) }}</template>
+        <template v-else>{{ format(seen.low) }} to {{ format(seen.high) }}</template>
       </span>
     </figcaption>
 
@@ -162,13 +167,13 @@ const marker = computed(() => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .head {
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .name {
@@ -176,7 +181,7 @@ const marker = computed(() => {
 }
 
 .range {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -217,7 +222,7 @@ svg {
 
 .axis {
   justify-content: space-between;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 </style>

@@ -1,4 +1,8 @@
 import { FIRST_ENTRY } from './date'
+import { APOD_URL } from './links'
+import type { ApodEntry } from '@/api/types'
+
+const DECOMMISSIONED = ['apod.nasa.gov', 'www.apod.nasa.gov', 'antwrp.gsfc.nasa.gov']
 
 const HREF =
   /href="https?:\/\/(?:www\.)?(?:apod\.nasa\.gov|antwrp\.gsfc\.nasa\.gov)\/apod\/ap(\d{6})\.html"/gi
@@ -28,4 +32,17 @@ function fromStamp(stamp: string): string | null {
 
   const iso = date.toISOString().slice(0, 10)
   return iso >= FIRST_ENTRY ? iso : null
+}
+
+export function officialUrl(entry: Pick<ApodEntry, 'source_url'>): string | null {
+  const host = entry.source_url.split('//')[1] ?? entry.source_url
+  return DECOMMISSIONED.some((dead) => host.startsWith(dead)) ? null : entry.source_url
+}
+
+export function originalPath(date: string): string {
+  return `/${date}/original`
+}
+
+export function apodPageUrl(entry: Pick<ApodEntry, 'source_url'>): string {
+  return officialUrl(entry) ?? APOD_URL
 }

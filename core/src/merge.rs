@@ -128,6 +128,10 @@ pub fn merge(legacy: Option<ApodEntry>, modern: Option<ApodEntry>) -> Option<Mer
         entry.extra_media = modern.extra_media;
     }
 
+    if !modern.source_url.is_empty() {
+        entry.source_url = modern.source_url;
+    }
+
     entry.alt = modern.alt;
     entry.authors = modern.authors;
     entry.provenance = provenance;
@@ -230,8 +234,30 @@ mod tests {
         assert_eq!(entry.explanation_text, "The survey looked deep.");
         assert_eq!(entry.tomorrow_teaser.as_deref(), Some("lion head space"));
         assert_eq!(entry.keywords, ["rubin"]);
-        assert_eq!(entry.source_url, ApodDate::START.source_url());
         assert_eq!(entry.provenance, Provenance::Both);
+    }
+
+    #[test]
+    fn the_official_page_link_moves_to_the_host_that_survives() {
+        let Merged { entry, divergences } = merge(Some(legacy()), Some(modern())).unwrap();
+
+        assert_eq!(
+            entry.source_url,
+            "https://science.nasa.gov/image-article/apod-2026-august-7/"
+        );
+        assert!(
+            !fields(&divergences).contains(&"source_url"),
+            "a page that moved is not content the migration altered"
+        );
+
+        let mut blank = modern();
+        blank.source_url = String::new();
+        let Merged { entry, .. } = merge(Some(legacy()), Some(blank)).unwrap();
+        assert_eq!(
+            entry.source_url,
+            ApodDate::START.source_url(),
+            "a record with no link of its own leaves the legacy URL in place"
+        );
     }
 
     #[test]

@@ -12,6 +12,7 @@ import { type ApodEntry, type ApodSummary, isVideo } from '@/api/types'
 import { useCoverage } from '@/composables/useCoverage'
 import { useRead } from '@/composables/useRead'
 import { useStatus } from '@/composables/useStatus'
+import { apodPageUrl } from '@/utils/apodLinks'
 import { formatDate } from '@/utils/date'
 
 const TICK_MS = 1_000
@@ -226,7 +227,7 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
 
             <div class="attribution">
               <ApodCredit
-                :source="featuredFull?.source_url"
+                :source="featuredFull ? apodPageUrl(featuredFull) : undefined"
                 lead="This picture is from NASA's"
                 variant="banner"
               />

@@ -62,6 +62,7 @@ const groups: { name: string | null; links: NavLink[] }[] = [
       { to: '/pictures', label: 'Encores', icon: 'pi pi-replay' },
       { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
       { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
+      { to: '/modernization', label: 'Modernization', icon: 'pi pi-arrow-right-arrow-left' },
       { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
     ],
   },
@@ -244,9 +245,8 @@ router.afterEach(() => (menuOpen.value = false))
 
           <p class="muted">
             An unofficial archive of NASA's
-            <a href="https://apod.nasa.gov/apod/" rel="noopener" target="_blank">
-              Astronomy Picture of the Day</a
-            >. Not affiliated with or endorsed by NASA. The text and media of all APOD entries
+            <a :href="APOD_URL" rel="noopener" target="_blank"> Astronomy Picture of the Day</a>.
+            Not affiliated with or endorsed by NASA. The text and media of all APOD entries
             originate from NASA and belong to the credited people and institutions.
           </p>
         </div>

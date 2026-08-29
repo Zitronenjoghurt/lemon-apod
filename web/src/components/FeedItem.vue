@@ -7,7 +7,7 @@ import { api, ApiError } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
-import { withInternalLinks } from '@/utils/apodLinks'
+import { apodPageUrl, withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
 import { formatDate } from '@/utils/date'
 
@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
     <MediaFrame
       v-if="media"
       :media="media"
-      :source="entry?.source_url"
+      :source="entry ? apodPageUrl(entry) : undefined"
       :title="title"
       max-height="min(70vh, 44rem)"
     >

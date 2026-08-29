@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::web::escape;
 use anyhow::{Context, Result};
-use apod_core::{ApodDate, ApodEntry, PictureAppearances, Resource};
+use apod_core::{ApodDate, ApodEntry, PictureAppearances, Resource, is_decommissioned};
 
 const MARKER: &str = "<!--APOD_META-->";
 const DESCRIPTION_CHARS: usize = 200;
@@ -75,6 +75,16 @@ const FIXED: &[Fixed] = &[
         path: "/resources",
         title: "Resources",
         description: "A comprehensive catalogue of every webpage NASAs Astronomy Picture of the Day has ever referenced.",
+    },
+    Fixed {
+        path: "/modernization",
+        title: "Modernization",
+        description: "NASA moved the Astronomy Picture of the Day from apod.nasa.gov to science.nasa.gov. These are statistics about the modernization itself..",
+    },
+    Fixed {
+        path: "/modernization/changes",
+        title: "What changed",
+        description: "NASA moved the Astronomy Picture of the Day from apod.nasa.gov to science.nasa.gov. This is a list of the changes that have been made to individual entries.",
     },
     Fixed {
         path: "/notifications",
@@ -276,7 +286,7 @@ impl Shell {
             .media
             .url
             .as_deref()
-            .filter(|_| entry.media.kind.is_image())
+            .filter(|url| entry.media.kind.renders_inline() && !is_decommissioned(url))
             .map(str::to_owned)
             .or_else(|| {
                 entry
@@ -475,7 +485,7 @@ mod tests {
             keywords: Vec::new(),
             media: Media::new(
                 MediaKind::ImageJpg,
-                Some("https://apod.nasa.gov/apod/image/2403/a.jpg".into()),
+                Some("https://assets.science.nasa.gov/content/dam/a.jpg".into()),
                 None,
             ),
             extra_media: Vec::new(),
@@ -544,9 +554,45 @@ mod tests {
         assert!(page.contains(
             r#"<meta property="og:url" content="https://apod.lemon.industries/2024-03-05">"#
         ));
-        assert!(page.contains(r#"content="https://apod.nasa.gov/apod/image/2403/a.jpg""#));
+        assert!(page.contains(r#"content="https://assets.science.nasa.gov/content/dam/a.jpg""#));
         assert!(page.contains(r#"twitter:card" content="summary_large_image"#));
         assert!(page.contains("<div id=app>"), "the app shell must survive");
+    }
+
+    #[test]
+    fn a_picture_on_the_host_being_switched_off_is_not_offered_as_a_share_image() {
+        let mut entry = entry();
+        entry.media = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2403/a.jpg".into()),
+            None,
+        );
+        entry.media.thumb_url = Some("/thumbs/2024/03/2024-03-05.webp".into());
+
+        let page = shell().entry_page(&entry);
+        assert!(
+            !page.contains("apod.nasa.gov"),
+            "a card fetched weeks after it was posted would find nothing there: {page}"
+        );
+        assert!(
+            page.contains(
+                r#"content="https://apod.lemon.industries/thumbs/2024/03/2024-03-05.webp""#
+            )
+        );
+    }
+
+    #[test]
+    fn an_entry_with_only_a_dying_picture_and_no_thumbnail_offers_no_image_at_all() {
+        let mut entry = entry();
+        entry.media = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2403/a.jpg".into()),
+            None,
+        );
+
+        let page = shell().entry_page(&entry);
+        assert!(!page.contains("og:image"), "{page}");
+        assert!(page.contains(r#"twitter:card" content="summary"#));
     }
 
     #[test]

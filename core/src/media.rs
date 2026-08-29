@@ -8,6 +8,7 @@ pub enum MediaKind {
     ImageJpg,
     ImagePng,
     ImageGif,
+    ImageTiff,
     VideoMp4,
     #[serde(rename = "youtube")]
     YouTube,
@@ -20,6 +21,13 @@ pub enum MediaKind {
 
 impl MediaKind {
     pub fn is_image(self) -> bool {
+        matches!(
+            self,
+            Self::ImageJpg | Self::ImagePng | Self::ImageGif | Self::ImageTiff
+        )
+    }
+
+    pub fn renders_inline(self) -> bool {
         matches!(self, Self::ImageJpg | Self::ImagePng | Self::ImageGif)
     }
 
@@ -37,6 +45,7 @@ impl MediaKind {
                 "jpg" | "jpeg" => return Self::ImageJpg,
                 "png" => return Self::ImagePng,
                 "gif" => return Self::ImageGif,
+                "tif" | "tiff" => return Self::ImageTiff,
                 "mp4" | "m4v" => return Self::VideoMp4,
                 _ => {}
             }
@@ -66,6 +75,7 @@ impl fmt::Display for MediaKind {
             Self::ImageJpg => "image_jpg",
             Self::ImagePng => "image_png",
             Self::ImageGif => "image_gif",
+            Self::ImageTiff => "image_tiff",
             Self::VideoMp4 => "video_mp4",
             Self::YouTube => "youtube",
             Self::Vimeo => "vimeo",
@@ -85,6 +95,7 @@ impl FromStr for MediaKind {
             "image_jpg" => Self::ImageJpg,
             "image_png" => Self::ImagePng,
             "image_gif" => Self::ImageGif,
+            "image_tiff" => Self::ImageTiff,
             "video_mp4" => Self::VideoMp4,
             "youtube" => Self::YouTube,
             "vimeo" => Self::Vimeo,
@@ -100,10 +111,11 @@ impl FromStr for MediaKind {
 pub struct KindFilter(Vec<MediaKind>);
 
 impl KindFilter {
-    pub const IMAGE: [MediaKind; 3] = [
+    pub const IMAGE: [MediaKind; 4] = [
         MediaKind::ImageJpg,
         MediaKind::ImagePng,
         MediaKind::ImageGif,
+        MediaKind::ImageTiff,
     ];
     pub const VIDEO: [MediaKind; 3] = [MediaKind::VideoMp4, MediaKind::YouTube, MediaKind::Vimeo];
 

@@ -2,7 +2,7 @@ import { ref } from 'vue'
 
 export const EXTERNAL_WARNING_KEY = 'apod:external-warning'
 
-const OURS = ['apod.nasa.gov', 'antwrp.gsfc.nasa.gov']
+const OURS = ['apod.nasa.gov', 'antwrp.gsfc.nasa.gov', 'science.nasa.gov']
 
 const acknowledged = ref(load())
 const pending = ref<string | null>(null)

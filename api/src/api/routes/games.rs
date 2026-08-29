@@ -60,7 +60,8 @@ pub struct Reveal {
     #[serde(flatten)]
     entry: ApodSummary,
     dates: Vec<ApodDate>,
-    source_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_url: Option<String>,
 }
 
 pub struct Setup {
@@ -257,18 +258,13 @@ async fn reveal(state: &ServerState, picture: &str) -> ApiResult<Reveal> {
     let dates = state.store.picture_dates(drawn).await?;
     let first = dates.first().copied().unwrap_or(drawn);
 
-    let entry = state
-        .store
-        .entry(first)
-        .await?
-        .ok_or(ApiError::NotFound)?
-        .to_summary();
+    let entry = state.store.entry(first).await?.ok_or(ApiError::NotFound)?;
 
     Ok(Reveal {
         picture: picture.to_owned(),
-        source_url: first.source_url(),
+        source_url: entry.official_url().map(str::to_owned),
         dates,
-        entry,
+        entry: entry.to_summary(),
     })
 }
 

@@ -17,6 +17,7 @@ rand = "0.10.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.11.0"
+sqlx = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net"] }
 tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }
 thiserror = { workspace = true }

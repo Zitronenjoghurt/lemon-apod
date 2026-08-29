@@ -1,4 +1,5 @@
 mod api;
+mod archive;
 mod client_ip;
 mod config;
 mod meta;
@@ -108,13 +109,18 @@ fn router(state: &ServerState) -> Router {
 
     let router = Router::new()
         .nest("/api", api)
-        .merge(web::metered().route_layer(GovernorLayer::new(reading)))
+        .merge(web::metered().route_layer(GovernorLayer::new(reading.clone())))
         .merge(web::unmetered(state))
         .fallback_service(static_files)
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());
 
-    web::with_security_headers(router)
+    let original = web::original::router()
+        .route_layer(GovernorLayer::new(reading))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state.clone());
+
+    web::with_security_headers(router).merge(original)
 }
 
 fn init_logging() {

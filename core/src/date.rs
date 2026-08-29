@@ -71,6 +71,17 @@ impl ApodDate {
         self.0 >= 0 && self <= today && !self.is_known_missing()
     }
 
+    pub fn from_legacy_filename(name: &str) -> Option<Self> {
+        let name = name.rsplit('/').next()?;
+        let digits = name.strip_prefix("ap")?.strip_suffix(".html")?;
+        if digits.len() != 6 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        NaiveDate::parse_from_str(digits, "%y%m%d")
+            .ok()
+            .map(Self::from)
+    }
+
     pub fn source_url(self) -> String {
         format!(
             "https://apod.nasa.gov/apod/ap{}.html",

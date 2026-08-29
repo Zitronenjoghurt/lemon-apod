@@ -5,6 +5,7 @@ mod entries;
 mod entry;
 pub mod games;
 pub mod gaps;
+mod migration;
 mod on_this_day;
 mod pictures;
 mod random;
@@ -21,6 +22,7 @@ pub fn build_routes() -> Router<ServerState> {
         .nest("/entry", entry::router())
         .nest("/entries", entries::router())
         .nest("/gaps", gaps::router())
+        .nest("/migration", migration::router())
         .nest("/search", search::router())
         .nest("/on-this-day", on_this_day::router())
         .nest("/random", random::router())

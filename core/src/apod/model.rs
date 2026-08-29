@@ -122,6 +122,17 @@ pub struct ResourceSummary {
 }
 
 #[derive(Debug, Serialize)]
+pub struct FieldDivergence {
+    pub date: ApodDate,
+    pub title: String,
+    pub field: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub legacy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modern: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct Timeline {
     pub years: Vec<YearStats>,
 }

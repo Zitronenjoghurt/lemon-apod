@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
+const DECOMMISSIONED: [&str; 3] = ["apod.nasa.gov", "www.apod.nasa.gov", "antwrp.gsfc.nasa.gov"];
+
+pub fn is_decommissioned(url: &str) -> bool {
+    let host = url.split_once("//").map_or(url, |(_, rest)| rest);
+    DECOMMISSIONED.iter().any(|dead| host.starts_with(dead))
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provenance {
@@ -136,6 +143,18 @@ impl ApodEntry {
         })
     }
 
+    pub fn official_url(&self) -> Option<&str> {
+        let host = self
+            .source_url
+            .split_once("//")
+            .map_or(self.source_url.as_str(), |(_, rest)| rest);
+
+        DECOMMISSIONED
+            .iter()
+            .all(|dead| !host.starts_with(dead))
+            .then_some(self.source_url.as_str())
+    }
+
     pub fn to_summary(&self) -> ApodSummary {
         ApodSummary {
             date: self.date,
@@ -201,6 +220,52 @@ fn truncate_on_word_boundary(text: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn at(source_url: &str) -> ApodEntry {
+        ApodEntry {
+            date: ApodDate::START,
+            title: String::new(),
+            title_raw: None,
+            explanation_html: String::new(),
+            explanation_text: String::new(),
+            credits: Vec::new(),
+            has_copyright: false,
+            license_url: None,
+            tomorrow_teaser: None,
+            keywords: Vec::new(),
+            media: Media::default(),
+            extra_media: Vec::new(),
+            legacy_media_url: None,
+            alt: None,
+            authors: Vec::new(),
+            provenance: Provenance::Both,
+            source_url: source_url.to_owned(),
+            picture: None,
+        }
+    }
+
+    #[test]
+    fn only_a_page_on_a_host_that_survives_is_offered_as_the_official_one() {
+        assert_eq!(
+            at("https://science.nasa.gov/image-article/apod/apod-x/").official_url(),
+            Some("https://science.nasa.gov/image-article/apod/apod-x/")
+        );
+
+        for dead in [
+            "https://apod.nasa.gov/apod/ap950616.html",
+            "http://apod.nasa.gov/apod/ap950616.html",
+            "https://www.apod.nasa.gov/apod/ap950616.html",
+            "https://antwrp.gsfc.nasa.gov/apod/ap950616.html",
+        ] {
+            assert_eq!(at(dead).official_url(), None, "{dead}");
+        }
+
+        assert_eq!(
+            at("https://science.nasa.gov/apod.nasa.gov/x").official_url(),
+            Some("https://science.nasa.gov/apod.nasa.gov/x"),
+            "the dead host has to be the host, not a substring of the path"
+        );
+    }
 
     #[test]
     fn truncates_without_splitting_words() {

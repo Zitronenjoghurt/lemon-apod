@@ -7,6 +7,7 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 mod feed;
 mod health;
+pub mod original;
 mod sitemap;
 mod spa;
 

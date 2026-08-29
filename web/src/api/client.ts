@@ -6,6 +6,7 @@ import type {
   Board,
   Cast,
   Coverage,
+  FieldDivergence,
   Forgotten,
   GamePicture,
   Gap,
@@ -15,6 +16,7 @@ import type {
   Listing,
   MatchAnswer,
   MatchRound,
+  Migration,
   OrderPair,
   Page,
   Picture,
@@ -181,6 +183,12 @@ export interface SearchOptions extends Omit<ListOptions, 'cursor' | 'order'> {
   offset?: number
 }
 
+export interface DivergenceOptions {
+  field?: string
+  offset?: number
+  limit?: number
+}
+
 export interface ResourceOptions {
   q?: string
   host?: string
@@ -247,6 +255,11 @@ export const api = {
   timeline: (signal?: AbortSignal) => request<Timeline>('/api/stats/timeline', signal),
 
   coverage: (signal?: AbortSignal) => request<Coverage>('/api/stats/coverage', signal),
+
+  migration: (signal?: AbortSignal) => request<Migration>('/api/migration', signal),
+
+  divergences: (options: DivergenceOptions = {}, signal?: AbortSignal) =>
+    request<Listing<FieldDivergence>>(`/api/migration/divergences${query({ ...options })}`, signal),
 
   resources: (options: ResourceOptions = {}, signal?: AbortSignal) =>
     request<Listing<Resource>>(`/api/resources${query({ ...options })}`, signal),

@@ -9,7 +9,7 @@ import type { ApodEntry, ApodSummary, PictureAppearances } from '@/api/types'
 import { useArrowKeys } from '@/composables/useArrowKeys'
 import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
-import { withInternalLinks } from '@/utils/apodLinks'
+import { apodPageUrl, originalPath, withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
 import {
   archivePath,
@@ -312,7 +312,7 @@ watch([() => props.entry.date, hits], async () => {
 
     <div class="layout">
       <div class="media-column">
-        <MediaFrame :media="entry.media" :source="entry.source_url" :title="entry.title">
+        <MediaFrame :media="entry.media" :source="apodPageUrl(entry)" :title="entry.title">
           <template #credit>
             <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
               <template v-for="(credit, index) in credits" :key="credit.label + index">
@@ -368,9 +368,10 @@ watch([() => props.entry.date, hits], async () => {
             size="small"
             @click="copyLink"
           />
-          <a :href="entry.source_url" class="plain" rel="noopener" target="_blank">
+          <a :href="originalPath(entry.date)" class="plain">
             <Button
-              icon="pi pi-external-link"
+              v-tooltip.bottom="'The page as APOD published it'"
+              icon="pi pi-file"
               label="Original"
               outlined
               severity="secondary"

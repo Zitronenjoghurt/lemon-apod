@@ -98,6 +98,18 @@ const router = createRouter({
       meta: { title: 'Encores' },
     },
     {
+      path: '/modernization',
+      name: 'modernization',
+      component: () => import('@/views/ModernizationView.vue'),
+      meta: { title: 'Modernization' },
+    },
+    {
+      path: '/modernization/changes',
+      name: 'modernization-changes',
+      component: () => import('@/views/ChangesView.vue'),
+      meta: { title: 'What changed' },
+    },
+    {
       path: '/notifications',
       name: 'notifications',
       component: () => import('@/views/NotificationsView.vue'),
@@ -140,7 +152,9 @@ const router = createRouter({
     if (saved) return saved
     if (
       to.name === from.name &&
-      ['search', 'resources', 'pictures', 'stats', 'rating'].includes(String(to.name))
+      ['search', 'resources', 'pictures', 'stats', 'rating', 'modernization-changes'].includes(
+        String(to.name),
+      )
     ) {
       return {}
     }

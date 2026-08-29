@@ -39,14 +39,7 @@ impl Header {
     }
 
     fn migrated_from(&self) -> Option<ApodDate> {
-        let name = self.migration_source_url.rsplit('/').next()?;
-        let digits = name.strip_prefix("ap")?.strip_suffix(".html")?;
-        if digits.len() != 6 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-            return None;
-        }
-        chrono::NaiveDate::parse_from_str(digits, "%y%m%d")
-            .ok()
-            .map(ApodDate::from)
+        ApodDate::from_legacy_filename(&self.migration_source_url)
     }
 
     fn key(&self) -> Option<ApodDate> {

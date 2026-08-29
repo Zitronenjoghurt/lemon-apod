@@ -55,6 +55,21 @@ pub fn sanitize(el: ElementRef<'_>, base: &Url, opts: &Options<'_>) -> Option<Fr
     Some(flat.slice(window))
 }
 
+pub fn escape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '\'' => out.push_str("&#39;"),
+            '"' => out.push_str("&quot;"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 pub fn collapse(raw: &str) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }
