@@ -110,6 +110,12 @@ const router = createRouter({
       meta: { title: 'What changed' },
     },
     {
+      path: '/discord',
+      name: 'discord',
+      component: () => import('@/views/DiscordView.vue'),
+      meta: { title: 'Discord bot' },
+    },
+    {
       path: '/notifications',
       name: 'notifications',
       component: () => import('@/views/NotificationsView.vue'),

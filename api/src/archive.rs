@@ -77,6 +77,27 @@ impl Archive {
         }
     }
 
+    pub async fn modern_missing(&self, date: ApodDate) -> bool {
+        let Some(db) = self.db().await else {
+            return false;
+        };
+
+        let found: Result<Option<i64>, _> = sqlx::query_scalar(
+            "SELECT http_status FROM fetches WHERE date_id = ?1 AND source = 'modern'",
+        )
+        .bind(date.days() as i64)
+        .fetch_optional(db.reader())
+        .await;
+
+        match found {
+            Ok(status) => status == Some(404),
+            Err(error) => {
+                tracing::warn!(%date, "reading the modern fetch status: {error}");
+                false
+            }
+        }
+    }
+
     pub async fn coverage(&self, index: &ApodReader) -> Option<Coverage> {
         let db = self.db().await?;
 

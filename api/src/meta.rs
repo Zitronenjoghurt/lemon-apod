@@ -79,7 +79,7 @@ const FIXED: &[Fixed] = &[
     Fixed {
         path: "/modernization",
         title: "Modernization",
-        description: "NASA moved the Astronomy Picture of the Day from apod.nasa.gov to science.nasa.gov. These are statistics about the modernization itself..",
+        description: "NASA moved the Astronomy Picture of the Day from apod.nasa.gov to science.nasa.gov. These are statistics about the modernization itself.",
     },
     Fixed {
         path: "/modernization/changes",

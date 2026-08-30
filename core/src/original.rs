@@ -318,9 +318,13 @@ impl Original<'_> {
         };
 
         format!(
-            "<div class=\"apod-frame\" role=\"note\">\
+            "<div class=\"apod-frame-slot\">\
+             <input type=\"checkbox\" id=\"apod-frame-off\" class=\"apod-frame-x\" \
+             title=\"Dismiss this notice\" aria-label=\"Dismiss this notice\">\
+             <div class=\"apod-frame\" role=\"note\">\
              <span class=\"apod-frame-lead\">{lead}</span>\
              <span class=\"apod-frame-links\">{links}</span>\
+             </div>\
              </div>\n"
         )
     }
@@ -418,13 +422,22 @@ fn splice(haystack: &str, from: usize, to: usize, with: &str) -> String {
 const STYLE: &str = r#"<style>
 html{color-scheme:light}
 body:not([bgcolor]):not(.apod-recon){background:#fff;color:#000}
+.apod-frame-slot{position:relative}
 .apod-frame{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45;
 margin:0 0 1rem;text-align:left;display:flex;flex-wrap:wrap;align-items:baseline;gap:.15rem 1rem;
-font-size:.78rem;padding:.35rem .6rem;border:1px solid #dcdfe8;border-radius:.35rem;
+font-size:.78rem;padding:.35rem 2.2rem .35rem .6rem;border:1px solid #dcdfe8;border-radius:.35rem;
 background:#fff;color:#5f647a}
 .apod-frame a{color:#3a53c4}
 .apod-frame-links{display:flex;flex-wrap:wrap;gap:.15rem 1rem}
 .apod-frame-links a{white-space:nowrap}
+.apod-frame-x{position:absolute;top:.2rem;right:.25rem;appearance:none;-webkit-appearance:none;
+margin:0;padding:0;width:1.7rem;height:1.7rem;border:0;border-radius:.3rem;background:none;
+font:inherit;font-size:.95rem;line-height:1.7rem;text-align:center;color:#8a8fa3;cursor:pointer}
+.apod-frame-x::before{content:"\00d7"}
+.apod-frame-x:hover{color:#1b1d26;background:#eceef4}
+.apod-frame-x:focus-visible{outline:2px solid #3a53c4;outline-offset:1px}
+.apod-frame-x:checked{display:none}
+.apod-frame-x:checked+.apod-frame{display:none}
 img{max-width:100%;height:auto}
 body{overflow-wrap:break-word}
 @media(max-width:40rem){table,pre{display:block;max-width:100%;overflow-x:auto}}
@@ -632,6 +645,36 @@ alt="See Explanation." style="max-width:100%"></a>
             !recon.contains("apod-frame-foot"),
             "the reconstruction says what it is once, at the top, and not again at the bottom"
         );
+    }
+
+    #[test]
+    fn the_banner_folds_away_for_this_reading_of_the_page_and_is_back_on_the_next() {
+        let entry = entry();
+
+        for page in [&view(&entry).reconstructed(), &archived()] {
+            assert!(
+                page.contains(r#"<input type="checkbox" id="apod-frame-off" class="apod-frame-x""#),
+                "a page served under script-src 'none' can only dismiss with a checkbox: {page}"
+            );
+            assert!(
+                page.contains(".apod-frame-x:checked+.apod-frame{display:none}"),
+                "and checking it has to actually take the banner away: {page}"
+            );
+            let rule = page
+                .split_once(".apod-frame-x{")
+                .expect("the control is styled")
+                .1;
+            assert!(
+                rule.starts_with("position:absolute") && rule[..60].contains("right:"),
+                "the control is pinned to the far right of the banner, not left in the flow: \
+                 {rule}"
+            );
+            assert!(
+                !page.contains("<script") && !page.contains("localStorage"),
+                "nothing remembers the dismissal, it lasts as long as this look at the page: \
+                 {page}"
+            );
+        }
     }
 
     #[test]

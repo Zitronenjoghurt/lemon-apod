@@ -17,13 +17,15 @@ COPY Cargo.toml Cargo.lock ./
 COPY core core
 COPY archiver archiver
 COPY api api
+COPY bot bot
 COPY baseline baseline
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked \
     && mkdir -p /out \
-    && cp target/release/apod-archiver target/release/apod-api /out/
+    && cp target/release/apod-archiver target/release/apod-api \
+          target/release/apod-discord-bot /out/
 
 FROM debian:trixie-slim AS prep
 RUN useradd --system --uid 10001 --no-create-home --home-dir /nonexistent apod \
@@ -49,3 +51,7 @@ COPY --from=web /web/dist /app/static
 ENV APOD_STATIC_DIR=/app/static
 EXPOSE 51995
 ENTRYPOINT ["apod-api"]
+
+FROM runtime AS discord-bot
+COPY --from=rust /out/apod-discord-bot /usr/local/bin/apod-discord-bot
+ENTRYPOINT ["apod-discord-bot"]

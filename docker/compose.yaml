@@ -71,6 +71,7 @@ services:
       APOD_NTFY_TOPIC_AURORA: apod-aurora
       APOD_NTFY_TOPIC_SPACE_WEATHER: apod-space-weather
       APOD_NTFY_TOPIC_SKY: apod-sky
+      APOD_DISCORD_CLIENT_ID: "${APOD_DISCORD_CLIENT_ID:-}"
       RUST_LOG: info
     healthcheck:
       test: [ "CMD", "apod-api", "--health" ]
@@ -78,6 +79,37 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  discord-bot:
+    profiles: [ "bot" ]
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: discord-bot
+    image: lemon-apod-discord-bot:dev
+    restart: unless-stopped
+    depends_on:
+      archiver:
+        condition: service_started
+    volumes:
+      - ${APOD_DATA:-../data}:/data
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      APOD_PUBLIC_URL: ${APOD_PUBLIC_URL:-http://localhost:51995}
+      APOD_BOT_ANNOUNCE_ENABLED: "${APOD_BOT_ANNOUNCE_ENABLED:-false}"
+      RUST_LOG: info
     read_only: true
     tmpfs:
       - /tmp

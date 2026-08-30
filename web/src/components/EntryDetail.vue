@@ -59,6 +59,14 @@ const changedNames = computed(() =>
   changed.value.map((row) => FIELD_NAMES[row.field] ?? row.field.replace(/_/g, ' ')),
 )
 
+const absent = computed(() => props.entry.absent === true)
+
+const migration = computed(() =>
+  absent.value
+    ? { icon: 'pi-ban', lead: "Missing from APOD's modernized site" }
+    : { icon: 'pi-arrow-right-arrow-left', lead: "Changed through APOD's modernization" },
+)
+
 const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
 
 const linked = computed(() => withInternalLinks(props.entry.explanation_html))
@@ -293,7 +301,7 @@ watch([() => props.entry.date, hits], async () => {
       </span>
     </nav>
 
-    <div v-if="changed.length" class="migration">
+    <div v-if="changed.length || absent" class="migration">
       <button
         :aria-expanded="migrationOpen"
         class="row migrated"
@@ -301,10 +309,10 @@ watch([() => props.entry.date, hits], async () => {
         @click="migrationOpen = !migrationOpen"
       >
         <span class="lead">
-          <i aria-hidden="true" class="pi pi-arrow-right-arrow-left" />
-          Changed through APOD's modernization
+          <i :class="['pi', migration.icon]" aria-hidden="true" />
+          {{ migration.lead }}
         </span>
-        <span class="row fields">
+        <span v-if="changed.length" class="row fields">
           <span v-for="name in changedNames" :key="name" class="what">{{ name }}</span>
         </span>
         <i
@@ -314,6 +322,10 @@ watch([() => props.entry.date, hits], async () => {
       </button>
 
       <div v-if="migrationOpen" class="card differences">
+        <p v-if="absent" class="gone">
+          NASA's modernized site has no page for this date. What you are reading was archived from
+          the legacy page.
+        </p>
         <FieldChange v-for="row in changed" :key="row.field" :row="row" />
         <RouterLink class="about" to="/modernization">
           More information about the modernization of the official APOD website
@@ -595,6 +607,11 @@ watch([() => props.entry.date, hits], async () => {
   flex-direction: column;
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
+}
+
+.gone {
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
 .about {

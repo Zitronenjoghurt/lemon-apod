@@ -1,9 +1,10 @@
 DATA ?= $(CURDIR)/data
 ARCHIVER = APOD_DATA_DIR=$(DATA) cargo run -q --profile cli -p apod-archiver --
 API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p apod-api
+BOT = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-discord-bot --
 COMPOSE = docker compose -f docker/compose.yaml
 
-.PHONY: help check test fmt lint api web dev backfill backfill-modern status quality reparse \
+.PHONY: help check test fmt lint api web dev bot preview backfill backfill-modern status quality reparse \
         media thumbs \
         pictures sky notify rating rating-import rating-export legacy-export legacy-import \
         docker seed up down logs ps shell
@@ -32,6 +33,12 @@ api: web ## Serve the API and the built frontend on :51995
 
 dev: ## Vite dev server (proxies /api to a locally running apod-api)
 	cd web && npm run dev
+
+bot: ## Run the Discord bot against ./data. Needs DISCORD_TOKEN
+	$(BOT)
+
+bot-preview: ## Print the announcement for a date, no Discord involved. DATE=<YYYY-MM-DD>
+	$(BOT) --preview $(DATE)
 
 backfill: ## Fetch a few pages into ./data. Respect the rate limit, this hits NASA
 	$(ARCHIVER) backfill --limit $(or $(N),5)
@@ -78,14 +85,15 @@ legacy-import: ## Restore a snapshot into ./data. FROM=<path|url>, SHA=<hash>, F
 notify: ## Send what is due. DRY=1 lists it instead, SEED=1 records it as sent without sending
 	$(ARCHIVER) notify $(if $(DRY),--dry-run) $(if $(SEED),--seed)
 
-docker: ## Build both images locally
+docker: ## Build all three images locally
 	docker build -f docker/Dockerfile --target archiver -t lemon-apod-archiver:dev .
 	docker build -f docker/Dockerfile --target api -t lemon-apod-api:dev .
+	docker build -f docker/Dockerfile --target discord-bot -t lemon-apod-discord-bot:dev .
 
 seed: ## Optional: fetch a few pages through the container so a fresh ./data is not empty
 	$(COMPOSE) run --rm archiver backfill --limit $(or $(N),5)
 
-up: ## Build and start both services on :51995
+up: ## Build and start the archiver and the API on :51995 (add --profile bot for the bot)
 	$(COMPOSE) up -d --build
 
 down: ## Stop both services (./data is a bind mount and survives)

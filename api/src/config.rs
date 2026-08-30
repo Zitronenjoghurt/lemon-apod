@@ -50,6 +50,7 @@ pub struct Config {
     pub rating: Rating,
     pub contact: Contact,
     pub notify: Notify,
+    pub discord: Discord,
 }
 
 #[derive(Clone, Default)]
@@ -203,6 +204,50 @@ fn delta(duration: Duration) -> TimeDelta {
     TimeDelta::from_std(duration).unwrap_or(TimeDelta::MAX)
 }
 
+const BOT_PERMISSIONS: u64 = (1 << 10) | (1 << 11) | (1 << 14) | (1 << 15);
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct Discord {
+    pub invite_url: Option<String>,
+    pub user_install_url: Option<String>,
+}
+
+impl Discord {
+    fn from_env() -> Result<Self> {
+        let Some(raw) = optional("APOD_DISCORD_CLIENT_ID") else {
+            return Ok(Self::default());
+        };
+
+        let client_id: u64 = raw
+            .parse()
+            .with_context(|| format!("APOD_DISCORD_CLIENT_ID='{raw}' is not a Discord id"))?;
+
+        Ok(Self {
+            invite_url: Some(invite_url(client_id)),
+            user_install_url: Some(user_install_url(client_id)),
+        })
+    }
+}
+
+fn invite_url(client_id: u64) -> String {
+    format!(
+        "https://discord.com/oauth2/authorize\
+         ?client_id={client_id}\
+         &permissions={BOT_PERMISSIONS}\
+         &integration_type=0\
+         &scope=bot+applications.commands"
+    )
+}
+
+fn user_install_url(client_id: u64) -> String {
+    format!(
+        "https://discord.com/oauth2/authorize\
+         ?client_id={client_id}\
+         &integration_type=1\
+         &scope=applications.commands"
+    )
+}
+
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Contact {
     pub form_key: Option<String>,
@@ -314,6 +359,7 @@ impl Config {
             },
 
             notify: Notify::from_env(),
+            discord: Discord::from_env()?,
         })
         .and_then(Self::validated)
     }
@@ -343,5 +389,55 @@ where
         Ok(raw) => T::from_str(raw.trim())
             .map_err(|e| anyhow::anyhow!("{e}"))
             .with_context(|| format!("{key}='{raw}' could not be parsed")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_bot_asks_for_four_permissions_and_no_more() {
+        assert_eq!(
+            BOT_PERMISSIONS, 52_224,
+            "view channel, send messages, embed links, attach files. A change here changes what \
+             every server is asked to consent to, so it should be deliberate"
+        );
+    }
+
+    #[test]
+    fn a_user_install_asks_for_no_permissions_and_no_bot_scope() {
+        let url = user_install_url(1_543_588_586_409_037_896);
+
+        assert_eq!(
+            url,
+            "https://discord.com/oauth2/authorize\
+             ?client_id=1543588586409037896\
+             &integration_type=1\
+             &scope=applications.commands"
+        );
+        assert!(
+            !url.contains("permissions"),
+            "a user install has no channel to be granted anything in: {url}"
+        );
+        assert!(!url.contains("scope=bot"), "{url}");
+    }
+
+    #[test]
+    fn the_invite_names_the_application_and_carries_both_scopes() {
+        let url = invite_url(1_543_588_586_409_037_896);
+
+        assert_eq!(
+            url,
+            "https://discord.com/oauth2/authorize\
+             ?client_id=1543588586409037896\
+             &permissions=52224\
+             &integration_type=0\
+             &scope=bot+applications.commands"
+        );
+        assert!(
+            !url.contains(' '),
+            "a line continuation left a space in it: {url}"
+        );
     }
 }

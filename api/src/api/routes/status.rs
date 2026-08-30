@@ -1,6 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::response;
-use crate::config::{Contact, Notify};
+use crate::config::{Contact, Discord, Notify};
 use crate::schedule::Schedule;
 use crate::state::ServerState;
 use apod_core::ApodSummary;
@@ -18,6 +18,7 @@ struct Status {
     rating: Rating,
     contact: Contact,
     notify: Notify,
+    discord: Discord,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -56,6 +57,7 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
         rating: rating(&state).await?,
         contact: state.config.contact.clone(),
         notify: state.config.notify.clone(),
+        discord: state.config.discord.clone(),
     };
 
     Ok(response::cached(state.config.cache_status_secs, status))

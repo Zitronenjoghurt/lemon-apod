@@ -44,6 +44,7 @@ export interface ApodEntry {
   authors?: string[]
   picture?: string
   changed?: FieldDivergence[]
+  absent?: boolean
 }
 
 export type Provenance = 'legacy_only' | 'modern_only' | 'both'
@@ -196,6 +197,11 @@ export interface NotifyConfig {
   sky_topic: string | null
 }
 
+export interface DiscordConfig {
+  invite_url: string | null
+  user_install_url: string | null
+}
+
 export interface Status {
   latest: ApodSummary | null
   entries: number
@@ -203,6 +209,7 @@ export interface Status {
   rating: RatingStatus
   contact: ContactConfig
   notify: NotifyConfig
+  discord: DiscordConfig
 }
 
 export interface RatingStatus {

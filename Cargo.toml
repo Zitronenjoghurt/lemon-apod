@@ -1,9 +1,9 @@
 [workspace]
-members = ["core", "archiver", "api"]
+members = ["core", "archiver", "api", "bot"]
 resolver = "3"
 
 [workspace.package]
-version = "0.17.0"
+version = "0.18.0"
 license = "MIT"
 edition = "2024"
 

@@ -6,6 +6,7 @@ import SettingsDialog from '@/components/SettingsDialog.vue'
 import { throttled } from '@/api/client'
 import { useExternalLinks } from '@/composables/useExternalLinks'
 import { useFavorites } from '@/composables/useFavorites'
+import { useStatus } from '@/composables/useStatus'
 import { useTheme } from '@/composables/useTheme'
 import { APOD_URL, MASTODON_URL, REPO_URL } from '@/utils/links'
 
@@ -13,6 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const { theme, cycle } = useTheme()
 const { count } = useFavorites()
+const { botInvite } = useStatus()
 const { intercept } = useExternalLinks()
 
 const playingAGame = computed(() => {
@@ -37,7 +39,7 @@ const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
 
 type NavLink = { to: string; label: string; icon: string; exact?: boolean; away?: boolean }
 
-const groups: { name: string | null; links: NavLink[] }[] = [
+const groups = computed<{ name: string | null; links: NavLink[] }[]>(() => [
   {
     name: null,
     links: [
@@ -70,10 +72,11 @@ const groups: { name: string | null; links: NavLink[] }[] = [
     name: 'Stay up to date',
     links: [
       { to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt' },
+      ...(botInvite.value ? [{ to: '/discord', label: 'Discord bot', icon: 'pi pi-discord' }] : []),
       { to: '/notifications', label: 'Notifications', icon: 'pi pi-bell' },
     ],
   },
-]
+])
 
 function isActive(link: NavLink): boolean {
   if (link.away) return false
