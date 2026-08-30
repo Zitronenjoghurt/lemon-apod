@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { type ApodSummary, isVideo, type SearchHit } from '@/api/types'
+import { type ApodSummary, isLost, isVideo, type SearchHit } from '@/api/types'
 import { useRead } from '@/composables/useRead'
 import { formatDate } from '@/utils/date'
 
@@ -9,13 +9,14 @@ const props = defineProps<{
   entry: ApodSummary
   snippet?: string
   query?: string
-  /** Present on search results, and only then. */
   hit?: SearchHit
 }>()
 
 const { isRead, dimmed } = useRead()
 
 const unread = computed(() => !isRead(props.entry.date))
+
+const lost = computed(() => isLost(props.entry.media))
 const faded = computed(() => dimmed(props.entry.date))
 
 const elsewhere = computed(() => {
@@ -45,8 +46,12 @@ const target = computed(() =>
         loading="lazy"
         width="480"
       />
-      <div v-else class="fallback">
-        <i aria-hidden="true" class="pi pi-image" />
+      <div v-else :class="{ gone: lost }" class="fallback">
+        <template v-if="lost">
+          <i aria-hidden="true" class="pi pi-ban" />
+          <span class="what">Media lost</span>
+        </template>
+        <i v-else aria-hidden="true" class="pi pi-image" />
       </div>
       <span v-if="isVideo(entry.media.kind)" aria-label="Video" class="badge">
         <i aria-hidden="true" class="pi pi-play" />
@@ -108,10 +113,28 @@ const target = computed(() =>
 .fallback {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
   font-size: 1.6rem;
+}
+
+.fallback.gone {
+  color: hsl(var(--tone-warn));
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--text) 5%, transparent) 6px 12px
+  );
+}
+
+.fallback .what {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .badge {

@@ -37,7 +37,7 @@ pub use entry::{
     ApodEntry, ApodSummary, Credit, Matched, Provenance, SearchHit, is_decommissioned,
 };
 pub use media::{KindFilter, Media, MediaKind, Thumb, ThumbSource};
-pub use merge::{Divergence, Merged, merge};
+pub use merge::{Divergence, Merged, is_content, merge};
 pub use parse::{ParseError, parse_page};
 pub use quality::{QualityWarning, quality_control};
 

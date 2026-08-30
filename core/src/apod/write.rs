@@ -130,7 +130,8 @@ impl ApodWriter {
 
     pub async fn fingerprints(&self) -> ApodResult<Vec<Fingerprint>> {
         let rows = sqlx::query(
-            "SELECT date_id, media_url, legacy_media_url, phash FROM entries ORDER BY date_id",
+            "SELECT date_id, media_url, legacy_media_url, phash, title FROM entries
+             ORDER BY date_id",
         )
         .fetch_all(self.db().reader())
         .await?;
@@ -142,6 +143,7 @@ impl ApodWriter {
                     media_url: row.try_get(1)?,
                     legacy_media_url: row.try_get(2)?,
                     phash: row.try_get(3)?,
+                    title: row.try_get(4)?,
                 })
             })
             .collect()

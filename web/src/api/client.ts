@@ -173,6 +173,7 @@ export interface ListOptions {
   to?: string
   kind?: KindFilter
   copyright?: boolean
+  lost?: boolean
   cursor?: string
   limit?: number
   order?: SortOrder

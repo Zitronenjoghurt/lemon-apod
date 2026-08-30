@@ -5,6 +5,7 @@ import ApodCredit from '@/components/ApodCredit.vue'
 import PictureTimeline from '@/components/PictureTimeline.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
+import { isLost } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
 import { formatDate } from '@/utils/date'
 import { pageTitle, pictureTitle, setTitle } from '@/utils/title'
@@ -29,6 +30,8 @@ const titles = computed(() => {
     .map(([title, times]) => ({ title, times }))
     .sort((a, b) => b.times - a.times || a.title.localeCompare(b.title))
 })
+
+const lost = computed(() => !!picture.value && isLost(picture.value.media))
 
 const years = computed(() => Math.max(1, Math.round((picture.value?.span_days ?? 0) / 365.25)))
 
@@ -74,7 +77,13 @@ watch([picture, notFound], ([found, missing]) => {
               height="300"
               width="480"
             />
-            <div v-else class="fallback"><i aria-hidden="true" class="pi pi-image" /></div>
+            <div v-else :class="{ gone: lost }" class="fallback">
+              <template v-if="lost">
+                <i aria-hidden="true" class="pi pi-ban" />
+                <span class="what">Media lost</span>
+              </template>
+              <i v-else aria-hidden="true" class="pi pi-image" />
+            </div>
           </RouterLink>
 
           <div class="stack about">
@@ -174,10 +183,28 @@ watch([picture, notFound], ([found, missing]) => {
 
 .fallback {
   aspect-ratio: 16 / 10;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
   font-size: 1.6rem;
+}
+
+.fallback.gone {
+  color: hsl(var(--tone-warn));
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--text) 5%, transparent) 6px 12px
+  );
+}
+
+.fallback .what {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .about {

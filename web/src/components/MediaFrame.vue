@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import ApodCredit from './ApodCredit.vue'
-import { aspectRatio, isImage, isUndisplayableImage, type Media } from '@/api/types'
+import { aspectRatio, isImage, isLost, isUndisplayableImage, type Media } from '@/api/types'
 
 const props = defineProps<{
   media: Media
@@ -77,6 +77,8 @@ const placeholderLabel = computed(() => {
   if (props.media.kind === 'embed') return 'Open the interactive embed'
   return 'Open the original file'
 })
+
+const lost = computed(() => isLost(props.media))
 
 const undisplayable = computed(
   () => isUndisplayableImage(props.media.kind) && !!props.media.thumb_url,
@@ -192,6 +194,15 @@ const frameStyle = computed(() => ({
         <span class="sr-only">Play video</span>
       </button>
     </template>
+
+    <div v-else-if="lost" class="frame placeholder-card gone">
+      <i aria-hidden="true" class="pi pi-ban" />
+      <span>Media lost</span>
+      <small>
+        The media this entry referenced became unreachable before this archive was able to preserve
+        it.
+      </small>
+    </div>
 
     <a
       v-else
@@ -443,8 +454,30 @@ video.frame,
   place-content: center;
   justify-items: center;
   gap: 0.6rem;
+  padding-inline: var(--space-5);
   color: var(--text-muted);
   text-decoration: none;
+  text-align: center;
+}
+
+/* Hatched, so a picture the archive lost cannot be read as one that has not loaded yet. */
+.placeholder-card.gone {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--text) 5%, transparent) 8px 16px
+  );
+}
+
+.placeholder-card.gone i {
+  color: hsl(var(--tone-warn));
+}
+
+.placeholder-card small {
+  max-width: 44ch;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .placeholder-card i {

@@ -23,6 +23,21 @@ pub struct Divergence {
     pub modern: String,
 }
 
+const RECORDED: [&str; 8] = [
+    "title",
+    "explanation_text",
+    "credit_text",
+    "has_copyright",
+    "license_url",
+    "tomorrow_teaser",
+    "media_kind",
+    "media_url",
+];
+
+pub fn is_content(field: &str) -> bool {
+    field != "media_url"
+}
+
 pub(crate) fn fold(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
 
@@ -48,11 +63,21 @@ fn differs(legacy: &str, modern: &str) -> bool {
 
 fn note(out: &mut Vec<Divergence>, field: &'static str, legacy: &str, modern: &str) {
     if differs(legacy, modern) {
-        out.push(Divergence {
-            field,
-            legacy: legacy.to_owned(),
-            modern: modern.to_owned(),
-        });
+        out.push(recorded(field, legacy.to_owned(), modern.to_owned()));
+    }
+}
+
+fn recorded(field: &'static str, legacy: String, modern: String) -> Divergence {
+    debug_assert!(
+        RECORDED.contains(&field),
+        "{field} is recorded as a difference but is not one of the fields the two records are \
+         compared on"
+    );
+
+    Divergence {
+        field,
+        legacy,
+        modern,
     }
 }
 
@@ -85,11 +110,11 @@ pub fn merge(legacy: Option<ApodEntry>, modern: Option<ApodEntry>) -> Option<Mer
             modern.credit_text().as_deref().unwrap_or_default(),
         );
         if entry.has_copyright != modern.has_copyright {
-            divergences.push(Divergence {
-                field: "has_copyright",
-                legacy: entry.has_copyright.to_string(),
-                modern: modern.has_copyright.to_string(),
-            });
+            divergences.push(recorded(
+                "has_copyright",
+                entry.has_copyright.to_string(),
+                modern.has_copyright.to_string(),
+            ));
         }
     }
 
@@ -109,11 +134,11 @@ pub fn merge(legacy: Option<ApodEntry>, modern: Option<ApodEntry>) -> Option<Mer
     if modern.media.kind != MediaKind::None {
         if entry.media.kind != MediaKind::None {
             if entry.media.kind != modern.media.kind {
-                divergences.push(Divergence {
-                    field: "media_kind",
-                    legacy: entry.media.kind.to_string(),
-                    modern: modern.media.kind.to_string(),
-                });
+                divergences.push(recorded(
+                    "media_kind",
+                    entry.media.kind.to_string(),
+                    modern.media.kind.to_string(),
+                ));
             }
             note(
                 &mut divergences,
@@ -203,6 +228,27 @@ mod tests {
 
     fn fields(divergences: &[Divergence]) -> Vec<&str> {
         divergences.iter().map(|d| d.field).collect()
+    }
+
+    #[test]
+    fn every_difference_names_a_field_the_two_records_are_compared_on() {
+        let Merged { divergences, .. } = merge(Some(legacy()), Some(modern())).unwrap();
+
+        assert!(!divergences.is_empty());
+        for divergence in &divergences {
+            assert!(
+                RECORDED.contains(&divergence.field),
+                "{} is recorded but unlisted",
+                divergence.field
+            );
+        }
+    }
+
+    #[test]
+    fn a_picture_that_only_moved_host_is_not_a_change_to_the_entry() {
+        assert!(!is_content("media_url"));
+        assert!(is_content("title"));
+        assert!(is_content("media_kind"), "a re-encode changes what you get");
     }
 
     #[test]

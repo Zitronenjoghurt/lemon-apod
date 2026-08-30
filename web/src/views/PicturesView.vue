@@ -4,7 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
-import type { PictureSort, SortOrder } from '@/api/types'
+import { isLost, type PictureSort, type SortOrder } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
 import { useNarrow } from '@/composables/useNarrow'
 import { formatDate, year as yearOf } from '@/utils/date'
@@ -156,7 +156,13 @@ function span(first: string, last: string): string {
               loading="lazy"
               width="480"
             />
-            <div v-else class="fallback"><i aria-hidden="true" class="pi pi-image" /></div>
+            <div v-else :class="{ gone: isLost(picture.media) }" class="fallback">
+              <template v-if="isLost(picture.media)">
+                <i aria-hidden="true" class="pi pi-ban" />
+                <span class="what">Media lost</span>
+              </template>
+              <i v-else aria-hidden="true" class="pi pi-image" />
+            </div>
             <span class="tally">{{ picture.appearances }}&times;</span>
           </div>
 
@@ -286,10 +292,28 @@ h1 {
 .fallback {
   width: 100%;
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
   font-size: 1.6rem;
+}
+
+.fallback.gone {
+  color: hsl(var(--tone-warn));
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--text) 5%, transparent) 6px 12px
+  );
+}
+
+.fallback .what {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .tally {

@@ -263,6 +263,17 @@ impl Media {
         self.url.is_none() && self.hd_url.is_none()
     }
 
+    pub fn is_lost(&self) -> bool {
+        if self.kind == MediaKind::None || self.thumb_path.is_some() || self.thumb_url.is_some() {
+            return false;
+        }
+
+        [self.url.as_deref(), self.hd_url.as_deref()]
+            .into_iter()
+            .flatten()
+            .all(crate::entry::is_decommissioned)
+    }
+
     pub fn best_url(&self) -> Option<&str> {
         self.hd_url.as_deref().or(self.url.as_deref())
     }
@@ -466,6 +477,59 @@ mod tests {
         assert!("mystery".parse::<KindFilter>().is_err());
         assert!("".parse::<KindFilter>().is_err());
         assert!(",,".parse::<KindFilter>().is_err());
+    }
+
+    #[test]
+    fn media_is_only_lost_when_there_is_nothing_left_to_show() {
+        let mut dead = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2301/rocky.jpg".into()),
+            None,
+        );
+        assert!(dead.is_lost());
+
+        dead.set_thumb(Some(Thumb::new("2023/01/x.webp")), Some("/thumbs/"));
+        assert!(
+            !dead.is_lost(),
+            "a thumbnail made before the host went away is the picture surviving"
+        );
+
+        let elsewhere = Media::new(
+            MediaKind::ImageGif,
+            Some("http://nusoft.fnal.gov/nova/public/img/echo.gif".into()),
+            None,
+        );
+        assert!(
+            !elsewhere.is_lost(),
+            "a host nobody switched off is not ours to declare dead"
+        );
+
+        let never_had_one = Media::new(MediaKind::None, None, None);
+        assert!(!never_had_one.is_lost(), "no picture is not a lost picture");
+
+        let half = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2301/rocky.jpg".into()),
+            Some("https://assets.science.nasa.gov/rocky.jpg".into()),
+        );
+        assert!(!half.is_lost(), "one surviving address is enough");
+    }
+
+    #[test]
+    fn the_sql_form_of_a_dead_host_matches_the_rust_one() {
+        let sql = crate::entry::decommissioned_sql("media_url");
+
+        for host in ["apod.nasa.gov", "www.apod.nasa.gov", "antwrp.gsfc.nasa.gov"] {
+            for scheme in ["http", "https"] {
+                assert!(
+                    sql.contains(&format!("media_url LIKE '{scheme}://{host}/%'")),
+                    "{host} is missing from {sql}"
+                );
+                assert!(crate::entry::is_decommissioned(&format!(
+                    "{scheme}://{host}/apod/image/x.jpg"
+                )));
+            }
+        }
     }
 
     #[test]

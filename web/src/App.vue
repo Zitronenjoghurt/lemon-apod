@@ -352,6 +352,9 @@ router.afterEach(() => (menuOpen.value = false))
   .sidebar .menu {
     position: sticky;
     top: calc(var(--header-h) + 1px + 0.9rem);
+    max-height: calc(100dvh - var(--header-h) - 1px - 1.8rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .sidebar .nav-link {
@@ -395,6 +398,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   .sidebar .menu {
     top: calc(var(--header-h) + 1px + 1rem);
+    max-height: calc(100dvh - var(--header-h) - 1px - 2rem);
   }
 
   .sidebar .nav-link {

@@ -1,10 +1,20 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::{params, response};
 use crate::state::ServerState;
+use apod_core::{ApodEntry, FieldDivergence};
 use axum::Router;
 use axum::extract::{Path, State};
 use axum::response::Response;
 use axum::routing::get;
+use serde::Serialize;
+
+#[derive(Debug, Serialize)]
+struct Entry {
+    #[serde(flatten)]
+    entry: ApodEntry,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    changed: Vec<FieldDivergence>,
+}
 
 async fn get_latest(State(state): State<ServerState>) -> ApiResult<Response> {
     let entry = state.store.latest().await?.ok_or(ApiError::NotFound)?;
@@ -17,7 +27,19 @@ async fn get_entry(
 ) -> ApiResult<Response> {
     let date = params::date(&date)?;
     let entry = state.store.entry(date).await?.ok_or(ApiError::NotFound)?;
-    Ok(response::cached(state.config.cache_entry_secs, entry))
+    let changed = match entry.provenance.has_modern() {
+        true => {
+            let mut rows = state.store.entry_divergences(date).await?;
+            rows.retain(|row| apod_core::is_content(&row.field));
+            rows
+        }
+        false => Vec::new(),
+    };
+
+    Ok(response::cached(
+        state.config.cache_entry_secs,
+        Entry { entry, changed },
+    ))
 }
 
 pub fn router() -> Router<ServerState> {

@@ -1,4 +1,4 @@
-use crate::api::error::{ApiError, ApiResult};
+use crate::api::error::ApiResult;
 use crate::api::{params, response};
 use crate::state::ServerState;
 use axum::Router;
@@ -14,6 +14,7 @@ pub struct SearchQuery {
     to: Option<String>,
     kind: Option<String>,
     copyright: Option<bool>,
+    lost: Option<bool>,
     sort: Option<String>,
     offset: Option<usize>,
     limit: Option<usize>,
@@ -23,15 +24,14 @@ async fn get_search(
     State(state): State<ServerState>,
     Query(query): Query<SearchQuery>,
 ) -> ApiResult<Response> {
-    let Some(q) = query.q.as_deref().filter(|q| !q.trim().is_empty()) else {
-        return Err(ApiError::bad_request("q is required"));
-    };
+    let q = query.q.as_deref().unwrap_or_default();
 
     let filters = params::filters(
         query.from.as_deref(),
         query.to.as_deref(),
         query.kind.as_deref(),
         query.copyright,
+        query.lost,
     )?;
 
     let results = state

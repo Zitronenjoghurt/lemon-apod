@@ -77,6 +77,7 @@ async fn every_read_query_matches_the_migrated_schema() {
         to: Some(date),
         kind: Some(MediaKind::ImageJpg.into()),
         copyright: Some(true),
+        lost: Some(false),
     };
 
     reader.entry(date).await.unwrap();
@@ -1664,4 +1665,130 @@ async fn a_rerun_that_moved_only_its_high_resolution_file_is_reported_as_changed
 
     writer.reader().db().close().await;
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn an_entry_is_lost_by_the_same_rule_whether_sql_or_rust_is_asked() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let mut gone = entry("2023-01-24", "Rocky", "A picture nobody kept.");
+    gone.media = Media::new(
+        MediaKind::ImageJpg,
+        Some("https://apod.nasa.gov/apod/image/2301/rocky.jpg".into()),
+        None,
+    );
+
+    let thumbed = entry("2023-01-25", "Kept", "A picture we made a copy of.");
+
+    let mut elsewhere = entry("2023-01-26", "Fermilab", "Somebody else's host.");
+    elsewhere.media = Media::new(
+        MediaKind::ImageGif,
+        Some("http://nusoft.fnal.gov/nova/public/img/echo.gif".into()),
+        None,
+    );
+
+    let mut nothing = entry("2023-01-27", "Nothing", "An entry with no picture.");
+    nothing.media = Media::new(MediaKind::None, None, None);
+
+    let dates: Vec<ApodDate> = [&gone, &thumbed, &elsewhere, &nothing]
+        .iter()
+        .map(|entry| entry.date)
+        .collect();
+
+    let entries: Vec<apod_core::Merged> = vec![
+        gone.into(),
+        thumbed.clone().into(),
+        elsewhere.into(),
+        nothing.into(),
+    ];
+    writer.upsert_all(&entries).await.unwrap();
+    writer
+        .set_thumb(thumbed.date, Some(&Thumb::new(thumbed.date.thumb_path())))
+        .await
+        .unwrap();
+
+    let reader = writer.reader();
+
+    let mut lost: Vec<ApodDate> = Vec::new();
+    let mut left: Vec<ApodDate> = Vec::new();
+    for date in dates {
+        let entry = reader.entry(date).await.unwrap().unwrap();
+        match entry.media.is_lost() {
+            true => lost.push(date),
+            false => left.push(date),
+        }
+    }
+
+    assert_eq!(
+        lost,
+        ["2023-01-24".parse::<ApodDate>().unwrap()],
+        "only the dead host with nothing made from it is lost"
+    );
+
+    for (wanted, expected) in [(true, &lost), (false, &left)] {
+        let filters = Filters {
+            lost: Some(wanted),
+            ..Filters::default()
+        };
+        let page = reader.list(&filters, None, 50, Order::Asc).await.unwrap();
+        let found: Vec<ApodDate> = page.items.iter().map(|item| item.date).collect();
+
+        assert_eq!(&found, expected, "lost = {wanted}");
+    }
+}
+
+#[tokio::test]
+async fn a_search_with_no_terms_is_the_filters_on_their_own() {
+    let (writer, _) = seeded(&[
+        ("2024-03-05", "Saturn", "The ringed planet."),
+        ("2024-03-06", "Jupiter", "The banded planet."),
+        ("2024-03-07", "Mars", "The red planet."),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let all = reader
+        .search("", &Filters::default(), false, 0, 10, 32)
+        .await
+        .unwrap();
+    assert_eq!(all.total, 3);
+    assert_eq!(
+        all.items
+            .iter()
+            .map(|hit| hit.entry.date)
+            .collect::<Vec<_>>(),
+        [
+            "2024-03-07".parse::<ApodDate>().unwrap(),
+            "2024-03-06".parse().unwrap(),
+            "2024-03-05".parse().unwrap()
+        ],
+        "newest first, since there is nothing to be relevant to"
+    );
+    assert!(all.items.iter().all(|hit| hit.snippet.is_empty()));
+
+    let narrowed = reader
+        .search(
+            "   ",
+            &Filters {
+                from: Some("2024-03-06".parse().unwrap()),
+                ..Filters::default()
+            },
+            false,
+            0,
+            10,
+            32,
+        )
+        .await
+        .unwrap();
+    assert_eq!(narrowed.total, 2, "whitespace is not a query either");
+
+    let nothing_to_match = reader
+        .search("-saturn", &Filters::default(), false, 0, 10, 32)
+        .await
+        .unwrap();
+    assert_eq!(
+        nothing_to_match.total, 0,
+        "a query made only of exclusions still matches nothing, and is not everything"
+    );
 }

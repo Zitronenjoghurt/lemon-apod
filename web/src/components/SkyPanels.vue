@@ -212,6 +212,7 @@ function magnitude(value: number): string {
 
         <KpGauge :kp="report.kp" :stamp="observed" />
 
+        <p v-if="levels.length" class="muted scope">Worst so far today</p>
         <ul v-if="levels.length" class="bands">
           <li v-for="level in levels" :key="level.band" :class="{ up: (level.scale ?? 0) > 0 }">
             <span class="mark">{{ levelName(level) }}</span>
@@ -518,6 +519,13 @@ h2 {
 
 .far {
   text-align: right;
+}
+
+.scope {
+  margin: 0;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .bands {

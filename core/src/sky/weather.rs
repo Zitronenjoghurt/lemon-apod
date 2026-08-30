@@ -155,6 +155,20 @@ impl Alert {
     pub fn is_geomagnetic(&self) -> bool {
         self.band() == Some(Band::G)
     }
+
+    pub fn level(&self) -> Option<(Band, u8)> {
+        let mut scale = self.scale.as_deref()?.trim().chars();
+
+        let band = match scale.next()? {
+            'G' => Band::G,
+            'S' => Band::S,
+            'R' => Band::R,
+            _ => return None,
+        };
+
+        let level = scale.next()?.to_digit(10)? as u8;
+        (1..=5).contains(&level).then_some((band, level))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,10 +203,38 @@ impl WeatherReport {
         WeatherSummary {
             kp: self.kp,
             observed_at: self.observed_at,
-            scales: self.scales.clone(),
+            scales: self.measured_scales(now),
             alert: current.first().map(|alert| (*alert).clone()),
             active: current.len(),
         }
+    }
+
+    pub fn measured_scales(&self, now: DateTime<Utc>) -> Option<ScaleDay> {
+        let mut day = self.scales.clone()?;
+        raise(&mut day, Band::G, g_level(self.kp));
+
+        for alert in &self.alerts {
+            if alert.notice == Notice::Alert
+                && alert.in_force(now)
+                && let Some((band, level)) = alert.level()
+            {
+                raise(&mut day, band, Some(level));
+            }
+        }
+
+        Some(day)
+    }
+}
+
+fn raise(day: &mut ScaleDay, band: Band, level: Option<u8>) {
+    let Some(level) = level else { return };
+    let Some(found) = day.levels.iter_mut().find(|one| one.band == band) else {
+        return;
+    };
+
+    if found.scale.unwrap_or(0) < level {
+        found.scale = Some(level);
+        found.text = None;
     }
 }
 
@@ -378,6 +420,124 @@ mod tests {
         let summary = report.summary(at(101));
         assert_eq!(summary.active, 2, "the write-up is not something going on");
         assert_eq!(summary.alert.map(|alert| alert.id), Some("100".to_owned()));
+    }
+
+    fn quiet_day() -> ScaleDay {
+        ScaleDay {
+            date: "2026-08-30".to_owned(),
+            observed_at: Some(at(100)),
+            levels: Band::ALL
+                .into_iter()
+                .map(|band| Level {
+                    band,
+                    scale: Some(0),
+                    text: Some("none".to_owned()),
+                    chance: Chance::default(),
+                })
+                .collect(),
+        }
+    }
+
+    fn reported(kp: f64, alerts: Vec<Alert>) -> WeatherReport {
+        WeatherReport {
+            kp,
+            observed_at: at(100),
+            scales: Some(quiet_day()),
+            outlook: Vec::new(),
+            kp_series: Vec::new(),
+            flux: Vec::new(),
+            dst: Vec::new(),
+            alerts,
+        }
+    }
+
+    fn level_of(day: &ScaleDay, band: Band) -> Option<u8> {
+        day.levels
+            .iter()
+            .find(|level| level.band == band)
+            .and_then(|level| level.scale)
+    }
+
+    #[test]
+    fn a_measured_kp_settles_the_g_band_whatever_the_daily_table_still_says() {
+        let report = reported(5.0, Vec::new());
+        let day = report.measured_scales(at(101)).unwrap();
+
+        assert_eq!(level_of(&day, Band::G), Some(1));
+        assert_eq!(
+            day.levels
+                .iter()
+                .find(|level| level.band == Band::G)
+                .and_then(|level| level.text.clone()),
+            None,
+            "NOAA's \"none\" cannot be left standing next to a G1"
+        );
+        assert_eq!(level_of(&day, Band::S), Some(0), "and nothing else moves");
+        assert!(!day.quiet());
+    }
+
+    #[test]
+    fn an_alert_in_force_raises_its_own_band_and_a_warning_raises_nothing() {
+        let raised = Alert {
+            scale: Some("R3 - Strong".to_owned()),
+            ..alert(Notice::Alert, 100, Some(120))
+        };
+        let expected = Alert {
+            scale: Some("S2 - Moderate".to_owned()),
+            ..alert(Notice::Warning, 100, Some(120))
+        };
+
+        let day = reported(3.0, vec![raised.clone(), expected])
+            .measured_scales(at(110))
+            .unwrap();
+
+        assert_eq!(level_of(&day, Band::R), Some(3));
+        assert_eq!(
+            level_of(&day, Band::S),
+            Some(0),
+            "a warning says a level is expected, which is not a level reached"
+        );
+
+        let expired = reported(3.0, vec![raised])
+            .measured_scales(at(121))
+            .unwrap();
+        assert_eq!(level_of(&expired, Band::R), Some(0));
+    }
+
+    #[test]
+    fn a_table_that_has_already_seen_worse_keeps_its_own_reading() {
+        let mut day = quiet_day();
+        for level in &mut day.levels {
+            level.scale = Some(3);
+            level.text = Some("strong".to_owned());
+        }
+
+        let report = WeatherReport {
+            scales: Some(day),
+            ..reported(5.0, Vec::new())
+        };
+        let measured = report.measured_scales(at(101)).unwrap();
+
+        assert_eq!(
+            level_of(&measured, Band::G),
+            Some(3),
+            "the day peaked higher"
+        );
+    }
+
+    #[test]
+    fn only_a_scale_carrying_a_number_names_a_level() {
+        assert_eq!(
+            banded("x", Some("G2 - Moderate")).level(),
+            Some((Band::G, 2))
+        );
+        assert_eq!(banded("Geomagnetic K-index of 4", None).level(), None);
+        assert_eq!(
+            banded("Geomagnetic Storm Category G1 Predicted", None).level(),
+            None,
+            "the band is in the headline, the level is not, and guessing it is not this job"
+        );
+        assert_eq!(banded("x", Some("G0")).level(), None);
     }
 
     #[test]

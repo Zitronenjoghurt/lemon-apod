@@ -1,12 +1,23 @@
 use crate::date::ApodDate;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A 256-bit difference hash: sixteen rows of sixteen comparisons between horizontally adjacent
 /// pixels of a 17x16 grayscale copy of the thumbnail.
 pub const PHASH_BYTES: usize = 32;
 
-/// How many of those 256 bits may differ and still be the same picture.
+/// How many of those 256 bits may differ and still be the same picture, given something else
+/// also says so.
 pub const MAX_DISTANCE: u32 = 8;
+
+/// How near two hashes have to be to be taken as the same picture on the strength of the hash
+/// alone.
+///
+/// A difference hash keeps shape and throws brightness away, which makes every centred round
+/// bright thing look alike: Betelgeuse and the sun behind the ISS sit 8 bits apart in this
+/// archive, and Betelgeuse and Saturn from Cassini sit 4. Identical files hash identically, so
+/// the band that can be trusted unaided is the one just above zero, and everything above it has
+/// to be corroborated.
+pub const NEAR_DISTANCE: u32 = 2;
 
 /// How many of the 256 bits have to fall on the less common side for a hash to mean anything.
 ///
@@ -25,6 +36,7 @@ pub const MIN_DETAIL: u32 = 4;
 #[derive(Debug, Clone)]
 pub struct Fingerprint {
     pub date: ApodDate,
+    pub title: String,
     pub media_url: Option<String>,
     pub legacy_media_url: Option<String>,
     pub phash: Option<Vec<u8>>,
@@ -90,18 +102,6 @@ pub fn distance(a: &[u8], b: &[u8]) -> u32 {
 pub fn group(prints: &[Fingerprint]) -> Vec<PictureGroup> {
     let mut union = Union::new(prints.len());
 
-    let mut by_url: HashMap<&str, usize> = HashMap::new();
-    for (index, print) in prints.iter().enumerate() {
-        for url in print.urls() {
-            match by_url.get(url) {
-                Some(&first) => union.join(first, index),
-                None => {
-                    by_url.insert(url, index);
-                }
-            }
-        }
-    }
-
     let hashed: Vec<(usize, &[u8])> = prints
         .iter()
         .enumerate()
@@ -113,8 +113,25 @@ pub fn group(prints: &[Fingerprint]) -> Vec<PictureGroup> {
 
     for (position, &(index, phash)) in hashed.iter().enumerate() {
         for &(other, other_phash) in &hashed[position + 1..] {
-            if alike(phash, other_phash, MAX_DISTANCE) {
+            if same_picture(
+                phash,
+                other_phash,
+                &prints[index].title,
+                &prints[other].title,
+            ) {
                 union.join(index, other);
+            }
+        }
+    }
+
+    let mut by_url: HashMap<&str, usize> = HashMap::new();
+    for (index, print) in prints.iter().enumerate() {
+        for url in print.urls() {
+            match by_url.get(url) {
+                Some(&first) => union.join(first, index),
+                None => {
+                    by_url.insert(url, index);
+                }
             }
         }
     }
@@ -138,6 +155,58 @@ pub fn group(prints: &[Fingerprint]) -> Vec<PictureGroup> {
 
     groups.sort_unstable_by_key(PictureGroup::id);
     groups
+}
+
+fn same_picture(one: &[u8], two: &[u8], here: &str, there: &str) -> bool {
+    let apart = distance(one, two);
+    apart <= NEAR_DISTANCE || (apart <= MAX_DISTANCE && about_the_same(here, there))
+}
+
+const COMMON: [&str; 16] = [
+    "the", "and", "for", "from", "its", "our", "with", "over", "near", "this", "that", "into",
+    "your", "are", "was", "not",
+];
+
+fn about_the_same(here: &str, there: &str) -> bool {
+    let ours = subjects(here);
+    let theirs = subjects(there);
+
+    ours.iter().any(|one| {
+        theirs.iter().any(|two| match numbered(one) {
+            true => one == two,
+            false => one.starts_with(two.as_str()) || two.starts_with(one.as_str()),
+        })
+    })
+}
+
+fn numbered(word: &str) -> bool {
+    word.starts_with(|letter: char| letter.is_ascii_digit())
+}
+
+fn subjects(title: &str) -> HashSet<String> {
+    let mut out: HashSet<String> = HashSet::new();
+    let mut word = String::new();
+    let mut digits = false;
+
+    for letter in title.chars().chain(std::iter::once(' ')) {
+        let alphanumeric = letter.is_alphanumeric();
+        if !alphanumeric || letter.is_ascii_digit() != digits {
+            let ended = std::mem::take(&mut word);
+            let wanted = match numbered(&ended) {
+                true => ended.len() >= 2,
+                false => ended.len() >= 3 && !COMMON.contains(&ended.as_str()),
+            };
+            if wanted {
+                out.insert(ended);
+            }
+            digits = letter.is_ascii_digit();
+        }
+        if alphanumeric {
+            word.extend(letter.to_lowercase());
+        }
+    }
+
+    out
 }
 
 struct Union {
@@ -176,8 +245,13 @@ mod tests {
     }
 
     fn print(date: &str, url: Option<&str>, phash: Option<Vec<u8>>) -> Fingerprint {
+        titled(date, "The Same Nebula Again", url, phash)
+    }
+
+    fn titled(date: &str, title: &str, url: Option<&str>, phash: Option<Vec<u8>>) -> Fingerprint {
         Fingerprint {
             date: date.parse().unwrap(),
+            title: title.to_owned(),
             media_url: url.map(str::to_owned),
             legacy_media_url: None,
             phash,
@@ -187,6 +261,7 @@ mod tests {
     fn migrated(date: &str, url: &str, legacy: &str) -> Fingerprint {
         Fingerprint {
             date: date.parse().unwrap(),
+            title: "Andromeda".to_owned(),
             media_url: Some(url.to_owned()),
             legacy_media_url: Some(legacy.to_owned()),
             phash: None,
@@ -294,6 +369,107 @@ mod tests {
 
         assert_eq!(groups.len(), 1, "the URL is the same file either way");
         assert_eq!(groups[0].dates.len(), 2);
+    }
+
+    #[test]
+    fn a_hash_that_is_only_close_needs_the_entries_to_be_about_the_same_thing() {
+        let one = hash(0b0101_0101);
+        let mut other = one.clone();
+        other[0] ^= 0xff;
+        assert_eq!(distance(&one, &other), MAX_DISTANCE);
+
+        let apart = group(&[
+            titled("1998-04-19", "Betelgeuse", Some("a.jpg"), Some(one.clone())),
+            titled(
+                "2005-07-29",
+                "ISS and Discovery Transit the Sun",
+                Some("b.jpg"),
+                Some(other.clone()),
+            ),
+        ]);
+        assert!(
+            apart.is_empty(),
+            "eight bits of 256 puts a red giant and the sun together, and nothing else says \
+             they are one picture: {apart:?}"
+        );
+
+        let together = group(&[
+            titled(
+                "2003-11-11",
+                "Eclipsed Moonlight from Connelly's Springs",
+                Some("a.jpg"),
+                Some(one),
+            ),
+            titled(
+                "2007-08-26",
+                "A Total Lunar Eclipse Over North Carolina",
+                Some("b.jpg"),
+                Some(other),
+            ),
+        ]);
+        assert_eq!(together.len(), 1, "the same eclipse, renamed: {together:?}");
+    }
+
+    #[test]
+    fn a_hash_that_all_but_matches_stands_on_its_own() {
+        let one = hash(0b0101_0101);
+        let mut other = one.clone();
+        other[0] ^= 0b0000_0011;
+        assert_eq!(distance(&one, &other), NEAR_DISTANCE);
+
+        let groups = group(&[
+            titled(
+                "2012-12-13",
+                "Apollo 17: A Stereo View from Lunar Orbit",
+                Some("a.jpg"),
+                Some(one),
+            ),
+            titled(
+                "2022-12-10",
+                "America and the Sea of Serenity",
+                Some("b.jpg"),
+                Some(other),
+            ),
+        ]);
+
+        assert_eq!(
+            groups.len(),
+            1,
+            "the archive does rerun a picture under a title with nothing in common: {groups:?}"
+        );
+    }
+
+    #[test]
+    fn a_word_inside_another_word_is_the_same_subject_and_a_number_is_a_word() {
+        assert!(about_the_same("M104 Hubble Remix", "Messier 104"));
+        assert!(about_the_same(
+            "Restored: First Image of the Earth from the Moon",
+            "Lunar Orbiter Earthset"
+        ));
+        assert!(about_the_same(
+            "Barred Spiral Galaxy NGC 1300",
+            "NGC 1300: Barred Spiral Galaxy"
+        ));
+        assert!(!about_the_same(
+            "Betelgeuse",
+            "Views from Cassini at Saturn"
+        ));
+        assert!(about_the_same(
+            "M33: Triangulum Galaxy",
+            "The Hydrogen Clouds of M33"
+        ));
+        assert!(
+            !about_the_same("Arp 220: Spirals in Collision", "Messier 87"),
+            "87 is not 220 and neither is the start of the other"
+        );
+        assert!(
+            !about_the_same("Arp 22", "Messier 220"),
+            "a catalogue number is not a prefix of a bigger one"
+        );
+        assert!(
+            !about_the_same("The Moon and Our Sky", "That Was Not Its Year"),
+            "sharing only the words every title has is sharing nothing"
+        );
     }
 
     #[test]

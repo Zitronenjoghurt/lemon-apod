@@ -1,8 +1,9 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
+import DiffText from './DiffText.vue'
 import { api } from '@/api/client'
 import type { ApodEntry } from '@/api/types'
-import { type Change, type ChangeKind, countWords, diffWords } from '@/utils/diff'
+import { type Change, countWords, diffWords } from '@/utils/diff'
 import { formatDate } from '@/utils/date'
 
 const props = defineProps<{
@@ -30,28 +31,10 @@ async function load() {
 
 watch(() => [props.before, props.after], load, { immediate: true })
 
-interface Piece {
-  kind: ChangeKind
-  text: string
-  tail: string
-}
-
 interface Field {
   key: string
   label: string
   changes: Change[]
-  pieces: Piece[]
-}
-
-function pieces(changes: Change[]): Piece[] {
-  return changes.map((change) => {
-    const tail = /\s*$/.exec(change.text)?.[0] ?? ''
-    return {
-      kind: change.kind,
-      text: change.text.slice(0, change.text.length - tail.length),
-      tail,
-    }
-  })
 }
 
 function credit(entry: ApodEntry): string {
@@ -79,10 +62,11 @@ const fields = computed<Field[]>(() => {
     { key: 'file', label: 'Image source', before: file(was), after: file(now) },
   ]
     .filter((field) => field.before !== field.after)
-    .map((field) => {
-      const changes = diffWords(field.before, field.after)
-      return { key: field.key, label: field.label, changes, pieces: pieces(changes) }
-    })
+    .map((field) => ({
+      key: field.key,
+      label: field.label,
+      changes: diffWords(field.before, field.after),
+    }))
 })
 
 const tally = computed(() => {
@@ -112,14 +96,7 @@ const tally = computed(() => {
 
       <div v-for="field in fields" :key="field.key" class="field">
         <p class="label">{{ field.label }}</p>
-        <p class="text">
-          <template v-for="(piece, index) in field.pieces" :key="index"
-            ><del v-if="piece.kind === 'removed'">{{ piece.text }}</del
-            ><ins v-else-if="piece.kind === 'added'">{{ piece.text }}</ins
-            ><span v-else>{{ piece.text }}</span
-            >{{ piece.tail }}</template
-          >
-        </p>
+        <DiffText :changes="field.changes" />
       </div>
 
       <p v-if="!fields.length" class="muted note">
@@ -188,33 +165,5 @@ const tally = computed(() => {
   letter-spacing: 0.06em;
   font-weight: 600;
   color: var(--text-muted);
-}
-
-.text {
-  margin: 0;
-  font-size: 0.88rem;
-  line-height: 1.55;
-  text-wrap: pretty;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-
-ins,
-del {
-  border-radius: 0.2rem;
-  padding: 0.02em 0.12em;
-  text-decoration: none;
-}
-
-ins {
-  background: color-mix(in srgb, var(--diff-added) 24%, transparent);
-  box-shadow: inset 0 -0.12em color-mix(in srgb, var(--diff-added) 70%, transparent);
-}
-
-del {
-  background: color-mix(in srgb, var(--diff-removed) 20%, transparent);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-  opacity: 0.75;
 }
 </style>

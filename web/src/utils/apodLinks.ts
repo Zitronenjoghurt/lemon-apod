@@ -1,8 +1,6 @@
 import { FIRST_ENTRY } from './date'
 import { APOD_URL } from './links'
-import type { ApodEntry } from '@/api/types'
-
-const DECOMMISSIONED = ['apod.nasa.gov', 'www.apod.nasa.gov', 'antwrp.gsfc.nasa.gov']
+import { type ApodEntry, isDecommissioned } from '@/api/types'
 
 const HREF =
   /href="https?:\/\/(?:www\.)?(?:apod\.nasa\.gov|antwrp\.gsfc\.nasa\.gov)\/apod\/ap(\d{6})\.html"/gi
@@ -35,8 +33,7 @@ function fromStamp(stamp: string): string | null {
 }
 
 export function officialUrl(entry: Pick<ApodEntry, 'source_url'>): string | null {
-  const host = entry.source_url.split('//')[1] ?? entry.source_url
-  return DECOMMISSIONED.some((dead) => host.startsWith(dead)) ? null : entry.source_url
+  return isDecommissioned(entry.source_url) ? null : entry.source_url
 }
 
 export function originalPath(date: string): string {

@@ -11,6 +11,16 @@ pub fn is_decommissioned(url: &str) -> bool {
     DECOMMISSIONED.iter().any(|dead| host.starts_with(dead))
 }
 
+pub fn decommissioned_sql(column: &str) -> String {
+    DECOMMISSIONED
+        .iter()
+        .flat_map(|dead| {
+            ["http", "https"].map(|scheme| format!("{column} LIKE '{scheme}://{dead}/%'"))
+        })
+        .collect::<Vec<_>>()
+        .join(" OR ")
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provenance {

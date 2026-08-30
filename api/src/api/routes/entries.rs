@@ -13,6 +13,7 @@ pub struct ListQuery {
     to: Option<String>,
     kind: Option<String>,
     copyright: Option<bool>,
+    lost: Option<bool>,
     cursor: Option<String>,
     limit: Option<usize>,
     order: Option<String>,
@@ -27,6 +28,7 @@ async fn get_entries(
         query.to.as_deref(),
         query.kind.as_deref(),
         query.copyright,
+        query.lost,
     )?;
 
     let page = state

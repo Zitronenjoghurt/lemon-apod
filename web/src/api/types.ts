@@ -43,6 +43,7 @@ export interface ApodEntry {
   alt?: string
   authors?: string[]
   picture?: string
+  changed?: FieldDivergence[]
 }
 
 export type Provenance = 'legacy_only' | 'modern_only' | 'both'
@@ -578,6 +579,20 @@ export function isVideo(kind: MediaKind): boolean {
   return VIDEO_KINDS.includes(kind)
 }
 
+const DECOMMISSIONED = ['apod.nasa.gov', 'www.apod.nasa.gov', 'antwrp.gsfc.nasa.gov']
+
+export function isDecommissioned(url: string): boolean {
+  const host = url.split('//')[1] ?? url
+  return DECOMMISSIONED.some((dead) => host.startsWith(dead))
+}
+
+export function isLost(media: Media): boolean {
+  if (media.kind === 'none' || media.thumb_url) return false
+
+  const addresses = [media.url, media.hd_url].filter((url): url is string => !!url)
+  return addresses.every(isDecommissioned)
+}
+
 export function aspectRatio(media: Media): number | null {
   const { thumb_width: width, thumb_height: height } = media
   return width && height ? width / height : null
@@ -697,14 +712,8 @@ export interface CoverageSplit {
   unchecked: number
 }
 
-export interface YearSplit extends CoverageSplit {
-  year: number
-  entries: number
-}
-
 export interface MigrationCoverage extends CoverageSplit {
   entries: number
-  years: YearSplit[]
   absent_dates: string[]
 }
 

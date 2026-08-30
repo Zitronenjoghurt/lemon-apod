@@ -94,11 +94,13 @@ async fn get_weather(State(state): State<ServerState>, headers: HeaderMap) -> Ap
 
 async fn build_weather(state: &ServerState) -> ApiResult<String> {
     let reader = state.sky.reader().await.ok_or(ApiError::NotFound)?;
-    let report = reader
+    let mut report = reader
         .weather_report()
         .await
         .map_err(|error| ApiError::Internal(error.into()))?
         .ok_or(ApiError::NotFound)?;
+
+    report.scales = report.measured_scales(Utc::now());
 
     serde_json::to_string(&report).map_err(|error| ApiError::Internal(error.into()))
 }

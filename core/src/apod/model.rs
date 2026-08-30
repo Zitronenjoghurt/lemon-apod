@@ -8,11 +8,16 @@ pub struct Filters {
     pub to: Option<ApodDate>,
     pub kind: Option<KindFilter>,
     pub copyright: Option<bool>,
+    pub lost: Option<bool>,
 }
 
 impl Filters {
     pub fn is_empty(&self) -> bool {
-        self.from.is_none() && self.to.is_none() && self.kind.is_none() && self.copyright.is_none()
+        self.from.is_none()
+            && self.to.is_none()
+            && self.kind.is_none()
+            && self.copyright.is_none()
+            && self.lost.is_none()
     }
 }
 

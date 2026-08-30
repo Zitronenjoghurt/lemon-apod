@@ -21,12 +21,14 @@ pub fn filters(
     to: Option<&str>,
     media_kind: Option<&str>,
     copyright: Option<bool>,
+    lost: Option<bool>,
 ) -> ApiResult<Filters> {
     Ok(Filters {
         from: optional_date(from)?,
         to: optional_date(to)?,
         kind: media_kind.map(kind).transpose()?,
         copyright,
+        lost,
     })
 }
 

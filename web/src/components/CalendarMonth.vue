@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import ApodCredit from './ApodCredit.vue'
-import type { ApodSummary } from '@/api/types'
+import { type ApodSummary, isLost } from '@/api/types'
 import { useGaps } from '@/composables/useGaps'
 import { usePreferences } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
@@ -145,6 +145,7 @@ watch([rows, () => props.entries.length], () => void nextTick(measure))
             decoding="async"
             loading="lazy"
           />
+          <i v-else-if="isLost(slot.entry.media)" aria-hidden="true" class="pi pi-ban lost" />
           <span class="day">{{ slot.day }}</span>
           <span v-if="!isRead(slot.date)" aria-hidden="true" class="unread-dot" />
           <span class="sr-only">
@@ -229,6 +230,20 @@ watch([rows, () => props.entries.length], () => void nextTick(measure))
 .gap .mark {
   font-size: 0.8em;
   opacity: 0.85;
+}
+
+.filled .lost {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.9em;
+  color: hsl(var(--tone-warn));
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--text) 6%, transparent) 5px 10px
+  );
 }
 
 .empty {

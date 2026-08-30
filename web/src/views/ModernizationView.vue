@@ -22,25 +22,6 @@ const missing = computed(() => coverage.value?.absent_dates ?? [])
 
 const dated = computed(() => checked.value + (coverage.value?.unchecked ?? 0))
 
-const mostlyUnchecked = computed(
-  () => dated.value === 0 || (coverage.value?.unchecked ?? 0) / dated.value > 0.25,
-)
-
-const columns = computed(() => {
-  const years = coverage.value?.years ?? []
-  const tallest = Math.max(...years.map((year) => year.entries), 1)
-
-  return years.map((year) => ({
-    ...year,
-    height: (year.entries / tallest) * 100,
-    tick: year.year % 5 === 0,
-    caption:
-      `${year.year}: ${year.carried} of ${year.entries} on NASA's site` +
-      (year.absent ? `, ${year.absent} missing` : '') +
-      (year.unchecked ? `, ${year.unchecked} not checked` : ''),
-  }))
-})
-
 function count(value: number | undefined): string {
   return value === undefined ? 'n/a' : value.toLocaleString()
 }
@@ -129,61 +110,27 @@ onMounted(run)
           <li><span class="swatch unchecked" />Not checked</li>
         </ul>
 
-        <template v-if="mostlyUnchecked">
-          <div
-            :aria-label="`${count(coverage.carried)} on NASA's site, ${count(coverage.absent)} missing, ${count(coverage.unchecked)} not checked`"
-            class="progress"
-            role="img"
-          >
-            <span
-              v-if="coverage.carried"
-              :style="{ flexGrow: coverage.carried }"
-              class="seg carried"
-            />
-            <span
-              v-if="coverage.absent"
-              :style="{ flexGrow: coverage.absent }"
-              class="seg absent"
-            />
-            <span
-              v-if="coverage.unchecked"
-              :style="{ flexGrow: coverage.unchecked }"
-              class="seg unchecked"
-            />
-          </div>
-          <p class="muted note">
-            {{ count(checked) }} of {{ count(dated) }} dates checked,
-            {{ count(coverage.absent) }} of them missing from the modern page.
-          </p>
-        </template>
-
         <div
-          v-else
-          :aria-label="`Coverage from ${columns[0]?.year} to ${columns.at(-1)?.year}`"
-          class="chart"
+          :aria-label="`${count(coverage.carried)} on NASA's site, ${count(coverage.absent)} missing, ${count(coverage.unchecked)} not checked`"
+          class="progress"
           role="img"
         >
-          <ol class="cols">
-            <li v-for="year in columns" :key="year.year" :title="year.caption">
-              <span class="col">
-                <span :style="{ height: `${year.height}%` }" class="stack-bar">
-                  <span
-                    v-if="year.unchecked"
-                    :style="{ flexGrow: year.unchecked }"
-                    class="seg unchecked"
-                  />
-                  <span v-if="year.absent" :style="{ flexGrow: year.absent }" class="seg absent" />
-                  <span
-                    v-if="year.carried"
-                    :style="{ flexGrow: year.carried }"
-                    class="seg carried"
-                  />
-                </span>
-              </span>
-              <span :class="{ on: year.tick }" class="tick">{{ year.tick ? year.year : '' }}</span>
-            </li>
-          </ol>
+          <span
+            v-if="coverage.carried"
+            :style="{ flexGrow: coverage.carried }"
+            class="seg carried"
+          />
+          <span v-if="coverage.absent" :style="{ flexGrow: coverage.absent }" class="seg absent" />
+          <span
+            v-if="coverage.unchecked"
+            :style="{ flexGrow: coverage.unchecked }"
+            class="seg unchecked"
+          />
         </div>
+        <p class="muted note">
+          {{ count(checked) }} of {{ count(dated) }} dates checked, {{ count(coverage.absent) }} of
+          them missing from the modern page.
+        </p>
       </section>
     </template>
   </div>
@@ -283,10 +230,6 @@ h2 {
   border-radius: var(--radius-sm);
 }
 
-.chart {
-  overflow-x: auto;
-}
-
 .progress {
   display: flex;
   height: var(--space-3);
@@ -297,45 +240,6 @@ h2 {
 
 .progress .seg {
   min-width: 3px;
-}
-
-.cols {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 22rem;
-}
-
-.cols li {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.3rem;
-}
-
-.col {
-  display: flex;
-  align-items: flex-end;
-  height: 7rem;
-}
-
-.stack-bar {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  border-radius: 2px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-
-.seg {
-  display: block;
-  min-height: 1px;
 }
 
 .seg.carried,
@@ -351,18 +255,6 @@ h2 {
 .seg.unchecked,
 .swatch.unchecked {
   background: color-mix(in srgb, var(--text) 16%, transparent);
-}
-
-.tick {
-  font-size: var(--text-xs);
-  color: transparent;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.tick.on {
-  color: var(--text-muted);
 }
 
 .breakdown {

@@ -13,19 +13,10 @@ pub struct Split {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-pub struct YearSplit {
-    pub year: i32,
-    pub entries: i64,
-    #[serde(flatten)]
-    pub split: Split,
-}
-
-#[derive(Debug, Clone, serde::Serialize)]
 pub struct Coverage {
     pub entries: i64,
     #[serde(flatten)]
     pub split: Split,
-    pub years: Vec<YearSplit>,
     pub absent_dates: Vec<ApodDate>,
 }
 
@@ -123,33 +114,18 @@ impl Archive {
 
         let mut total = Split::default();
         let mut entries = 0;
-        let years = by_year
-            .into_iter()
-            .map(|(year, count)| {
-                let (carried, absent) = measured.get(&year).copied().unwrap_or_default();
-                let split = Split {
-                    carried,
-                    absent,
-                    unchecked: (count - carried - absent).max(0),
-                };
+        for (year, count) in by_year {
+            let (carried, absent) = measured.get(&year).copied().unwrap_or_default();
 
-                entries += count;
-                total.carried += split.carried;
-                total.absent += split.absent;
-                total.unchecked += split.unchecked;
-
-                YearSplit {
-                    year,
-                    entries: count,
-                    split,
-                }
-            })
-            .collect();
+            entries += count;
+            total.carried += carried;
+            total.absent += absent;
+            total.unchecked += (count - carried - absent).max(0);
+        }
 
         Some(Coverage {
             entries,
             split: total,
-            years,
             absent_dates,
         })
     }

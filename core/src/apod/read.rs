@@ -204,6 +204,10 @@ impl ApodReader {
         limit: usize,
         snippet_tokens: usize,
     ) -> ApodResult<SearchResults> {
+        if query.trim().is_empty() {
+            return self.filtered(filters, offset, limit).await;
+        }
+
         let Some(match_query) = fts_query(query) else {
             return Ok(SearchResults {
                 items: Vec::new(),
@@ -378,6 +382,51 @@ impl ApodReader {
             .collect())
     }
 
+    async fn filtered(
+        &self,
+        filters: &Filters,
+        offset: usize,
+        limit: usize,
+    ) -> ApodResult<SearchResults> {
+        let mut where_clause = String::from("WHERE 1 = 1");
+        let mut params: Vec<Param> = Vec::new();
+        push_filters(&mut where_clause, &mut params, filters);
+
+        let total: i64 = sqlx::query_scalar_with(
+            AssertSqlSafe(format!("SELECT COUNT(*) FROM entries {where_clause}")),
+            arguments(&params),
+        )
+        .fetch_one(self.db.reader())
+        .await?;
+
+        let sql = format!(
+            "SELECT {SUMMARY_COLUMNS} FROM entries {where_clause}
+             ORDER BY date_id DESC LIMIT ? OFFSET ?"
+        );
+        params.push(Param::Int(limit as i64));
+        params.push(Param::Int(offset as i64));
+
+        let rows = sqlx::query_with(AssertSqlSafe(sql), arguments(&params))
+            .fetch_all(self.db.reader())
+            .await?;
+
+        Ok(SearchResults {
+            items: rows
+                .iter()
+                .map(|row| {
+                    Ok(SearchHit {
+                        entry: self.summary(row)?,
+                        snippet: String::new(),
+                        matched: Matched::default(),
+                        credit: None,
+                        keywords: None,
+                    })
+                })
+                .collect::<ApodResult<_>>()?,
+            total,
+        })
+    }
+
     pub async fn divergence_counts(&self) -> ApodResult<Vec<(String, i64)>> {
         Ok(sqlx::query_as(
             "SELECT field, COUNT(*) FROM divergences GROUP BY field ORDER BY 2 DESC, 1",
@@ -438,18 +487,23 @@ impl ApodReader {
         Ok(Listing {
             items: rows
                 .iter()
-                .map(|row| {
-                    Ok(FieldDivergence {
-                        date: ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
-                        title: row.try_get(1)?,
-                        field: row.try_get(2)?,
-                        legacy: row.try_get(3)?,
-                        modern: row.try_get(4)?,
-                    })
-                })
+                .map(read_divergence)
                 .collect::<ApodResult<_>>()?,
             total,
         })
+    }
+
+    pub async fn entry_divergences(&self, date: ApodDate) -> ApodResult<Vec<FieldDivergence>> {
+        let rows = sqlx::query(
+            "SELECT d.date_id, e.title, d.field, d.legacy_value, d.modern_value
+             FROM divergences d JOIN entries e ON e.date_id = d.date_id
+             WHERE d.date_id = ?1 ORDER BY d.field",
+        )
+        .bind(date.days())
+        .fetch_all(self.db.reader())
+        .await?;
+
+        rows.iter().map(read_divergence).collect()
     }
 
     pub async fn origin_pairs(&self) -> ApodResult<Vec<(ApodDate, String, String)>> {
@@ -556,6 +610,16 @@ impl ApodReader {
     }
 }
 
+fn read_divergence(row: &SqliteRow) -> ApodResult<FieldDivergence> {
+    Ok(FieldDivergence {
+        date: ApodDate::from_days(row.try_get::<i64, _>(0)? as i32),
+        title: row.try_get(1)?,
+        field: row.try_get(2)?,
+        legacy: row.try_get(3)?,
+        modern: row.try_get(4)?,
+    })
+}
+
 fn read_picture(row: &SqliteRow, at: usize) -> ApodResult<Option<ApodDate>> {
     Ok(row
         .try_get::<Option<i64>, _>(at)?
@@ -652,6 +716,23 @@ fn push_filters(sql: &mut String, params: &mut Vec<Param>, filters: &Filters) {
         sql.push_str(" AND entries.has_copyright = ?");
         params.push(Param::Int(copyright.into()));
     }
+    if let Some(lost) = filters.lost {
+        sql.push_str(match lost {
+            true => " AND ",
+            false => " AND NOT ",
+        });
+        sql.push_str(&lost_media_sql());
+    }
+}
+
+fn lost_media_sql() -> String {
+    format!(
+        "(entries.thumb_path IS NULL AND entries.media_kind <> 'none' \
+         AND (entries.media_url IS NULL OR {dead_url}) \
+         AND (entries.media_hd_url IS NULL OR {dead_hd}))",
+        dead_url = crate::entry::decommissioned_sql("entries.media_url"),
+        dead_hd = crate::entry::decommissioned_sql("entries.media_hd_url"),
+    )
 }
 
 pub(super) fn from_json<T: serde::de::DeserializeOwned + Default>(raw: Option<String>) -> T {

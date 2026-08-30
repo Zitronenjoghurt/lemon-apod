@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
+import FieldChange from './FieldChange.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary, PictureAppearances } from '@/api/types'
 import { useArrowKeys } from '@/composables/useArrowKeys'
@@ -39,6 +40,24 @@ const encore = ref<PictureAppearances | null>(null)
 const encoreGroup = ref<string>()
 const encoreFailed = ref(false)
 const prose = ref<HTMLElement>()
+
+const migrationOpen = ref(false)
+
+const FIELD_NAMES: Record<string, string> = {
+  title: 'the title',
+  explanation_text: 'the explanation',
+  credit_text: 'the credit',
+  has_copyright: 'the copyright note',
+  license_url: 'the licence link',
+  tomorrow_teaser: "tomorrow's teaser",
+  media_kind: 'the file format',
+}
+
+const changed = computed(() => props.entry.changed ?? [])
+
+const changedNames = computed(() =>
+  changed.value.map((row) => FIELD_NAMES[row.field] ?? row.field.replace(/_/g, ' ')),
+)
 
 const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
 
@@ -274,6 +293,35 @@ watch([() => props.entry.date, hits], async () => {
       </span>
     </nav>
 
+    <div v-if="changed.length" class="migration">
+      <button
+        :aria-expanded="migrationOpen"
+        class="row migrated"
+        type="button"
+        @click="migrationOpen = !migrationOpen"
+      >
+        <span class="lead">
+          <i aria-hidden="true" class="pi pi-arrow-right-arrow-left" />
+          Changed through APOD's modernization
+        </span>
+        <span class="row fields">
+          <span v-for="name in changedNames" :key="name" class="what">{{ name }}</span>
+        </span>
+        <i
+          :class="['pi', migrationOpen ? 'pi-chevron-up' : 'pi-chevron-down']"
+          aria-hidden="true"
+        />
+      </button>
+
+      <div v-if="migrationOpen" class="card differences">
+        <FieldChange v-for="row in changed" :key="row.field" :row="row" />
+        <RouterLink class="about" to="/modernization">
+          More information about the modernization of the official APOD website
+          <i aria-hidden="true" class="pi pi-arrow-right" />
+        </RouterLink>
+      </div>
+    </div>
+
     <div v-if="highlight" class="row hits">
       <i aria-hidden="true" class="pi pi-search" />
       <span class="term">{{ highlight }}</span>
@@ -493,6 +541,73 @@ watch([() => props.entry.date, hits], async () => {
 
 .encore .all i {
   font-size: 0.7em;
+}
+
+.migration {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-self: stretch;
+}
+
+.migrated {
+  align-self: flex-start;
+  max-width: 100%;
+  gap: 0.5rem 0.7rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1.1rem;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.migrated:hover {
+  color: var(--text);
+}
+
+.migrated .lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.migrated .fields {
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.migrated .what {
+  padding: 0.05rem 0.4rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.differences {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+
+.about {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.about i {
+  font-size: 0.8em;
 }
 
 .entry {
