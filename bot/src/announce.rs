@@ -20,7 +20,8 @@ pub struct Pass {
 
 pub async fn run(ctx: serenity::Context, state: BotState) {
     let poll = state.config.announce.poll;
-    tracing::info!(?poll, "watching the archive for a new entry");
+    let settle = state.config.announce.settle;
+    tracing::info!(?poll, ?settle, "watching the archive for a new entry");
 
     loop {
         match pass(&ctx, &state, Utc::now()).await {
@@ -45,6 +46,15 @@ pub async fn pass(
     };
 
     if !is_fresh(&entry, now, state.config.announce.max_age) {
+        return Ok(Pass::default());
+    }
+
+    if let Some(waiting_for) = entry.settling(state.config.announce.settle, now) {
+        tracing::info!(
+            date = %entry.date,
+            %waiting_for,
+            "the archive has not finished this entry, holding the announcement"
+        );
         return Ok(Pass::default());
     }
 
@@ -234,6 +244,7 @@ mod tests {
             media: Media::new(MediaKind::ImageJpg, None, None),
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: Provenance::Both,

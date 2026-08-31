@@ -47,6 +47,7 @@ fn entry(date: &str, title: &str, explanation: &str) -> ApodEntry {
         ),
         extra_media: Vec::new(),
         legacy_media_url: None,
+        first_stored_at: None,
         alt: None,
         authors: Vec::new(),
         provenance: Provenance::LegacyOnly,

@@ -10,7 +10,7 @@ pub use fit::{Anchor, Fit, Grouping, Outcome, Prior, Score, Vote, fit, tiers};
 pub use model::{Category, Progress, Stage};
 pub use pool::{Candidate, Draw, Pairing, Pool};
 #[cfg(feature = "rating-data")]
-pub use store::{Cast, Consistency, Ranked, Standing, Tally, VoteStore, Voter};
+pub use store::{Cast, Consistency, Ranked, Standing, Tally, VoteStore, Voter, Whose};
 
 pub const MODEL: &str = "bt-map-1";
 pub const Z: f64 = 1.96;

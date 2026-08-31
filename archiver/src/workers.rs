@@ -13,7 +13,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rand::RngExt;
 use std::collections::HashSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::Instrument;
 
 const MAX_SLEEP: Duration = Duration::from_secs(900);
@@ -110,7 +110,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     if cfg.media.enabled {
         tracing::info!(
             every = %range(cfg.media.delay_min, cfg.media.delay_max),
-            max_attempts = cfg.media.max_attempts,
+            backoff_max = %duration(cfg.retry_backoff_max),
             "media archive starting"
         );
         handles.push(tokio::spawn(
@@ -388,26 +388,45 @@ async fn media_backfill(
     mut shutdown: Shutdown,
 ) -> Result<()> {
     let store = archive.media();
-    let mut targets = media::targets(
-        &index.all_media().await?,
-        &index.reader().origin_pairs().await?,
-    );
+    let mut targets = media_targets(&index).await?;
+    let mut scanned = Instant::now();
 
     while !shutdown.is_triggered() {
-        let Some(target) = store.next_target(&targets, cfg.media.max_attempts).await? else {
-            tracing::info!(
-                files = targets.len(),
-                rescanning_in = %duration(MAX_SLEEP),
-                "every picture the index knows about is stored"
-            );
-            if !shutdown.sleep(MAX_SLEEP).await {
-                break;
+        if scanned.elapsed() >= MAX_SLEEP {
+            targets = media_targets(&index).await?;
+            scanned = Instant::now();
+        }
+
+        let target = match store
+            .next_target(&targets, cfg.retry_backoff_max, Utc::now().timestamp())
+            .await?
+        {
+            Next::Fetch(target) => target,
+            Next::Waiting(wait) => {
+                let wait = wait.min(MAX_SLEEP);
+                tracing::info!(
+                    retrying_in = %duration(wait),
+                    "every file that can be fetched is fetched; the rest are waiting on a host \
+                     that would not answer"
+                );
+                if !shutdown.sleep(wait).await {
+                    break;
+                }
+                continue;
             }
-            targets = media::targets(
-                &index.all_media().await?,
-                &index.reader().origin_pairs().await?,
-            );
-            continue;
+            Next::Complete => {
+                tracing::info!(
+                    files = targets.len(),
+                    rescanning_in = %duration(MAX_SLEEP),
+                    "every picture the index knows about is stored"
+                );
+                if !shutdown.sleep(MAX_SLEEP).await {
+                    break;
+                }
+                targets = media_targets(&index).await?;
+                scanned = Instant::now();
+                continue;
+            }
         };
 
         media_step(&cfg, &client, &store, &targets, &target).await;
@@ -419,6 +438,13 @@ async fn media_backfill(
     }
 
     Ok(())
+}
+
+async fn media_targets(index: &ApodWriter) -> Result<Vec<media::Target>> {
+    Ok(media::targets(
+        &index.all_media().await?,
+        &index.reader().origin_pairs().await?,
+    ))
 }
 
 async fn thumb_backfill(

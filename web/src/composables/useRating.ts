@@ -1,6 +1,6 @@
-import { computed, ref, type Ref, shallowRef } from 'vue'
-import { api, ApiError } from '@/api/client'
-import type { Ballot, RatingCategory, RatingOutcome } from '@/api/types'
+import {computed, ref, type Ref, shallowRef} from 'vue'
+import {api, ApiError, type SpentBudget} from '@/api/client'
+import type {Ballot, RatingCategory, RatingOutcome} from '@/api/types'
 
 export const CARD_KEY = 'apod:rating-card'
 const HELD_KEY = 'apod:rating-ballot'
@@ -24,6 +24,15 @@ export const CATEGORY_ICONS: Record<RatingCategory, string> = {
 }
 
 export const ORDER: RatingCategory[] = ['beautiful', 'fascinating']
+
+export function spell(seconds: number): string {
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60
+    return hours === 1 ? 'an hour' : `${hours} hours`
+  }
+  return minutes === 1 ? 'a minute' : `${minutes} minutes`
+}
 
 export function isCategory(raw: unknown): raw is RatingCategory {
   return raw === 'beautiful' || raw === 'fascinating'
@@ -77,6 +86,7 @@ export function useRatingSession(category: Ref<RatingCategory>) {
   const sending = ref(false)
   const error = ref<string>()
   const throttled = ref(false)
+  const spent = ref<SpentBudget | null>(null)
   const cast = ref(0)
   let lastVote = 0
 
@@ -101,6 +111,7 @@ export function useRatingSession(category: Ref<RatingCategory>) {
     loading.value = true
     error.value = undefined
     throttled.value = false
+    spent.value = null
 
     try {
       take(await api.rating.ballot(category.value))
@@ -113,10 +124,10 @@ export function useRatingSession(category: Ref<RatingCategory>) {
   }
 
   async function vote(outcome: RatingOutcome): Promise<void> {
-    const spent = ballot.value
-    if (!spent || sending.value) return
+    const pending = ballot.value
+    if (!pending || sending.value) return
 
-    if (Date.now() - lastVote < spent.pace) return
+    if (Date.now() - lastVote < pending.pace) return
     lastVote = Date.now()
 
     sending.value = true
@@ -124,13 +135,14 @@ export function useRatingSession(category: Ref<RatingCategory>) {
     cast.value += 1
 
     try {
-      const answer = await api.rating.vote(spent.ballot, outcome, category.value)
+      const answer = await api.rating.vote(pending.ballot, outcome, category.value)
       take(answer.next)
       if (!answer.next) await open()
     } catch (thrown) {
       cast.value -= 1
       note(thrown)
-      if (thrown instanceof ApiError && thrown.status === 400) await open()
+      if (spent.value) take(null)
+      else if (thrown instanceof ApiError && thrown.status === 400) await open()
     } finally {
       sending.value = false
     }
@@ -146,13 +158,15 @@ export function useRatingSession(category: Ref<RatingCategory>) {
   function note(thrown: unknown): void {
     if (thrown instanceof ApiError) {
       throttled.value = thrown.rateLimited
+      spent.value = thrown.budget ?? null
       error.value = thrown.message
       return
     }
+    spent.value = null
     error.value = thrown instanceof Error ? thrown.message : 'Something went wrong.'
   }
 
-  return { ballot, loading, sending, error, throttled, cast, ready, open, vote, reset }
+  return { ballot, loading, sending, error, throttled, spent, cast, ready, open, vote, reset }
 }
 
 const dismissed = ref(loadDismissed())

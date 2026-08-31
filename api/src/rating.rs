@@ -4,19 +4,21 @@ pub mod nonce;
 
 use crate::config::Rating as Settings;
 use anyhow::{Context, Result};
-use apod_core::rating::store::{Cast, Standing, VoteStore, VoterId};
+use apod_core::rating::store::{Cast, Standing, VoteStore, VoterId, Whose};
 use apod_core::rating::{
     self, Candidate, Category, Grouping, Outcome, Pairing, Pool, Prior, Progress,
 };
 use apod_core::{ApodDate, ApodReader};
 use ballot::{Ballot, BallotError};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeDelta, Utc};
 use nonce::Nonces;
 use rand::RngExt;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Clone, Default)]
@@ -29,8 +31,45 @@ pub struct Who {
 pub enum Denied {
     #[error("The archive is not ready to be rated yet; try again shortly")]
     Unavailable,
-    #[error("That is a lot of votes in an hour. Come back a bit later")]
-    OverBudget,
+    #[error("vote budget spent")]
+    OverBudget(Budget),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Budget {
+    pub scope: Scope,
+    pub allowed: u64,
+    pub window_secs: u64,
+    pub retry_after: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    Voter,
+    Network,
+}
+
+impl Budget {
+    fn spent(
+        scope: Scope,
+        allowed: u64,
+        window: Duration,
+        frees_at: Option<DateTime<Utc>>,
+        now: DateTime<Utc>,
+    ) -> Self {
+        let retry_after = frees_at
+            .map(|frees_at| (frees_at - now).num_seconds().max(0) as u64)
+            .unwrap_or_else(|| window.as_secs())
+            .max(1);
+
+        Self {
+            scope,
+            allowed,
+            window_secs: window.as_secs(),
+            retry_after,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -100,22 +139,63 @@ impl Rating {
                 })?,
         };
 
-        if standing.votes >= self.settings.votes_per_window {
-            return Err(Denied::OverBudget);
+        let window = self.settings.budget_window;
+        let allowed = self.settings.votes_per_window;
+
+        if let Some(voter) = who.voter
+            && standing.votes >= allowed
+        {
+            let frees_at = self
+                .frees_at(Whose::Voter(voter), since, standing.votes - allowed, window)
+                .await;
+            return Err(Denied::OverBudget(Budget::spent(
+                Scope::Voter,
+                allowed,
+                window,
+                frees_at,
+                now,
+            )));
         }
 
         if let Some(cohort) = &who.cohort {
+            let allowed = self.settings.cohort_votes_per_window;
             let votes = self
                 .store
                 .cohort_votes(cohort, since)
                 .await
                 .unwrap_or_default();
-            if votes >= self.settings.cohort_votes_per_window {
-                return Err(Denied::OverBudget);
+
+            if votes >= allowed {
+                let frees_at = self
+                    .frees_at(Whose::Cohort(cohort), since, votes - allowed, window)
+                    .await;
+                return Err(Denied::OverBudget(Budget::spent(
+                    Scope::Network,
+                    allowed,
+                    window,
+                    frees_at,
+                    now,
+                )));
             }
         }
 
         Ok(standing)
+    }
+
+    async fn frees_at(
+        &self,
+        whose: Whose<'_>,
+        since: DateTime<Utc>,
+        over_by: u64,
+        window: Duration,
+    ) -> Option<DateTime<Utc>> {
+        let ages_out = self
+            .store
+            .ages_out_at(whose, since, over_by)
+            .await
+            .unwrap_or_default()?;
+
+        Some(ages_out + TimeDelta::from_std(window).ok()?)
     }
 
     pub async fn draw(
@@ -340,6 +420,64 @@ pub fn weighted_category(beautiful_share: u32) -> Category {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const HOUR: Duration = Duration::from_secs(3_600);
+
+    #[test]
+    fn a_spent_budget_counts_the_wait_from_when_the_window_frees_up() {
+        let now = Utc::now();
+        let frees_at = now + TimeDelta::minutes(42);
+        let budget = Budget::spent(Scope::Voter, 300, HOUR, Some(frees_at), now);
+
+        assert_eq!(budget.retry_after, 42 * 60);
+        assert_eq!(budget.allowed, 300);
+        assert_eq!(budget.window_secs, 3_600);
+        assert_eq!(budget.scope, Scope::Voter);
+    }
+
+    #[test]
+    fn a_budget_with_nothing_in_the_log_waits_the_whole_window_rather_than_guessing() {
+        let now = Utc::now();
+        let blind = Budget::spent(Scope::Network, 1_000, HOUR, None, now);
+
+        assert_eq!(
+            blind.retry_after, 3_600,
+            "with no vote to age out, the only answer that cannot send them back early is the \
+             whole window"
+        );
+        assert_eq!(blind.scope, Scope::Network);
+    }
+
+    #[test]
+    fn a_wait_that_has_already_passed_still_asks_for_a_moment() {
+        let now = Utc::now();
+        let gone = Budget::spent(
+            Scope::Voter,
+            300,
+            HOUR,
+            Some(now - TimeDelta::hours(2)),
+            now,
+        );
+
+        assert_eq!(
+            gone.retry_after, 1,
+            "zero would read as a green light and put the client straight back into a refusal"
+        );
+    }
+
+    #[test]
+    fn the_refusal_carries_facts_and_not_a_sentence() {
+        let now = Utc::now();
+        let budget = Budget::spent(Scope::Voter, 300, HOUR, Some(now), now);
+        let said = serde_json::to_string(&budget).unwrap();
+
+        assert!(said.contains("\"scope\":\"voter\""), "{said}");
+        assert!(
+            !said.contains("You "),
+            "the words the reader sees belong to the client in front of them, not to the \
+             archive: {said}"
+        );
+    }
 
     #[test]
     fn the_mix_leans_on_the_board_that_has_to_reach_significance_first() {

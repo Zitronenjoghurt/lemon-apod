@@ -178,7 +178,7 @@ impl From<Denied> for ApiError {
     fn from(denied: Denied) -> Self {
         match denied {
             Denied::Unavailable => Self::Unavailable(denied.to_string()),
-            Denied::OverBudget => Self::TooManyRequests(denied.to_string()),
+            Denied::OverBudget(budget) => Self::OverBudget(budget),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::archive::Source;
+use crate::archive::{Next, Source};
 use crate::client::{Client, Limit, Response};
 use crate::config::Config;
 use crate::fetch::{self, sha256};
@@ -8,6 +8,7 @@ use apod_core::db::Db;
 use apod_core::{ApodDate, Media, MediaKind};
 use sqlx::Row;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 const NAME_MAX: usize = 96;
 const HASH_LEN: usize = 8;
@@ -57,6 +58,11 @@ pub fn targets(
 ) -> Vec<Target> {
     let mut out: Vec<Target> = Vec::with_capacity(entries.len() + origin_pairs.len());
     let mut seen: HashSet<String> = HashSet::with_capacity(entries.len() + origin_pairs.len());
+
+    let mut entries: Vec<&(ApodDate, Media)> = entries.iter().collect();
+    entries.sort_by_key(|(date, _)| *date);
+    let mut origin_pairs: Vec<&(ApodDate, String, String)> = origin_pairs.iter().collect();
+    origin_pairs.sort_by_key(|(date, _, _)| *date);
 
     for (date, media) in entries {
         let candidates = match media.kind {
@@ -402,11 +408,13 @@ struct Attempted {
 }
 
 impl Attempted {
-    fn settled(&self, max_attempts: u32) -> bool {
-        self.stored
-            || matches!(self.http_status, Some(404 | 410))
-            || self.http_status.is_some_and(|s| (300..400).contains(&s))
-            || self.attempts >= max_attempts
+    fn settled(&self) -> bool {
+        self.stored || matches!(self.http_status, Some(404 | 410 | 300..=399))
+    }
+
+    fn due_in(&self, backoff_max: Duration, now: i64) -> i64 {
+        crate::archive::backoff(self.attempts, backoff_max).as_secs() as i64
+            - now.saturating_sub(self.last_checked_at)
     }
 }
 
@@ -431,23 +439,45 @@ impl MediaStore {
     pub async fn next_target(
         &self,
         targets: &[Target],
-        max_attempts: u32,
-    ) -> Result<Option<Target>> {
+        backoff_max: Duration,
+        now: i64,
+    ) -> Result<Next<Target>> {
         let attempted = self.attempted().await?;
 
         if let Some(target) = targets
             .iter()
-            .find(|target| !attempted.contains_key(&target.url))
+            .filter(|target| !attempted.contains_key(&target.url))
+            .max_by_key(|target| target.date)
         {
-            return Ok(Some(target.clone()));
+            return Ok(Next::Fetch(target.clone()));
         }
 
-        Ok(targets
+        let mut soonest: Option<i64> = None;
+        let mut due: Option<(i64, &Target)> = None;
+
+        for (record, target) in targets
             .iter()
             .filter_map(|target| Some((attempted.get(&target.url)?, target)))
-            .filter(|(record, _)| !record.settled(max_attempts))
-            .min_by_key(|(record, _)| record.last_checked_at)
-            .map(|(_, target)| target.clone()))
+            .filter(|(record, _)| !record.settled())
+        {
+            let due_in = record.due_in(backoff_max, now);
+            match due_in <= 0 {
+                true if due.is_none_or(|(waited, _)| record.last_checked_at < waited) => {
+                    due = Some((record.last_checked_at, target))
+                }
+                true => {}
+                false => soonest = Some(soonest.map_or(due_in, |soonest: i64| soonest.min(due_in))),
+            }
+        }
+
+        if let Some((_, target)) = due {
+            return Ok(Next::Fetch(target.clone()));
+        }
+
+        Ok(match soonest {
+            Some(seconds) => Next::Waiting(Duration::from_secs(seconds.max(0) as u64)),
+            None => Next::Complete,
+        })
     }
 
     async fn attempted(&self) -> Result<HashMap<String, Attempted>> {
@@ -694,13 +724,15 @@ mod tests {
             ),
         ];
 
-        let picked = targets(&entries, &[]);
-        assert_eq!(picked.len(), 1);
-        assert_eq!(
-            picked[0].date,
-            date(2006, 10, 5),
-            "the first entry handed in wins, so the caller orders by date"
-        );
+        for entries in [entries.clone(), entries.into_iter().rev().collect()] {
+            let picked = targets(&entries, &[]);
+            assert_eq!(picked.len(), 1, "one url is one file");
+            assert_eq!(picked[0].date, date(2002, 8, 12));
+            assert_eq!(
+                stored_path(picked[0].date, "earthlights.jpg"),
+                "2002/08/2002-08-12/earthlights.jpg"
+            );
+        }
     }
 
     #[test]
@@ -905,28 +937,61 @@ mod tests {
         assert_eq!(sniff(b""), None);
     }
 
-    #[test]
-    fn an_answer_is_final_but_a_failure_is_not() {
-        let settled = |status: Option<u16>, attempts: u32| {
-            Attempted {
-                stored: false,
-                http_status: status,
-                attempts,
-                last_checked_at: 0,
-            }
-            .settled(3)
-        };
-
-        assert!(settled(Some(404), 1), "the file is not there");
-        assert!(settled(Some(410), 1), "and it is not coming back");
-        assert!(settled(Some(301), 1), "a redirect answered the question");
-        assert!(
-            !settled(Some(500), 1),
-            "the server having a bad day is not an answer"
-        );
-        assert!(!settled(None, 1));
-        assert!(settled(Some(500), 3), "but it does not get asked forever");
+    fn record(status: Option<u16>, attempts: u32) -> Attempted {
+        Attempted {
+            stored: false,
+            http_status: status,
+            attempts,
+            last_checked_at: 0,
+        }
     }
+
+    #[test]
+    fn only_the_servers_own_answer_settles_a_url() {
+        assert!(record(Some(404), 1).settled(), "the file is not there");
+        assert!(record(Some(410), 1).settled(), "and it is not coming back");
+        assert!(
+            record(Some(301), 1).settled(),
+            "a redirect answered the question"
+        );
+
+        assert!(
+            !record(Some(500), 99).settled(),
+            "a server having a bad day never becomes proof the file is gone, however long the \
+             bad day runs"
+        );
+        assert!(
+            !record(None, 99).settled(),
+            "and neither does a download that never connected or was cut off partway"
+        );
+        assert!(
+            !record(Some(200), 99).settled(),
+            "a 200 that was not the picture is worth asking about again: an error page from a \
+             cache is exactly what an outage looks like"
+        );
+    }
+
+    #[test]
+    fn a_host_that_is_not_answering_is_asked_less_and_less_often() {
+        let ceiling = Duration::from_secs(6 * 3600);
+        let first = record(None, 1).due_in(ceiling, 0);
+        let fifth = record(None, 5).due_in(ceiling, 0);
+
+        assert!(
+            fifth > first,
+            "each failure widens the wait, so an outage is not hammered: {first} then {fifth}"
+        );
+        assert!(
+            record(None, 40).due_in(ceiling, 0) <= ceiling.as_secs() as i64,
+            "and the wait stops widening rather than running away"
+        );
+        assert!(
+            record(None, 1).due_in(ceiling, 10_000) < 0,
+            "once the wait has passed it is due again"
+        );
+    }
+
+    const CEILING: Duration = Duration::from_secs(6 * 3600);
 
     async fn store() -> MediaStore {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -954,39 +1019,18 @@ mod tests {
     #[tokio::test]
     async fn the_index_is_the_worklist_and_a_stored_file_leaves_it() {
         let store = store().await;
-        let first = target("https://apod.nasa.gov/a.jpg", date(1995, 6, 16));
-        let second = target("https://apod.nasa.gov/b.jpg", date(1995, 6, 20));
-        let queue = vec![first.clone(), second.clone()];
+        let older = target("https://apod.nasa.gov/a.jpg", date(1995, 6, 16));
+        let newer = target("https://apod.nasa.gov/b.jpg", date(1995, 6, 20));
+        let queue = vec![older.clone(), newer.clone()];
 
         assert_eq!(
-            store.next_target(&queue, 3).await.unwrap(),
-            Some(first.clone())
+            store.next_target(&queue, CEILING, 0).await.unwrap(),
+            Next::Fetch(newer.clone())
         );
 
         store
             .record_stored(
-                &first,
-                "1995/06/1995-06-16/a.jpg",
-                "hash",
-                4096,
-                "image/jpeg",
-                1,
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(
-            store.next_target(&queue, 3).await.unwrap(),
-            Some(second.clone())
-        );
-        assert_eq!(
-            store.stored_path(&first.url).await.unwrap().as_deref(),
-            Some("1995/06/1995-06-16/a.jpg")
-        );
-
-        store
-            .record_stored(
-                &second,
+                &newer,
                 "1995/06/1995-06-20/b.jpg",
                 "hash",
                 8192,
@@ -995,11 +1039,58 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(store.next_target(&queue, 3).await.unwrap(), None);
+
+        assert_eq!(
+            store.next_target(&queue, CEILING, 0).await.unwrap(),
+            Next::Fetch(older.clone())
+        );
+        assert_eq!(
+            store.stored_path(&newer.url).await.unwrap().as_deref(),
+            Some("1995/06/1995-06-20/b.jpg")
+        );
+
+        store
+            .record_stored(
+                &older,
+                "1995/06/1995-06-16/a.jpg",
+                "hash",
+                4096,
+                "image/jpeg",
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            store.next_target(&queue, CEILING, 0).await.unwrap(),
+            Next::Complete
+        );
 
         let counts = store.counts().await.unwrap();
         assert_eq!((counts.stored, counts.missing, counts.failed), (2, 0, 0));
         assert_eq!(counts.bytes, 12_288);
+    }
+
+    #[tokio::test]
+    async fn todays_picture_does_not_queue_behind_thirty_years_of_backlog() {
+        let store = store().await;
+        let backlog: Vec<Target> = (0..200)
+            .map(|day| {
+                target(
+                    &format!("https://apod.nasa.gov/old{day}.jpg"),
+                    ApodDate::from_days(day),
+                )
+            })
+            .collect();
+        let today = target("https://apod.nasa.gov/today.jpg", date(2026, 8, 31));
+
+        let mut queue = backlog.clone();
+        queue.push(today.clone());
+
+        assert_eq!(
+            store.next_target(&queue, CEILING, 0).await.unwrap(),
+            Next::Fetch(today),
+            "the archive walks back from today, so a new entry is never behind the whole archive"
+        );
     }
 
     #[tokio::test]
@@ -1013,38 +1104,74 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(store.next_target(&queue, 3).await.unwrap(), None);
+        assert_eq!(
+            store.next_target(&queue, CEILING, 10_000).await.unwrap(),
+            Next::Complete
+        );
         assert_eq!(store.counts().await.unwrap().missing, 1);
     }
 
     #[tokio::test]
-    async fn a_failing_url_is_retried_but_not_forever() {
+    async fn a_failing_url_backs_off_rather_than_being_asked_every_few_seconds() {
         let store = store().await;
         let flaky = target("https://apod.nasa.gov/flaky.jpg", date(1995, 6, 16));
         let queue = vec![flaky.clone()];
 
-        for attempt in 1..=2 {
-            store
-                .record_failure(&flaky, Some(500), "boom", attempt)
-                .await
-                .unwrap();
-            assert_eq!(
-                store.next_target(&queue, 3).await.unwrap(),
-                Some(flaky.clone()),
-                "still worth another try after {attempt}"
-            );
-        }
-
         store
-            .record_failure(&flaky, Some(500), "boom", 3)
+            .record_failure(&flaky, Some(500), "boom", 0)
             .await
             .unwrap();
+
+        assert!(
+            matches!(
+                store.next_target(&queue, CEILING, 10).await.unwrap(),
+                Next::Waiting(_)
+            ),
+            "one broken url must not become the only candidate and hold the front of the queue"
+        );
         assert_eq!(
-            store.next_target(&queue, 3).await.unwrap(),
-            None,
-            "one broken url must not become the only candidate and be asked for every few seconds"
+            store.next_target(&queue, CEILING, 10_000).await.unwrap(),
+            Next::Fetch(flaky.clone()),
+            "but once the wait has passed it is asked again"
+        );
+
+        store
+            .record_failure(&flaky, Some(500), "boom", 10_000)
+            .await
+            .unwrap();
+        assert!(
+            matches!(
+                store.next_target(&queue, CEILING, 10_060).await.unwrap(),
+                Next::Waiting(_)
+            ),
+            "and the second failure buys a longer wait than the first"
         );
         assert_eq!(store.counts().await.unwrap().failed, 1);
+    }
+
+    #[tokio::test]
+    async fn an_outage_never_turns_into_work_quietly_abandoned() {
+        let store = store().await;
+        let wanted = target("https://apod.nasa.gov/wanted.jpg", date(2026, 8, 31));
+        let queue = vec![wanted.clone()];
+
+        // A host that is down answers the same way a hundred times running. None of those
+        // answers say the file is not there, so none of them may end the queue.
+        for attempt in 0..100 {
+            store
+                .record_failure(&wanted, None, "connection reset", attempt * 100_000)
+                .await
+                .unwrap();
+        }
+
+        assert_eq!(
+            store
+                .next_target(&queue, CEILING, 100 * 100_000)
+                .await
+                .unwrap(),
+            Next::Fetch(wanted),
+            "when the host comes back the file is still owed, however long it was down"
+        );
     }
 
     #[tokio::test]
@@ -1065,8 +1192,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            store.next_target(&queue, 3).await.unwrap(),
-            Some(fresh.clone()),
+            store.next_target(&queue, CEILING, 10_000).await.unwrap(),
+            Next::Fetch(fresh.clone()),
             "work that has never been attempted comes first"
         );
 
@@ -1083,9 +1210,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            store.next_target(&queue, 3).await.unwrap(),
-            Some(stale),
-            "then the one asked about longest ago"
+            store.next_target(&queue, CEILING, 10_000).await.unwrap(),
+            Next::Fetch(stale),
+            "then, among the ones now due, the one asked about longest ago"
         );
     }
 }

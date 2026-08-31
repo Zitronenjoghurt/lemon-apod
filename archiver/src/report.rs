@@ -144,7 +144,13 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
         &index.reader().origin_pairs().await?,
     );
     let media_counts = store.counts().await?;
-    let next_media = store.next_target(&targets, cfg.media.max_attempts).await?;
+    let next_media = store
+        .next_target(
+            &targets,
+            cfg.retry_backoff_max,
+            chrono::Utc::now().timestamp(),
+        )
+        .await?;
     println!("media");
     println!(
         "  stored          {} of {} ({:.1}%)",
@@ -162,8 +168,9 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!(
         "  next target     {}",
         match &next_media {
-            Some(target) => format!("{} {}", target.date, target.url),
-            None => "complete".to_owned(),
+            Next::Fetch(target) => format!("{} {}", target.date, target.url),
+            Next::Waiting(wait) => format!("nothing due for {}", workers::duration(*wait)),
+            Next::Complete => "complete".to_owned(),
         }
     );
     let (compared, agree) = origin_agreement(index, &store).await?;

@@ -1,8 +1,11 @@
-use axum::Json;
-use axum::http::StatusCode;
+use crate::rating::Budget;
+use axum::http::{header, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 
 pub type ApiResult<T> = Result<T, ApiError>;
+
+pub const OVER_BUDGET: &str = "over_budget";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -12,8 +15,8 @@ pub enum ApiError {
     BadRequest(String),
     #[error("{0}")]
     Unavailable(String),
-    #[error("{0}")]
-    TooManyRequests(String),
+    #[error("vote budget spent")]
+    OverBudget(Budget),
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
@@ -42,7 +45,23 @@ impl IntoResponse for ApiError {
             Self::NotFound => (StatusCode::NOT_FOUND, self.to_string()),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             Self::Unavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
-            Self::TooManyRequests(_) => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
+            Self::OverBudget(budget) => {
+                let mut body = serde_json::json!({
+                    "error": self.to_string(),
+                    "code": OVER_BUDGET,
+                });
+                if let Ok(serde_json::Value::Object(fields)) = serde_json::to_value(budget)
+                    && let Some(object) = body.as_object_mut()
+                {
+                    object.extend(fields);
+                }
+
+                let mut response = (StatusCode::TOO_MANY_REQUESTS, Json(body)).into_response();
+                if let Ok(value) = HeaderValue::from_str(&budget.retry_after.to_string()) {
+                    response.headers_mut().insert(header::RETRY_AFTER, value);
+                }
+                return response;
+            }
             Self::Internal(error) => {
                 tracing::error!("{error:#}");
                 (
@@ -92,9 +111,40 @@ mod tests {
         assert!(body.contains("not ready yet"));
     }
 
+    fn budget(retry_after: u64) -> Budget {
+        Budget {
+            scope: crate::rating::Scope::Voter,
+            allowed: 300,
+            window_secs: 3_600,
+            retry_after,
+        }
+    }
+
     #[tokio::test]
     async fn a_vote_budget_reads_as_a_rate_limit_so_the_client_backs_off() {
-        let (status, _) = body_of(ApiError::TooManyRequests("come back later".to_owned())).await;
+        let (status, body) = body_of(ApiError::OverBudget(budget(2_400))).await;
+
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+        assert!(body.contains(OVER_BUDGET), "{body}");
+        assert!(body.contains("\"retry_after\":2400"), "{body}");
+        assert!(
+            body.contains("\"allowed\":300") && body.contains("\"window_secs\":3600"),
+            "the cap travels with the refusal so the client can say which one was reached \
+             without holding a copy of the settings: {body}"
+        );
+        assert!(
+            body.contains("\"scope\":\"voter\""),
+            "and whether it was theirs or the one their address shares: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_spent_budget_sets_the_header_a_client_already_knows_to_read() {
+        let response = ApiError::OverBudget(budget(90)).into_response();
+        assert_eq!(
+            response.headers().get(header::RETRY_AFTER).unwrap(),
+            "90",
+            "seconds, so a client that only reads the header still waits the right amount"
+        );
     }
 }

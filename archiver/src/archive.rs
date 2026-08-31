@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use apod_core::ApodDate;
 use apod_core::db::{Db, DbConfig};
+use apod_core::ApodDate;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use sqlx::migrate::Migrator;
+use sqlx::Row;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;
@@ -66,8 +66,8 @@ impl Attempted {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Next {
-    Fetch(ApodDate),
+pub enum Next<T> {
+    Fetch(T),
     Waiting(Duration),
     Complete,
 }
@@ -253,7 +253,7 @@ impl ArchiveStore {
         source: Source,
         backoff_max: Duration,
         now: i64,
-    ) -> Result<Next> {
+    ) -> Result<Next<ApodDate>> {
         let attempted = self.attempted(source).await?;
         let seen: HashSet<i64> = attempted.iter().map(|row| row.date_id).collect();
 
@@ -472,14 +472,14 @@ mod tests {
         ApodDate::from_ymd(y, m, d).unwrap()
     }
 
-    async fn target(store: &ArchiveStore, today: ApodDate) -> Next {
+    async fn target(store: &ArchiveStore, today: ApodDate) -> Next<ApodDate> {
         store
             .next_target(today, Source::Legacy, NEVER, LATER)
             .await
             .unwrap()
     }
 
-    async fn target_at(store: &ArchiveStore, today: ApodDate, now: i64) -> Next {
+    async fn target_at(store: &ArchiveStore, today: ApodDate, now: i64) -> Next<ApodDate> {
         store
             .next_target(today, Source::Legacy, CEILING, now)
             .await

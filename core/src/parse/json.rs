@@ -95,6 +95,7 @@ pub fn parse_json_bytes(date: ApodDate, bytes: &[u8]) -> Result<Modern, ParseErr
         media,
         extra_media,
         legacy_media_url: None,
+        first_stored_at: None,
         alt: alt(hero),
         authors: authors(hero),
         provenance: Provenance::ModernOnly,

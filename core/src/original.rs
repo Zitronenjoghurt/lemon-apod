@@ -512,6 +512,7 @@ alt="See Explanation." style="max-width:100%"></a>
             ),
             extra_media: Vec::new(),
             legacy_media_url: Some("https://apod.nasa.gov/apod/image/2501/small.jpg".into()),
+            first_stored_at: None,
             alt: None,
             authors: vec!["Jerry Bonnell".into()],
             provenance: Provenance::Both,

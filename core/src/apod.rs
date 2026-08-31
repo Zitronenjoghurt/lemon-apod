@@ -22,15 +22,15 @@ pub use read::{ApodError, ApodReader, ApodResult, Snippet};
 #[cfg(feature = "data-write")]
 pub use write::ApodWriter;
 
-pub const SCHEMA_VERSION: i64 = 5;
-pub const MIN_SCHEMA_VERSION: i64 = 5;
+pub const SCHEMA_VERSION: i64 = 6;
+pub const MIN_SCHEMA_VERSION: i64 = 6;
 
 pub(crate) const ENTRY_COLUMNS: &str = "date_id, title, title_raw, explanation_html, \
                                         explanation_text, credits, has_copyright, license_url, \
                                         tomorrow_teaser, keywords, media_kind, media_url, \
                                         media_hd_url, thumb_path, thumb_width, thumb_height, \
                                         source_url, picture_group, legacy_media_url, alt, \
-                                        authors, provenance";
+                                        authors, provenance, first_stored_at";
 
 pub(crate) const SUMMARY_COLUMNS: &str = "date_id, title, has_copyright, media_kind, media_url, \
                                           media_hd_url, thumb_path, thumb_width, thumb_height, \

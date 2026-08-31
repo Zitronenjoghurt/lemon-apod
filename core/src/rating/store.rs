@@ -5,8 +5,8 @@ use super::{COMPARISON_INFORMATION, MODEL, Z};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, TimeZone, Utc};
-use sqlx::Row;
 use sqlx::migrate::Migrator;
+use sqlx::Row;
 use std::fmt;
 use std::path::Path;
 
@@ -65,7 +65,6 @@ pub struct Voter {
     pub blocked: bool,
 }
 
-/// One vote, as it is written down.
 #[derive(Debug, Clone)]
 pub struct Cast {
     pub voter: VoterId,
@@ -83,6 +82,12 @@ impl Cast {
     pub fn response(&self) -> chrono::TimeDelta {
         self.voted_at - self.issued_at
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Whose<'a> {
+    Voter(VoterId),
+    Cohort(&'a [u8]),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -312,6 +317,37 @@ impl VoteStore {
         .await?;
 
         Ok(votes.max(0) as u64)
+    }
+
+    pub async fn ages_out_at(
+        &self,
+        whose: Whose<'_>,
+        since: DateTime<Utc>,
+        over_by: u64,
+    ) -> DbResult<Option<DateTime<Utc>>> {
+        let query = match whose {
+            Whose::Voter(voter) => sqlx::query_scalar(
+                "SELECT voted_at FROM votes
+                 WHERE voter_id = ?1 AND voted_at >= ?2
+                 ORDER BY voted_at LIMIT 1 OFFSET ?3",
+            )
+            .bind(voter.bytes().to_vec()),
+            Whose::Cohort(cohort) => sqlx::query_scalar(
+                "SELECT votes.voted_at FROM votes
+                 JOIN voters ON voters.id = votes.voter_id
+                 WHERE voters.cohort = ?1 AND votes.voted_at >= ?2
+                 ORDER BY votes.voted_at LIMIT 1 OFFSET ?3",
+            )
+            .bind(cohort.to_vec()),
+        };
+
+        let voted_at: Option<i64> = query
+            .bind(millis(since))
+            .bind(over_by as i64)
+            .fetch_optional(self.db.reader())
+            .await?;
+
+        Ok(voted_at.map(at))
     }
 
     pub async fn consistency(&self, quick: chrono::TimeDelta) -> DbResult<Vec<Consistency>> {
@@ -739,7 +775,7 @@ fn at(millis: i64) -> DateTime<Utc> {
 mod tests {
     use super::*;
     use crate::rating::baseline::Row;
-    use crate::rating::{Grouping, MIN_COMPARISONS, Prior, fit};
+    use crate::rating::{fit, Grouping, Prior, MIN_COMPARISONS};
     use chrono::TimeDelta;
 
     async fn store() -> VoteStore {
@@ -1281,6 +1317,46 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(hour.votes, 2, "the three-hour-old one has aged out");
+    }
+
+    #[tokio::test]
+    async fn a_window_frees_up_when_enough_of_it_has_aged_out_and_not_before() {
+        let store = store().await;
+        let who = voter(1);
+
+        for minutes in [50i64, 40, 30] {
+            let mut vote = cast(who, minutes as i32, minutes as i32 + 1, Outcome::Left);
+            vote.voted_at = Utc::now() - TimeDelta::minutes(minutes);
+            store.record(&vote, never()).await.unwrap();
+        }
+
+        let since = Utc::now() - TimeDelta::hours(1);
+        let whose = Whose::Voter(who);
+
+        let sitting_on_the_cap = store.ages_out_at(whose, since, 0).await.unwrap().unwrap();
+        assert!(
+            (sitting_on_the_cap - (Utc::now() - TimeDelta::minutes(50)))
+                .abs()
+                .num_seconds()
+                < 2,
+            "on the cap it is the oldest vote that has to go"
+        );
+
+        let two_over = store.ages_out_at(whose, since, 2).await.unwrap().unwrap();
+        assert!(
+            (two_over - (Utc::now() - TimeDelta::minutes(30)))
+                .abs()
+                .num_seconds()
+                < 2,
+            "two over the cap, the two oldest going is not enough: the third is the one that \
+             actually frees a slot, and answering with the oldest would send them back early"
+        );
+
+        assert_eq!(
+            store.ages_out_at(whose, since, 99).await.unwrap(),
+            None,
+            "asking past the end of the window is not an answer to invent"
+        );
     }
 
     #[tokio::test]

@@ -23,6 +23,7 @@ pub struct Announce {
     pub enabled: bool,
     pub poll: Duration,
     pub max_age: Duration,
+    pub settle: Duration,
 }
 
 impl Config {
@@ -46,6 +47,10 @@ impl Config {
                     "APOD_BOT_MAX_AGE_SECS",
                     DEFAULT_MAX_AGE_SECS,
                 )?),
+                settle: Duration::from_secs(env_or(
+                    "APOD_BOT_SETTLE_SECS",
+                    apod_core::entry::SETTLE.as_secs(),
+                )?),
             },
 
             search_page: env_or("APOD_BOT_SEARCH_PAGE", 5)?,
@@ -62,6 +67,11 @@ impl Config {
              loop than this buys nothing and only spins"
         );
         anyhow::ensure!(
+            self.announce.settle < self.announce.max_age,
+            "APOD_BOT_SETTLE_SECS must be under APOD_BOT_MAX_AGE_SECS, or an entry held back \
+             while the archive finishes it would go stale before it is ever posted"
+        );
+        anyhow::ensure!(
             (1..=10).contains(&self.search_page),
             "APOD_BOT_SEARCH_PAGE must be between 1 and 10: more than ten hits do not fit one \
              embed"
@@ -75,6 +85,14 @@ impl Config {
 
     pub fn entry_url(&self, date: apod_core::ApodDate) -> String {
         format!("{}/{date}", self.public_url)
+    }
+
+    pub fn entry_url_with_query(
+        &self,
+        date: apod_core::ApodDate,
+        query: impl AsRef<str>,
+    ) -> String {
+        format!("{}?q={}", self.entry_url(date), query.as_ref())
     }
 }
 
@@ -121,6 +139,7 @@ mod tests {
                 enabled: true,
                 poll: Duration::from_secs(60),
                 max_age: Duration::from_secs(DEFAULT_MAX_AGE_SECS),
+                settle: apod_core::entry::SETTLE,
             },
             search_page: 5,
             page_life: Duration::from_secs(300),
@@ -133,6 +152,16 @@ mod tests {
         let mut tight = base();
         tight.announce.poll = Duration::from_secs(1);
         assert!(tight.validated().is_err());
+    }
+
+    #[test]
+    fn a_hold_longer_than_the_entry_stays_fresh_is_refused() {
+        let mut forever = base();
+        forever.announce.settle = Duration::from_secs(DEFAULT_MAX_AGE_SECS + 1);
+        assert!(
+            forever.validated().is_err(),
+            "waiting past the freshness window would mean never posting at all"
+        );
     }
 
     #[test]

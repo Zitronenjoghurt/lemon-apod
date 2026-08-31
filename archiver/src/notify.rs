@@ -2,12 +2,12 @@ use crate::client::Client;
 use crate::config::{Config, Notify};
 use crate::shutdown::Shutdown;
 use anyhow::{Context, Result};
-use apod_core::ApodReader;
 use apod_core::db::DbConfig;
 use apod_core::notify::NotifyStore;
 use apod_core::sky::store::SkyReader;
 use apod_core::sky::weather::{Alert, Notice, WeatherReport};
 use apod_core::sky::{eclipse, moon, showers};
+use apod_core::ApodReader;
 use chrono::{DateTime, TimeDelta, Utc};
 
 const SUMMARY_CHARS: usize = 300;
@@ -138,6 +138,15 @@ async fn apod(cfg: &Config, topic: &str, now: DateTime<Utc>) -> Result<Vec<Notif
         .unwrap_or_else(|| entry.date.naive().and_time(Default::default()).and_utc());
 
     if now - published > TimeDelta::from_std(cfg.notify.apod_max_age)? {
+        return Ok(Vec::new());
+    }
+
+    if let Some(waiting_for) = entry.settling(cfg.notify.settle, now) {
+        tracing::info!(
+            date = %entry.date,
+            %waiting_for,
+            "the archive has not finished this entry, holding the notification"
+        );
         return Ok(Vec::new());
     }
 
@@ -359,6 +368,7 @@ mod tests {
             aurora_topic: Some("aurora".to_owned()),
             space_weather_topic: Some("space-weather".to_owned()),
             sky_topic: Some("sky".to_owned()),
+            settle: apod_core::entry::SETTLE,
             apod_max_age: Duration::from_secs(36 * 3600),
             sky_lead: Duration::from_secs(24 * 3600),
             eclipse_lead: Duration::from_secs(72 * 3600),

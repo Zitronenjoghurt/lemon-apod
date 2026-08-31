@@ -1,19 +1,13 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {RouterLink, useRoute, useRouter} from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
 import RatingHelp from '@/components/rating/RatingHelp.vue'
 import RatingPicture from '@/components/rating/RatingPicture.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import type { RatingCategory, RatingOutcome } from '@/api/types'
-import {
-  CATEGORIES,
-  CATEGORY_ICONS,
-  isCategory,
-  otherCategory,
-  useRatingSession,
-} from '@/composables/useRating'
-import { useArrowKeys } from '@/composables/useArrowKeys'
+import type {RatingCategory, RatingOutcome} from '@/api/types'
+import {CATEGORIES, CATEGORY_ICONS, isCategory, otherCategory, spell, useRatingSession,} from '@/composables/useRating'
+import {useArrowKeys} from '@/composables/useArrowKeys'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,7 +16,7 @@ const category = ref<RatingCategory>(
   isCategory(route.query.category) ? route.query.category : 'beautiful',
 )
 
-const { ballot, loading, sending, error, throttled, cast, ready, open, vote, reset } =
+const { ballot, loading, sending, error, throttled, spent, cast, ready, open, vote, reset } =
   useRatingSession(category)
 
 const ask = computed(() => CATEGORIES[ballot.value?.category ?? category.value])
@@ -31,6 +25,43 @@ const picked = ref<RatingOutcome | null>(null)
 const helpOpen = ref(false)
 
 let flash: ReturnType<typeof setTimeout> | undefined
+
+const clock = ref(Date.now())
+let ticking: ReturnType<typeof setInterval> | undefined
+
+watch(spent, (budget) => {
+  clearInterval(ticking)
+  if (!budget) return
+  clock.value = Date.now()
+  ticking = setInterval(() => (clock.value = Date.now()), 15_000)
+})
+
+onUnmounted(() => clearInterval(ticking))
+
+const waitLeft = computed(() => {
+  const budget = spent.value
+  return budget ? Math.max(0, budget.until.getTime() - clock.value) : null
+})
+
+const over = computed(() => waitLeft.value === 0)
+
+const cap = computed(() => {
+  const budget = spent.value
+  if (!budget) return ''
+
+  const span = spell(budget.windowSecs)
+  return budget.scope === 'network'
+    ? `Everyone sharing your connection has used up the ${budget.allowed} votes ${span} between them.`
+    : `You have used up your ${budget.allowed} votes ${span}.`
+})
+
+const opensAgain = computed(() => {
+  const left = waitLeft.value
+  if (left === null) return ''
+  if (left === 0) return 'You can vote again now.'
+  if (left < 60_000) return 'You can vote again in under a minute.'
+  return `You can vote again in about ${spell(Math.round(left / 1000))}.`
+})
 
 async function choose(outcome: RatingOutcome): Promise<void> {
   if (!ready.value || sending.value) return
@@ -93,47 +124,64 @@ onMounted(() => void open(true))
 
     <ApodCredit class="credit" lead="Both pictures are from NASA's" variant="banner" />
 
-    <RetryNotice v-if="error && !ballot" :busy="loading" :message="error" @retry="open" />
-    <Message v-else-if="error" :closable="false" :severity="throttled ? 'warn' : 'error'">
-      {{ error }}
-    </Message>
+    <section v-if="spent" class="stack budget">
+      <i aria-hidden="true" class="pi pi-hourglass" />
+      <h2>{{ over ? 'Ready to vote' : 'Reached your voting limit' }}</h2>
+      <p>{{ cap }} {{ opensAgain }}</p>
+      <Button
+        v-if="over"
+        :loading="loading"
+        icon="pi pi-refresh"
+        label="Carry on voting"
+        size="small"
+        @click="open()"
+      />
+      <RouterLink class="board" to="/rating">See the results</RouterLink>
+    </section>
 
-    <div v-if="loading && !ballot" class="pair">
-      <Skeleton height="30vh" width="100%" />
-      <Skeleton height="30vh" width="100%" />
-    </div>
+    <template v-else>
+      <RetryNotice v-if="error && !ballot" :busy="loading" :message="error" @retry="open" />
+      <Message v-else-if="error" :closable="false" :severity="throttled ? 'warn' : 'error'">
+        {{ error }}
+      </Message>
 
-    <template v-else-if="ballot">
-      <div class="pair">
-        <RatingPicture
-          :disabled="sending"
-          :side="ballot.left"
-          :state="picked === 'left' ? 'picked' : picked ? 'passed' : 'plain'"
-          hint="← Left"
-          @pick="choose('left')"
-        />
-        <RatingPicture
-          :disabled="sending"
-          :side="ballot.right"
-          :state="picked === 'right' ? 'picked' : picked ? 'passed' : 'plain'"
-          hint="Right →"
-          @pick="choose('right')"
-        />
+      <div v-if="loading && !ballot" class="pair">
+        <Skeleton height="30vh" width="100%" />
+        <Skeleton height="30vh" width="100%" />
       </div>
 
-      <div class="row controls">
-        <Button
-          :disabled="sending"
-          icon="pi pi-equals"
-          label="I can't decide"
-          outlined
-          severity="secondary"
-          size="small"
-          @click="choose('tie')"
-        />
-        <p class="muted keys"><kbd>←</kbd> <kbd>→</kbd> to pick, <kbd>space</kbd> for a tie</p>
-        <p v-if="cast" class="muted tally">{{ cast }} vote{{ cast === 1 ? '' : 's' }} this visit</p>
-      </div>
+      <template v-else-if="ballot">
+        <div class="pair">
+          <RatingPicture
+            :disabled="sending"
+            :side="ballot.left"
+            :state="picked === 'left' ? 'picked' : picked ? 'passed' : 'plain'"
+            hint="← Left"
+            @pick="choose('left')"
+          />
+          <RatingPicture
+            :disabled="sending"
+            :side="ballot.right"
+            :state="picked === 'right' ? 'picked' : picked ? 'passed' : 'plain'"
+            hint="Right →"
+            @pick="choose('right')"
+          />
+        </div>
+
+        <div class="row controls">
+          <Button
+            :disabled="sending"
+            icon="pi pi-equals"
+            label="I can't decide"
+            outlined
+            severity="secondary"
+            size="small"
+            @click="choose('tie')"
+          />
+          <p class="muted keys"><kbd>←</kbd> <kbd>→</kbd> to pick, <kbd>space</kbd> for a tie</p>
+          <p v-if="cast" class="muted tally">{{ cast }} vote{{ cast === 1 ? '' : 's' }} this visit</p>
+        </div>
+      </template>
     </template>
 
     <RatingHelp v-model:visible="helpOpen" @forgot="reset" />
@@ -222,6 +270,39 @@ h1 {
   font-size: 1.25rem;
   font-weight: 600;
   text-wrap: balance;
+}
+
+.budget {
+  gap: 0.55rem;
+  align-items: center;
+  padding: 2.2rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  text-align: center;
+}
+
+.budget > i {
+  font-size: 1.6rem;
+  color: var(--accent);
+}
+
+.budget h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.budget p {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.board {
+  margin-top: 0.3rem;
+  font-size: 0.88rem;
 }
 
 .credit {

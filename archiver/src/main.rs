@@ -466,7 +466,14 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     let mut done = 0;
 
     while limit.is_none_or(|limit| done < limit) {
-        let Some(target) = store.next_target(&targets, cfg.media.max_attempts).await? else {
+        let archive::Next::Fetch(target) = store
+            .next_target(
+                &targets,
+                cfg.retry_backoff_max,
+                chrono::Utc::now().timestamp(),
+            )
+            .await?
+        else {
             break;
         };
 

@@ -271,6 +271,7 @@ mod tests {
             },
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: apod_core::Provenance::LegacyOnly,

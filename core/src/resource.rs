@@ -167,6 +167,7 @@ mod tests {
             media: Media::new(MediaKind::ImageJpg, None, None),
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: crate::entry::Provenance::LegacyOnly,

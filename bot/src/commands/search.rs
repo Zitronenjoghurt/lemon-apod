@@ -115,7 +115,7 @@ fn page(
             format!(
                 "**[{title}]({url})** · {date}\n{snippet}",
                 title = link_text(&hit.entry.title),
-                url = state.config.entry_url(hit.entry.date),
+                url = state.config.entry_url_with_query(hit.entry.date, query),
                 date = hit.entry.date.format("%-d %B %Y"),
                 snippet = hit.snippet.trim(),
             )

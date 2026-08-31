@@ -65,6 +65,7 @@ pub fn parse_page(date: ApodDate, raw: &str) -> Result<ApodEntry, ParseError> {
         media,
         extra_media,
         legacy_media_url: None,
+        first_stored_at: None,
         alt: None,
         authors: Vec::new(),
         provenance: crate::entry::Provenance::LegacyOnly,

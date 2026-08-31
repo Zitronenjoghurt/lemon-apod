@@ -199,6 +199,7 @@ mod tests {
             media: Media::new(MediaKind::ImageJpg, Some("https://x/y.jpg".into()), None),
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: Provenance::LegacyOnly,

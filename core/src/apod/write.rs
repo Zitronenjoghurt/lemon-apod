@@ -1,11 +1,11 @@
 use super::pictures::{self, Fingerprint, PictureGroup};
-use super::read::{ApodReader, ApodResult, to_dates};
-use crate::PARSER_VERSION;
+use super::read::{to_dates, ApodReader, ApodResult};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
 use crate::media::{Media, Thumb};
 use crate::merge::Merged;
+use crate::PARSER_VERSION;
 use crate::{resource, text};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
@@ -277,9 +277,9 @@ async fn write_entry(tx: &mut Transaction<'_, Sqlite>, merged: &Merged) -> ApodR
                               credits, credit_text, has_copyright, license_url, tomorrow_teaser,
                               keywords, media_kind, media_url, media_hd_url, source_url,
                               parser_version, parsed_at, legacy_media_url, alt, authors,
-                              provenance)
+                              provenance, first_stored_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
-                 ?19, ?20, ?21, ?22)
+                 ?19, ?20, ?21, ?22, ?18)
          ON CONFLICT(date_id) DO UPDATE SET
            date = excluded.date, title = excluded.title, title_raw = excluded.title_raw,
            explanation_html = excluded.explanation_html,

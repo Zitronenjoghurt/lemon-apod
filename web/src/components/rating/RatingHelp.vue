@@ -1,7 +1,8 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
-import { api } from '@/api/client'
-import type { RatingTerms } from '@/api/types'
+import {computed, ref, watch} from 'vue'
+import {api} from '@/api/client'
+import {spell} from '@/composables/useRating'
+import type {RatingTerms} from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { default: false })
 
@@ -13,6 +14,9 @@ const busy = ref(false)
 const forgotten = ref<number | null>(null)
 
 const days = computed(() => terms.value?.cookie_days ?? 90)
+const perWindow = computed(() => terms.value?.votes_per_window ?? 300)
+const windowSpan = computed(() => spell(terms.value?.window_secs ?? 3_600))
+const perPicture = computed(() => terms.value?.per_picture ?? 3)
 
 watch(
   visible,
@@ -77,6 +81,14 @@ async function forget(): Promise<void> {
         <p>
           Eventually pictures will fall into tiers, the pictures in the higher ones being the most
           popular. If there are enough votes a single entry might come out alone on top.
+        </p>
+      </section>
+
+      <section>
+        <h3>How much you can vote</h3>
+        <p>
+          You can cast {{ perWindow }} votes in {{ windowSpan }}, and weigh in on any one picture
+          {{ perPicture }} times.
         </p>
       </section>
 

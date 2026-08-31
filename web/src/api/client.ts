@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import {ref} from 'vue'
 import type {
   ApodEntry,
   ApodSummary,
@@ -52,11 +52,19 @@ const MAX_TOTAL_WAIT_MS = 30_000
 
 let waiting = 0
 
+export interface SpentBudget {
+  scope: 'voter' | 'network'
+  allowed: number
+  windowSecs: number
+  until: Date
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
     readonly retryAfterMs?: number,
+    readonly budget?: SpentBudget,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -99,6 +107,11 @@ async function request<T>(path: string, signal?: AbortSignal, send: Send = {}): 
       return (await response.json()) as T
     }
 
+    const spent = await budget(response)
+    if (spent) {
+      throw new ApiError('Vote budget spent.', 429, spent.until.getTime() - Date.now(), spent)
+    }
+
     const wait = retryAfterMs(response)
     if (attempt + 1 >= MAX_ATTEMPTS || waited + wait > MAX_TOTAL_WAIT_MS) {
       throw new ApiError(rateLimitMessage(wait), 429, wait)
@@ -117,6 +130,30 @@ async function hold(ms: number, signal?: AbortSignal): Promise<void> {
   } finally {
     waiting -= 1
     if (waiting === 0) throttled.value = false
+  }
+}
+
+const OVER_BUDGET = 'over_budget'
+
+async function budget(response: Response): Promise<SpentBudget | null> {
+  try {
+    const body = (await response.clone().json()) as {
+      code?: string
+      scope?: 'voter' | 'network'
+      allowed?: number
+      window_secs?: number
+      retry_after?: number
+    }
+    if (body.code !== OVER_BUDGET || typeof body.retry_after !== 'number') return null
+
+    return {
+      scope: body.scope === 'network' ? 'network' : 'voter',
+      allowed: body.allowed ?? 0,
+      windowSecs: body.window_secs ?? 0,
+      until: new Date(Date.now() + body.retry_after * 1000),
+    }
+  } catch {
+    return null
   }
 }
 

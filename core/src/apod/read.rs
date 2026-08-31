@@ -2,7 +2,7 @@ use super::model::{
     FieldDivergence, Filters, KindCount, Listing, Order, Page, SearchResults, Stats,
 };
 use super::query::fts_query;
-use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
+use super::{SchemaError, ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbError};
 use crate::entry::{ApodEntry, ApodSummary, Matched, Provenance, SearchHit};
@@ -606,6 +606,7 @@ impl ApodReader {
             provenance: row.try_get::<String, _>(21)?.parse().unwrap_or_default(),
             source_url: row.try_get(16)?,
             picture: read_picture(row, 17)?,
+            first_stored_at: row.try_get::<Option<i64>, _>(22)?.and_then(stored_at),
         })
     }
 }
@@ -618,6 +619,10 @@ fn read_divergence(row: &SqliteRow) -> ApodResult<FieldDivergence> {
         legacy: row.try_get(3)?,
         modern: row.try_get(4)?,
     })
+}
+
+fn stored_at(seconds: i64) -> Option<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::from_timestamp(seconds, 0)
 }
 
 fn read_picture(row: &SqliteRow, at: usize) -> ApodResult<Option<ApodDate>> {

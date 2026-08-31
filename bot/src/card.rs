@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::store::Explanation;
-use apod_core::{ApodEntry, MediaKind, is_decommissioned};
+use apod_core::{is_decommissioned, ApodEntry, MediaKind};
 use poise::serenity_prelude::{
     Colour, CreateAttachment, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
 };
@@ -111,13 +111,21 @@ fn tail(entry: &ApodEntry) -> String {
 
     if !renders_here(entry) {
         if let Some(url) = entry.media.url.as_deref() {
-            lines.push(match entry.media.kind {
-                MediaKind::ImageTiff => format!(
-                    "NASA's copy of this one is a TIFF, which Discord cannot show. \
-                     [Open the original]({url})."
+            let (says, opens) = match entry.media.kind {
+                MediaKind::ImageTiff => (
+                    "NASA's copy of this one is a TIFF, which Discord cannot show.",
+                    "Open the original",
                 ),
-                kind if kind.is_video() => format!("This entry is a video. [Watch it]({url})."),
-                _ => format!("This entry is interactive rather than a picture. [Open it]({url})."),
+                kind if kind.is_video() => ("This entry is a video.", "Watch it"),
+                _ => (
+                    "This entry is interactive rather than a picture.",
+                    "Open it",
+                ),
+            };
+
+            lines.push(match is_decommissioned(url) {
+                true => says.to_owned(),
+                false => format!("{says} [{opens}]({url})."),
             });
         }
     } else if let Some(url) = full_size(entry) {
@@ -191,6 +199,7 @@ mod tests {
                 enabled: true,
                 poll: Duration::from_secs(60),
                 max_age: Duration::from_secs(36 * 3600),
+                settle: Duration::from_secs(30 * 60),
             },
             search_page: 5,
             page_life: Duration::from_secs(300),
@@ -222,6 +231,7 @@ mod tests {
             ),
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: Provenance::Both,
@@ -416,6 +426,27 @@ mod tests {
 
         let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
         assert!(body.contains("TIFF"), "{body}");
+    }
+
+    #[test]
+    fn a_video_that_is_still_only_on_the_dead_host_says_so_without_a_link_to_nowhere() {
+        let mut entry = entry();
+        entry.media = Media::new(
+            MediaKind::VideoMp4,
+            Some("https://apod.nasa.gov/apod/image/2608/RomanLaunch_NASA.mp4".into()),
+            None,
+        );
+
+        let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
+        assert!(body.contains("is a video"), "{body}");
+        assert!(
+            !body.contains("apod.nasa.gov"),
+            "the legacy record lands first every morning, and its links are retired: {body}"
+        );
+        assert!(
+            body.contains("This entry on APOD"),
+            "the reader still needs somewhere to go: {body}"
+        );
     }
 
     #[test]

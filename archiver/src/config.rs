@@ -63,6 +63,9 @@ pub struct Notify {
     /// How stale an entry may be and still be worth announcing. Stops a deployment that was down
     /// over a weekend from opening with a picture nobody is looking at any more.
     pub apod_max_age: Duration,
+    /// How long to leave a half-built entry alone before pushing it anyway. A notification is
+    /// keyed and sent once, so one sent early is wrong for good.
+    pub settle: Duration,
     /// How far ahead a shower peak or a supermoon is announced.
     pub sky_lead: Duration,
     /// Eclipses get longer notice than the rest: they are rare, and worth travelling for.
@@ -121,7 +124,6 @@ pub struct Daily {
 pub struct MediaArchive {
     pub enabled: bool,
     pub max_bytes: u64,
-    pub max_attempts: u32,
     pub timeout: Duration,
     pub delay_min: Duration,
     pub delay_max: Duration,
@@ -210,7 +212,6 @@ impl Config {
             media: MediaArchive {
                 enabled: env_or("APOD_MEDIA_ENABLED", true)?,
                 max_bytes: env_or("APOD_MEDIA_MAX_BYTES", 512 * 1_048_576u64)?,
-                max_attempts: env_or("APOD_MEDIA_MAX_ATTEMPTS", 8)?,
                 timeout: secs("APOD_MEDIA_TIMEOUT_SECS", 600)?,
                 delay_min: millis("APOD_MEDIA_DELAY_MIN_MS", 10_000)?,
                 delay_max: millis("APOD_MEDIA_DELAY_MAX_MS", 20_000)?,
@@ -257,6 +258,10 @@ impl Config {
                 apod_max_age: Duration::from_secs(
                     u64::from(env_or::<u32>("APOD_NOTIFY_APOD_MAX_AGE_HOURS", 36)?) * 3600,
                 ),
+                settle: secs(
+                    "APOD_NOTIFY_SETTLE_SECS",
+                    apod_core::entry::SETTLE.as_secs(),
+                )?,
                 sky_lead: Duration::from_secs(
                     u64::from(env_or::<u32>("APOD_NOTIFY_SKY_LEAD_HOURS", 24)?) * 3600,
                 ),

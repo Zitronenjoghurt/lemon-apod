@@ -1,8 +1,10 @@
 use crate::date::ApodDate;
-use crate::media::Media;
+use crate::media::{Media, ThumbSource};
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+use std::time::Duration;
 
 const DECOMMISSIONED: [&str; 3] = ["apod.nasa.gov", "www.apod.nasa.gov", "antwrp.gsfc.nasa.gov"];
 
@@ -121,7 +123,35 @@ pub struct ApodEntry {
     /// whether a picture is a rerun is a fact about the archive, not about the page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<ApodDate>,
+    /// When this date first landed in the index, as opposed to when it was last parsed. What
+    /// [`ApodEntry::settling`] measures its patience against. `None` on a row written before the
+    /// archive started recording it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_stored_at: Option<DateTime<Utc>>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unfinished {
+    Merge,
+    Thumbnail,
+}
+
+impl Unfinished {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Merge => "the record on science.nasa.gov",
+            Self::Thumbnail => "the thumbnail",
+        }
+    }
+}
+
+impl fmt::Display for Unfinished {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+pub const SETTLE: Duration = Duration::from_secs(30 * 60);
 
 /// One labelled line of an entry's attribution block, such as `Image Credit & Copyright` or
 /// `Text`. APOD writes these as a single run of prose; keeping them apart is what lets the
@@ -151,6 +181,23 @@ impl ApodEntry {
                 .collect::<Vec<_>>()
                 .join("; ")
         })
+    }
+
+    pub fn unfinished(&self) -> Option<Unfinished> {
+        if !self.provenance.has_modern() {
+            return Some(Unfinished::Merge);
+        }
+
+        let wants_thumbnail = !matches!(self.media.thumb_source(), ThumbSource::None);
+        (wants_thumbnail && self.media.thumb_path.is_none()).then_some(Unfinished::Thumbnail)
+    }
+
+    pub fn settling(&self, grace: Duration, now: DateTime<Utc>) -> Option<Unfinished> {
+        let unfinished = self.unfinished()?;
+        let stored = self.first_stored_at?;
+        let grace = TimeDelta::from_std(grace).ok()?;
+
+        (now - stored < grace).then_some(unfinished)
     }
 
     pub fn official_url(&self) -> Option<&str> {
@@ -246,12 +293,97 @@ mod tests {
             media: Media::default(),
             extra_media: Vec::new(),
             legacy_media_url: None,
+            first_stored_at: None,
             alt: None,
             authors: Vec::new(),
             provenance: Provenance::Both,
             source_url: source_url.to_owned(),
             picture: None,
         }
+    }
+
+    fn arrived(minutes_ago: i64) -> (ApodEntry, chrono::DateTime<Utc>) {
+        let now = chrono::Utc::now();
+        let mut entry = at("https://science.nasa.gov/image-article/apod/apod-x/");
+        entry.media = Media::new(
+            crate::media::MediaKind::ImageJpg,
+            Some("https://assets.science.nasa.gov/a.jpg".into()),
+            None,
+        );
+        entry.first_stored_at = Some(now - TimeDelta::minutes(minutes_ago));
+        (entry, now)
+    }
+
+    #[test]
+    fn an_entry_only_the_legacy_page_has_yet_is_waiting_on_the_merge() {
+        let (mut half, _) = arrived(1);
+        half.provenance = Provenance::LegacyOnly;
+        half.media.thumb_path = Some("1995/06/1995-06-16.webp".into());
+
+        assert_eq!(half.unfinished(), Some(Unfinished::Merge));
+
+        half.provenance = Provenance::Both;
+        assert_eq!(
+            half.unfinished(),
+            None,
+            "both records in and the picture made leaves nothing outstanding"
+        );
+    }
+
+    #[test]
+    fn an_entry_whose_thumbnail_has_not_been_made_yet_is_waiting_on_it() {
+        let (coming, _) = arrived(1);
+        assert_eq!(coming.unfinished(), Some(Unfinished::Thumbnail));
+
+        let mut made = coming.clone();
+        made.media.thumb_path = Some("1995/06/1995-06-16.webp".into());
+        assert_eq!(made.unfinished(), None);
+    }
+
+    #[test]
+    fn an_entry_that_can_never_have_a_thumbnail_is_never_waiting_on_one() {
+        let (mut nothing, _) = arrived(1);
+        nothing.media = Media::default();
+        assert_eq!(
+            nothing.unfinished(),
+            None,
+            "no picture is coming, so waiting would only mean publishing it late"
+        );
+
+        let (mut headless, _) = arrived(1);
+        headless.media = Media::new(crate::media::MediaKind::VideoMp4, None, None);
+        assert_eq!(
+            headless.unfinished(),
+            None,
+            "a video with no url has no frame to take, and the archive cannot invent one"
+        );
+    }
+
+    #[test]
+    fn patience_runs_out_rather_than_holding_an_entry_back_all_day() {
+        let (fresh, now) = arrived(2);
+        assert_eq!(fresh.settling(SETTLE, now), Some(Unfinished::Thumbnail));
+
+        let (stale, now) = arrived(31);
+        assert_eq!(
+            stale.settling(SETTLE, now),
+            None,
+            "past the grace it goes out as it stands, picture or no picture"
+        );
+    }
+
+    #[test]
+    fn an_entry_with_no_recorded_arrival_is_published_rather_than_held_for_ever() {
+        let (mut old, now) = arrived(1);
+        old.first_stored_at = None;
+
+        assert_eq!(old.unfinished(), Some(Unfinished::Thumbnail));
+        assert_eq!(
+            old.settling(SETTLE, now),
+            None,
+            "a row from before the archive recorded arrivals has no clock to wait against, and a \
+             missing clock must not become an indefinite silence"
+        );
     }
 
     #[test]
