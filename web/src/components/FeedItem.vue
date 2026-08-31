@@ -1,11 +1,11 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import EntryActions from './EntryActions.vue'
 import MediaFrame from './MediaFrame.vue'
 import RetryNotice from './RetryNotice.vue'
 import { api, ApiError } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
-import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
 import { apodPageUrl, withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
@@ -22,8 +22,7 @@ const DWELL_MS = 1500
 const DWELL_RATIO = 0.35
 
 const router = useRouter()
-const { isFavorite, toggle } = useFavorites()
-const { isRead, markRead, toggleRead } = useRead()
+const { isRead, markRead } = useRead()
 
 const root = useTemplateRef<HTMLElement>('root')
 const entry = ref<ApodEntry | undefined>(props.preloaded)
@@ -172,34 +171,12 @@ onBeforeUnmount(() => {
     </MediaFrame>
     <Skeleton v-else height="18rem" />
 
-    <div class="row actions">
-      <Button
-        :icon="isFavorite(date) ? 'pi pi-star-fill' : 'pi pi-star'"
-        :label="isFavorite(date) ? 'Saved' : 'Save'"
-        :severity="isFavorite(date) ? 'primary' : 'secondary'"
-        outlined
-        size="small"
-        @click="toggle(date)"
-      />
-      <Button
-        :icon="isRead(date) ? 'pi pi-check-circle' : 'pi pi-circle'"
-        :label="isRead(date) ? 'Read' : 'Unread'"
-        outlined
-        severity="secondary"
-        size="small"
-        @click="toggleRead(date)"
-      />
-      <RouterLink :to="`/${date}`" class="plain">
-        <Button
-          icon="pi pi-arrow-up-right"
-          label="Open"
-          outlined
-          severity="secondary"
-          size="small"
-          tabindex="-1"
-        />
+    <EntryActions :date="date" :source-url="entry?.source_url" :title="title">
+      <RouterLink :to="`/${date}`" aria-label="Open this entry on its own page" class="act">
+        <i aria-hidden="true" class="pi pi-arrow-up-right" />
+        <span class="label">Open</span>
       </RouterLink>
-    </div>
+    </EntryActions>
 
     <Message v-if="error && missing" :closable="false" severity="secondary">{{ error }}</Message>
 
@@ -258,11 +235,6 @@ onBeforeUnmount(() => {
   background: var(--accent);
   margin-right: 0.4rem;
   vertical-align: 0.08em;
-}
-
-.actions {
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .plain {

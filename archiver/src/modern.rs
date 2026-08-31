@@ -4,12 +4,17 @@ use crate::config::Config;
 use crate::fetch::{sha256, write_atomically};
 use anyhow::{Context, Result, bail, ensure};
 use apod_core::{ApodDate, ApodWriter, parse};
+use regex::Regex;
 use serde::Deserialize;
 use serde_json::value::RawValue;
 use std::collections::HashSet;
+use std::path::Path;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 const KIND: &str = "image-article";
+static PLAYER_ID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"nasa-plus-[A-Za-z0-9]+").expect("valid"));
 
 #[derive(Debug, Deserialize)]
 struct Rendered {
@@ -123,7 +128,14 @@ pub struct Pass {
     pub warned: usize,
     pub misfiled: usize,
     pub oldest: Option<ApodDate>,
+    pub covered: Option<(ApodDate, ApodDate)>,
+    pub short: bool,
     pub elapsed: Duration,
+}
+
+pub fn after(pass: &Pass) -> Option<ApodDate> {
+    let oldest = pass.oldest?;
+    (!pass.short && oldest > ApodDate::START).then(|| oldest.prev())
 }
 
 pub async fn fetch_window(
@@ -156,6 +168,7 @@ pub async fn fetch_window(
 
     let mut pass = Pass {
         elapsed,
+        short: raw.len() < cfg.modern_per_page as usize,
         ..Pass::default()
     };
     if raw.is_empty() {
@@ -309,6 +322,11 @@ pub async fn fetch_window(
         pass.absent += 1;
     }
 
+    archive
+        .touch_between(Source::Modern, covered.0, covered.1, now)
+        .await?;
+    pass.covered = Some(covered);
+
     Ok(pass)
 }
 
@@ -324,21 +342,34 @@ async fn store(
     let url = format!("{}/{id}", cfg.modern_api_url.trim_end_matches('/'));
     let digest = sha256(bytes);
     let previous = archive.get(date, Source::Modern).await?;
+    let path = cfg.json_path(date);
 
-    if previous.as_ref().and_then(|row| row.sha256.as_deref()) == Some(digest.as_str())
-        && cfg.json_path(date).exists()
-    {
+    let held = previous.as_ref().and_then(|row| row.sha256.as_deref()) == Some(digest.as_str());
+    if path.exists() && (held || says_the_same(&path, bytes)) {
         archive.touch(date, Source::Modern, now).await?;
         return Ok(false);
     }
 
-    write_atomically(&cfg.json_path(date), bytes)?;
+    write_atomically(&path, bytes)?;
     archive
         .record_success(date, Source::Modern, &url, &digest, bytes.len(), now)
         .await?;
     crate::entry::reindex(cfg, index, date).await?;
 
     Ok(true)
+}
+
+fn says_the_same(path: &Path, fetched: &[u8]) -> bool {
+    let Ok(stored) = std::fs::read(path) else {
+        return false;
+    };
+    stored.len() == fetched.len() && settled(&stored) == settled(fetched)
+}
+
+fn settled(bytes: &[u8]) -> String {
+    PLAYER_ID
+        .replace_all(&String::from_utf8_lossy(bytes), "nasa-plus")
+        .into_owned()
 }
 
 #[cfg(test)]
@@ -557,6 +588,46 @@ mod tests {
     }
 
     #[test]
+    fn a_walk_backwards_resumes_one_day_older_than_the_page_it_just_read() {
+        let pass = Pass {
+            oldest: Some(date(2011, 3, 15)),
+            ..Pass::default()
+        };
+        assert_eq!(after(&pass), Some(date(2011, 3, 14)));
+    }
+
+    #[test]
+    fn a_walk_backwards_stops_at_the_end_of_the_collection() {
+        let short = Pass {
+            oldest: Some(date(2011, 3, 15)),
+            short: true,
+            ..Pass::default()
+        };
+        assert_eq!(
+            after(&short),
+            None,
+            "asking for anything older than a short page comes back empty, and an empty page \
+             reads as a failure to record rather than the end of the archive"
+        );
+
+        let first = Pass {
+            oldest: Some(ApodDate::START),
+            ..Pass::default()
+        };
+        assert_eq!(
+            after(&first),
+            None,
+            "there is nothing before the first entry"
+        );
+
+        assert_eq!(
+            after(&Pass::default()),
+            None,
+            "a window that held no APOD record says nothing about where to go next"
+        );
+    }
+
+    #[test]
     fn the_daily_window_speaks_for_its_own_date_alone() {
         let window = Window::only(date(2026, 8, 26));
         assert_eq!(
@@ -638,6 +709,38 @@ mod tests {
             (again.stored, again.unchanged),
             (0, 1),
             "a record already on disk is not written again"
+        );
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_player_id_nasa_rolls_on_every_request_is_not_an_edit() {
+        let dir = temp("player");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("record.json");
+
+        let held = br#"{"t":"nasa-plus-AAAAA and the moon"}"#;
+        let rolled = br#"{"t":"nasa-plus-BBBBB and the moon"}"#;
+        let edited = br#"{"t":"nasa-plus-BBBBB and the sun "}"#;
+
+        std::fs::write(&path, held).unwrap();
+        assert!(
+            says_the_same(&path, rolled),
+            "the same record twice, and only the id NASA rolls per request moved"
+        );
+        assert_eq!(
+            edited.len(),
+            held.len(),
+            "the edit has to be the same length, or the cheap guard would be what caught it"
+        );
+        assert!(
+            !says_the_same(&path, edited),
+            "anything else that moved is worth storing"
+        );
+        assert!(
+            !says_the_same(&dir.join("nothing.json"), held),
+            "a record not on disk is not a record that matches"
         );
 
         std::fs::remove_dir_all(&dir).unwrap();

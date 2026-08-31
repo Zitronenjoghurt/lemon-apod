@@ -107,6 +107,31 @@ pub async fn run(cfg: Config) -> Result<()> {
         }
     }
 
+    if cfg.fetch_modern && cfg.modern_refresh_days > 0 {
+        tracing::info!(
+            every_days = cfg.modern_refresh_days,
+            per_window = cfg.modern_per_page,
+            a_window_every = %duration(paced(
+                &cfg,
+                today_in(cfg.daily.timezone),
+                Duration::from_secs(u64::from(cfg.modern_refresh_days) * 86_400),
+            )),
+            "modern refresh starting, spread across the period"
+        );
+        handles.push(tokio::spawn(
+            modern_refresh(
+                cfg.clone(),
+                clients.source.clone(),
+                archive.clone(),
+                index.clone(),
+                shutdown.clone(),
+            )
+            .instrument(tracing::info_span!("modern refresh")),
+        ));
+    } else {
+        tracing::info!("modern refresh disabled");
+    }
+
     if cfg.media.enabled {
         tracing::info!(
             every = %range(cfg.media.delay_min, cfg.media.delay_max),
@@ -678,6 +703,57 @@ async fn recheck(
     Ok(())
 }
 
+async fn modern_refresh(
+    cfg: Config,
+    client: Client,
+    archive: ArchiveStore,
+    index: ApodWriter,
+    mut shutdown: Shutdown,
+) -> Result<()> {
+    let period = Duration::from_secs(u64::from(cfg.modern_refresh_days) * 86_400);
+
+    loop {
+        let today = today_in(cfg.daily.timezone);
+        let pace = paced(&cfg, today, period);
+        let cutoff = Utc::now().timestamp() - period.as_secs() as i64;
+
+        let wait = match archive.stale_before(Source::Modern, cutoff).await? {
+            None => {
+                tracing::debug!("every modern record has been looked at inside the period");
+                pace
+            }
+            Some(bound) => {
+                match modern_step(
+                    &cfg,
+                    &client,
+                    &archive,
+                    &index,
+                    modern::Window::back_from(bound),
+                )
+                .await
+                {
+                    Some(pass) => pace.max(modern::delay(&cfg, pass.elapsed)),
+                    None => pace,
+                }
+            }
+        };
+
+        if !tick(&mut shutdown, wait, "pausing before the next modern window").await {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+fn paced(cfg: &Config, today: ApodDate, period: Duration) -> Duration {
+    let dates = u64::try_from(today.days() - ApodDate::START.days())
+        .unwrap_or(1)
+        .max(1);
+    let windows = dates.div_ceil(u64::from(cfg.modern_per_page)).max(1);
+    period / u32::try_from(windows).unwrap_or(u32::MAX)
+}
+
 pub async fn step(
     cfg: &Config,
     clients: &Clients,
@@ -853,6 +929,28 @@ mod tests {
         assert_eq!(duration(Duration::from_secs(900)), "15m");
         assert_eq!(duration(Duration::from_secs(3600)), "1.0h");
         assert_eq!(duration(Duration::from_secs(6 * 3600)), "6.0h");
+    }
+
+    #[test]
+    fn a_pass_over_the_collection_is_spread_across_the_refresh_period() {
+        let mut cfg = Config::from_env().unwrap();
+        cfg.modern_per_page = 100;
+
+        let today = ApodDate::from_ymd(2026, 8, 31).unwrap();
+        let week = Duration::from_secs(7 * 86_400);
+        let pace = paced(&cfg, today, week);
+
+        let windows = (today.days() - ApodDate::START.days()) as u64 / 100;
+        assert!(
+            (85..=95).contains(&(pace.as_secs() / 60)),
+            "a hundred-odd windows over a week is about an hour and a half apart, not back to \
+             back: {windows} windows, {} minutes apart",
+            pace.as_secs() / 60
+        );
+        assert!(
+            pace * u32::try_from(windows).unwrap() <= week,
+            "the whole collection has to fit inside the period, not overrun it"
+        );
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub const SERVICE_LINE: &str = "ASD at NASA / GSFC, NASA Science Activation & Mi
 const NAME: &str = "Astronomy Picture of the Day";
 
 const DISPLAY_WIDTH: u32 = 1024;
+const EMBED_TAGS: [&str; 4] = ["iframe", "video", "embed", "object"];
 const SITE: &str = "APOD Archive";
 
 const PAGE_PREFIXES: &[&str] = &[
@@ -41,6 +42,11 @@ static HEAD_CLOSE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)</head\s*>").expect("valid"));
 static BODY_OPEN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?is)<body\b[^>]*>").expect("valid"));
+static EMBED: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<(?:iframe|video|embed|object)\b([^>]*)>").expect("valid"));
+static SIZE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?is)\b(width|height)\s*=\s*(?:"(\d+)"|'(\d+)'|(\d+))"#).expect("valid")
+});
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Form {
@@ -62,7 +68,9 @@ impl Original<'_> {
         let rewritten = self.rewrite_urls(&stripped);
         let titled = TITLE.replace(&rewritten, "");
 
-        let head = self.head(Form::Archived);
+        let mut head = self.head(Form::Archived);
+        head.push_str(&embed_sizes(&titled));
+
         let with_head = match HEAD_CLOSE.find(&titled) {
             Some(at) => splice(&titled, at.start(), at.start(), &head),
             None => format!("<head>{head}</head>\n{titled}"),
@@ -370,6 +378,56 @@ impl Original<'_> {
     }
 }
 
+fn embed_sizes(html: &str) -> String {
+    let mut sizes: Vec<(u32, u32)> = Vec::new();
+
+    for element in EMBED.captures_iter(html) {
+        let (mut width, mut height) = (None, None);
+
+        for attribute in SIZE.captures_iter(&element[1]) {
+            let Some(value) = attribute
+                .get(2)
+                .or_else(|| attribute.get(3))
+                .or_else(|| attribute.get(4))
+                .and_then(|found| found.as_str().parse::<u32>().ok())
+            else {
+                continue;
+            };
+
+            match attribute[1].eq_ignore_ascii_case("width") {
+                true => width = Some(value),
+                false => height = Some(value),
+            }
+        }
+
+        let (Some(width), Some(height)) = (width, height) else {
+            continue;
+        };
+        if width > 0 && height > 0 && !sizes.contains(&(width, height)) {
+            sizes.push((width, height));
+        }
+    }
+
+    if sizes.is_empty() {
+        return String::new();
+    }
+
+    let rules = sizes
+        .iter()
+        .map(|(width, height)| {
+            let selector = EMBED_TAGS
+                .iter()
+                .map(|tag| format!("{tag}[width=\"{width}\"][height=\"{height}\"]"))
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("{selector}{{height:auto;aspect-ratio:{width}/{height}}}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    format!("<style>\n{rules}\n</style>\n")
+}
+
 fn legacy_entry(absolute: &str) -> Option<ApodDate> {
     let rest = PAGE_PREFIXES
         .iter()
@@ -439,6 +497,7 @@ font:inherit;font-size:.95rem;line-height:1.7rem;text-align:center;color:#8a8fa3
 .apod-frame-x:checked{display:none}
 .apod-frame-x:checked+.apod-frame{display:none}
 img{max-width:100%;height:auto}
+iframe,video,embed,object{max-width:100%}
 body{overflow-wrap:break-word}
 @media(max-width:40rem){table,pre{display:block;max-width:100%;overflow-x:auto}}
 .apod-recon{background:#f4f4ff;color:#000;font-family:Georgia,"Times New Roman",serif;
@@ -594,6 +653,60 @@ alt="See Explanation." style="max-width:100%"></a>
         assert!(
             !page.contains("max-width:min(100%"),
             "a legacy image that is still the legacy image keeps whatever size it was: {page}"
+        );
+    }
+
+    #[test]
+    fn a_video_embed_keeps_its_shape_while_it_shrinks_to_the_screen() {
+        let entry = entry();
+        let page = view(&entry).archived(
+            br#"<html><head></head><body>
+               <iframe width="960" height="540" src="https://www.youtube.com/embed/x?rel=0"></iframe>
+               <object width="900" height="600"><embed width="900" height="600"></object>
+               </body></html>"#,
+        );
+
+        assert!(
+            page.contains("iframe,video,embed,object{max-width:100%}"),
+            "nothing the page embeds may be wider than the screen it is read on: {page}"
+        );
+        for tag in ["iframe", "video", "embed", "object"] {
+            assert!(
+                page.contains(&format!(r#"{tag}[width="960"][height="540"]"#)),
+                "the size APOD authored is the ratio to hold it to: {page}"
+            );
+        }
+        assert!(
+            page.contains("{height:auto;aspect-ratio:960/540}"),
+            "capping the width without releasing the authored height squashes the frame: {page}"
+        );
+        assert!(
+            page.contains("{height:auto;aspect-ratio:900/600}"),
+            "a page carrying two differently shaped embeds needs a rule for each: {page}"
+        );
+    }
+
+    #[test]
+    fn an_embed_without_a_shape_of_its_own_is_left_alone() {
+        let entry = entry();
+        let page = view(&entry).archived(
+            br#"<html><head></head><body>
+               <iframe width="0" height="0" src="https://tracker.example/beacon"></iframe>
+               <iframe width="100%" src="https://example.com/thing"></iframe>
+               </body></html>"#,
+        );
+
+        assert!(
+            !page.contains("aspect-ratio:"),
+            "a zero-sized beacon and a frame already sized in percent have no ratio to keep, and              inventing one for them would be a guess: {page}"
+        );
+    }
+
+    #[test]
+    fn a_page_with_no_embeds_carries_no_rules_for_them() {
+        assert!(
+            !archived().contains("aspect-ratio:"),
+            "the rules are generated per page, so a page of pictures gets none"
         );
     }
 

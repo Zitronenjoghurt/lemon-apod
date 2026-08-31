@@ -233,6 +233,40 @@ impl ArchiveStore {
         Ok(())
     }
 
+    pub async fn touch_between(
+        &self,
+        source: Source,
+        from: ApodDate,
+        to: ApodDate,
+        now: i64,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE fetches SET last_checked_at = ?1
+             WHERE source = ?2 AND date_id BETWEEN ?3 AND ?4",
+        )
+        .bind(now)
+        .bind(source.as_str())
+        .bind(from.days())
+        .bind(to.days())
+        .execute(self.db.writer()?)
+        .await
+        .context("touching a range of fetch records")?;
+        Ok(())
+    }
+
+    pub async fn stale_before(&self, source: Source, cutoff: i64) -> Result<Option<ApodDate>> {
+        let newest: Option<i64> = sqlx::query_scalar(
+            "SELECT MAX(date_id) FROM fetches WHERE source = ?1 AND last_checked_at < ?2",
+        )
+        .bind(source.as_str())
+        .bind(cutoff)
+        .fetch_one(self.db.reader())
+        .await
+        .context("looking for the newest date due a re-check")?;
+
+        Ok(newest.map(|days| ApodDate::from_days(days as i32)))
+    }
+
     pub async fn owed(&self, today: ApodDate, source: Source) -> Result<usize> {
         let seen: HashSet<i64> = self
             .attempted(source)
@@ -491,6 +525,61 @@ mod tests {
             .record_success(date, Source::Legacy, "u", "h", 100, now)
             .await
             .unwrap();
+    }
+
+    async fn stale(store: &ArchiveStore, cutoff: i64) -> Option<ApodDate> {
+        store.stale_before(Source::Legacy, cutoff).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_rolling_recheck_starts_at_the_newest_date_that_has_gone_unchecked() {
+        let store = store().await;
+        succeed(&store, date(2011, 3, 1), 100).await;
+        succeed(&store, date(2011, 3, 20), 100).await;
+        succeed(&store, date(2011, 3, 10), 900).await;
+
+        assert_eq!(
+            stale(&store, 500).await,
+            Some(date(2011, 3, 20)),
+            "the newest of the two nothing has looked at since the cutoff"
+        );
+        assert_eq!(
+            stale(&store, 50).await,
+            None,
+            "nothing is overdue, so there is no window to ask for"
+        );
+        assert_eq!(
+            stale(&store, 1000).await,
+            Some(date(2011, 3, 20)),
+            "the walk goes newest first however recently each one was read"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_date_the_window_carried_nothing_for_still_counts_as_looked_at() {
+        let store = store().await;
+        let absent = date(2011, 3, 5);
+        fail(&store, absent, 404, 100).await;
+        succeed(&store, date(2011, 3, 20), 100).await;
+
+        store
+            .touch_between(Source::Legacy, date(2011, 3, 1), date(2011, 3, 31), 900)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            stale(&store, 500).await,
+            None,
+            "a date the collection holds nothing for would otherwise read as overdue for good, \
+             and the walk would never get past it"
+        );
+
+        let row = store.get(absent, Source::Legacy).await.unwrap().unwrap();
+        assert_eq!(
+            row.http_status,
+            Some(404),
+            "only the timestamp moves; why it is absent is still on the record"
+        );
     }
 
     async fn fail(store: &ArchiveStore, date: ApodDate, status: u16, now: i64) {

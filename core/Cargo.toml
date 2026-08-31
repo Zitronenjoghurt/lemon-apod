@@ -18,7 +18,7 @@ sky-data = ["sky", "data"]
 [dependencies]
 chrono = { workspace = true }
 encoding_rs = "0.8.35"
-regex = "1.13.1"
+regex = { workspace = true }
 scraper = "0.27.0"
 serde = { workspace = true }
 serde_json = { workspace = true }

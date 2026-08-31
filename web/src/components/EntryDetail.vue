@@ -1,16 +1,15 @@
 <script lang="ts" setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { useToast } from 'primevue/usetoast'
+import EntryActions from './EntryActions.vue'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
 import FieldChange from './FieldChange.vue'
 import { api } from '@/api/client'
 import type { ApodEntry, ApodSummary, PictureAppearances } from '@/api/types'
 import { useArrowKeys } from '@/composables/useArrowKeys'
-import { useFavorites } from '@/composables/useFavorites'
 import { useRead } from '@/composables/useRead'
-import { apodPageUrl, originalPath, withInternalLinks } from '@/utils/apodLinks'
+import { apodPageUrl, withInternalLinks } from '@/utils/apodLinks'
 import { licenseName, roleLabel } from '@/utils/credits'
 import {
   archivePath,
@@ -32,9 +31,7 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const toast = useToast()
-const { isFavorite, toggle } = useFavorites()
-const { isRead, markRead, toggleRead } = useRead()
+const { markRead } = useRead()
 const alsoOnThisDay = ref<ApodSummary[]>([])
 const encore = ref<PictureAppearances | null>(null)
 const encoreGroup = ref<string>()
@@ -149,27 +146,6 @@ async function loadEncore() {
   }
 }
 
-function saveToggle() {
-  const wasSaved = isFavorite(props.entry.date)
-  toggle(props.entry.date)
-  toast.add({
-    severity: wasSaved ? 'secondary' : 'success',
-    summary: wasSaved ? 'Removed from favorites' : 'Saved to favorites',
-    detail: props.entry.title,
-    life: 2200,
-  })
-}
-
-function readToggle() {
-  const nowRead = toggleRead(props.entry.date)
-  toast.add({
-    severity: 'secondary',
-    summary: nowRead ? 'Marked as read' : 'Marked as unread',
-    detail: props.entry.title,
-    life: 1800,
-  })
-}
-
 const at = ref(0)
 
 function jump(step: number) {
@@ -186,21 +162,6 @@ function jump(step: number) {
 
 function clearHighlight() {
   router.replace({ path: `/${props.entry.date}` })
-}
-
-async function copyLink() {
-  const url = `${location.origin}/${props.entry.date}`
-  try {
-    await navigator.clipboard.writeText(url)
-    toast.add({ severity: 'success', summary: 'Link copied', detail: url, life: 2200 })
-  } catch {
-    toast.add({
-      severity: 'warn',
-      summary: 'Could not copy',
-      detail: 'Your browser blocked clipboard access.',
-      life: 3000,
-    })
-  }
 }
 
 useArrowKeys({
@@ -402,55 +363,17 @@ watch([() => props.entry.date, hits], async () => {
           </template>
         </MediaFrame>
 
-        <div class="row actions">
-          <Button
-            :icon="isFavorite(entry.date) ? 'pi pi-star-fill' : 'pi pi-star'"
-            :label="isFavorite(entry.date) ? 'Saved' : 'Save'"
-            :severity="isFavorite(entry.date) ? 'primary' : 'secondary'"
-            outlined
-            size="small"
-            @click="saveToggle"
-          />
-          <Button
-            v-tooltip.bottom="isRead(entry.date) ? 'Mark as unread' : 'Mark as read'"
-            :icon="isRead(entry.date) ? 'pi pi-check-circle' : 'pi pi-circle'"
-            :label="isRead(entry.date) ? 'Read' : 'Unread'"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="readToggle"
-          />
-          <Button
-            icon="pi pi-link"
-            label="Copy link"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="copyLink"
-          />
-          <a :href="originalPath(entry.date)" class="plain">
-            <Button
-              v-tooltip.bottom="'The page as APOD published it'"
-              icon="pi pi-file"
-              label="Original"
-              outlined
-              severity="secondary"
-              size="small"
-              tabindex="-1"
-            />
-          </a>
-          <RouterLink v-slot="{ navigate }" custom to="/random">
-            <Button
-              v-tooltip.bottom="'Another random entry'"
-              icon="pi pi-sync"
-              label="Random"
-              outlined
-              severity="secondary"
-              size="small"
-              @click="navigate"
-            />
+        <EntryActions
+          :date="entry.date"
+          :source-url="entry.source_url"
+          :title="entry.title"
+          class="bar"
+        >
+          <RouterLink aria-label="Random: another entry from the archive" class="act" to="/random">
+            <i aria-hidden="true" class="pi pi-sync" />
+            <span class="label">Random</span>
           </RouterLink>
-        </div>
+        </EntryActions>
       </div>
 
       <div class="text-column">
@@ -725,7 +648,7 @@ watch([() => props.entry.date, hits], async () => {
     order: 1;
   }
 
-  .actions {
+  .bar {
     order: 2;
   }
 
@@ -744,10 +667,6 @@ watch([() => props.entry.date, hits], async () => {
   .teaser {
     order: 6;
   }
-}
-
-.actions {
-  gap: 0.5rem;
 }
 
 .plain {

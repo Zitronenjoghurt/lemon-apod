@@ -4,7 +4,7 @@ API = APOD_DATA_DIR=$(DATA) APOD_STATIC_DIR=$(CURDIR)/web/dist cargo run -q -p a
 BOT = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-discord-bot --
 COMPOSE = docker compose -f docker/compose.yaml
 
-.PHONY: help check test fmt lint api web dev bot preview backfill backfill-modern status quality reparse \
+.PHONY: help check test fmt lint api web dev bot preview backfill backfill-modern refresh-modern status quality reparse \
         media thumbs \
         pictures sky notify rating rating-import rating-export legacy-export legacy-import \
         docker seed up down logs ps shell
@@ -45,6 +45,9 @@ backfill: ## Fetch a few pages into ./data. Respect the rate limit, this hits NA
 
 backfill-modern: ## Fetch modern API records into ./data/json. N=<n> requests, this hits NASA
 	$(ARCHIVER) backfill-modern $(if $(N),--limit $(N))
+
+refresh-modern: ## Walk the whole modern collection again. N=<n> requests, this hits NASA
+	$(ARCHIVER) backfill-modern --refresh $(if $(N),--limit $(N))
 
 status: ## Coverage and index health
 	$(ARCHIVER) status

@@ -53,6 +53,11 @@ enum Command {
         /// Stop after this many requests.
         #[arg(long)]
         limit: Option<usize>,
+        /// Walk the whole collection again instead of stopping at what is already recorded.
+        /// This is what picks up a page NASA edited after the migration, and a date the
+        /// modern site has gained since.
+        #[arg(long)]
+        refresh: bool,
     },
 
     /// Fetch one date.
@@ -210,7 +215,7 @@ async fn main() -> Result<()> {
     match cli.command.unwrap_or(Command::Run) {
         Command::Run => workers::run(cfg).await,
         Command::Backfill { limit } => backfill(cfg, limit).await,
-        Command::BackfillModern { limit } => backfill_modern(cfg, limit).await,
+        Command::BackfillModern { limit, refresh } => backfill_modern(cfg, limit, refresh).await,
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
         Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
         Command::Media { limit } => media_backfill(cfg, limit).await,
@@ -373,42 +378,50 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     Ok(())
 }
 
-async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
+async fn backfill_modern(cfg: Config, limit: Option<usize>, refresh: bool) -> Result<()> {
     cfg.require_modern()?;
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
     let today = workers::today_in(cfg.daily.timezone);
 
-    let bar = match limit {
-        Some(limit) => progress::bar("modern", limit),
-        None => progress::spinner("modern", "fetching until the modern archive is complete"),
+    let bar = match (limit, refresh) {
+        (Some(limit), _) => progress::bar("modern", limit),
+        (None, true) => progress::spinner("modern", "walking the whole collection again"),
+        (None, false) => {
+            progress::spinner("modern", "fetching until the modern archive is complete")
+        }
     };
 
     let (mut done, mut records, mut stored, mut absent, mut warned, mut misfiled) =
         (0, 0, 0, 0, 0, 0);
+    let mut sweeping = refresh.then_some(today);
+
     while limit.is_none_or(|limit| done < limit) {
-        let bound = match archive
-            .next_target(
-                today,
-                Source::Modern,
-                cfg.retry_backoff_max,
-                chrono::Utc::now().timestamp(),
-            )
-            .await?
-        {
-            Next::Fetch(date) => date,
-            Next::Waiting(wait) => {
-                tracing::info!(
-                    ?wait,
-                    "nothing is due; the rest is waiting out a retry backoff"
-                );
-                break;
-            }
-            Next::Complete => {
-                tracing::info!("the modern archive is complete");
-                break;
-            }
+        let bound = match sweeping {
+            Some(bound) => bound,
+            None => match archive
+                .next_target(
+                    today,
+                    Source::Modern,
+                    cfg.retry_backoff_max,
+                    chrono::Utc::now().timestamp(),
+                )
+                .await?
+            {
+                Next::Fetch(date) => date,
+                Next::Waiting(wait) => {
+                    tracing::info!(
+                        ?wait,
+                        "nothing is due; the rest is waiting out a retry backoff"
+                    );
+                    break;
+                }
+                Next::Complete => {
+                    tracing::info!("the modern archive is complete");
+                    break;
+                }
+            },
         };
 
         bar.set_message(bound.to_string());
@@ -432,6 +445,16 @@ async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
         done += 1;
         bar.inc(1);
 
+        if refresh {
+            match modern::after(&pass) {
+                Some(next) => sweeping = Some(next),
+                None => {
+                    tracing::info!("the walk reached the oldest record the collection holds");
+                    break;
+                }
+            }
+        }
+
         if limit.is_none_or(|limit| done < limit) {
             tokio::time::sleep(modern::delay(&cfg, pass.elapsed)).await;
         }
@@ -440,8 +463,12 @@ async fn backfill_modern(cfg: Config, limit: Option<usize>) -> Result<()> {
     progress::done(
         &bar,
         format!(
-            "{done} requests, {records} records, stored {stored}, absent {absent}, \
-             misfiled {misfiled}, warnings {warned}"
+            "{done} requests, {records} records, {} {stored}, absent {absent}, \
+             misfiled {misfiled}, warnings {warned}",
+            match refresh {
+                true => "changed",
+                false => "stored",
+            }
         ),
     );
     Ok(())

@@ -136,6 +136,39 @@ function goTo(target: Period | null) {
   if (target) go(target.year, target.month)
 }
 
+function localDate(iso: string): Date {
+  const [on, of, day] = iso.split('-').map(Number)
+  return new Date(on!, of! - 1, day!)
+}
+
+const oldestDay = localDate(FIRST_ENTRY)
+const newestDay = computed(() => (latest.value ? localDate(latest.value) : new Date()))
+
+const picked = ref<Date | null>(null)
+
+function toIso(date: Date): string {
+  const of = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${of}-${day}`
+}
+
+function openDate(date: Date) {
+  void router.push(`/${toIso(date)}`)
+}
+
+function browse(nextYear: number, nextMonth: number) {
+  const at = Math.min(Math.max(nextYear * 12 + nextMonth, AT_FIRST), atLatest.value)
+  go(Math.floor((at - 1) / 12), ((at - 1) % 12) + 1, true)
+}
+
+function onMonthChange({ month: changed, year: changedYear }: { month: number; year: number }) {
+  browse(changedYear, changed)
+}
+
+function onYearChange({ month: changed, year: changedYear }: { month: number; year: number }) {
+  browse(changedYear, changed + 1)
+}
+
 useArrowKeys({
   left: () => goTo(month.value ? previousMonth.value : previousYear.value),
   right: () => goTo(month.value ? nextMonth.value : nextYear.value),
@@ -201,6 +234,17 @@ async function load(append: boolean) {
     }
   }
 }
+
+watch(
+  [year, month],
+  ([shownYear, shownMonth]) => {
+    if (!shownYear || !shownMonth) return
+    const on = picked.value
+    if (on && on.getFullYear() === shownYear && on.getMonth() + 1 === shownMonth) return
+    picked.value = new Date(shownYear, shownMonth - 1, 1)
+  },
+  { immediate: true },
+)
 
 watch(range, () => load(false), { immediate: true })
 watch(
@@ -331,6 +375,21 @@ const countLabel = computed(() => {
           />
         </div>
 
+        <DatePicker
+          v-model="picked"
+          :max-date="newestDay"
+          :min-date="oldestDay"
+          aria-label="Go to a date"
+          class="jump"
+          date-format="yy-mm-dd"
+          icon-display="input"
+          placeholder="Go to a date"
+          show-icon
+          @date-select="openDate"
+          @month-change="onMonthChange"
+          @year-change="onYearChange"
+        />
+
         <ReadFilter class="read" />
       </div>
 
@@ -421,6 +480,14 @@ h1 {
   min-width: 9.5rem;
 }
 
+.jump {
+  width: 10.5rem;
+}
+
+.jump :deep(input) {
+  width: 100%;
+}
+
 .read {
   margin-left: auto;
 }
@@ -457,9 +524,14 @@ h1 {
     min-width: 0;
   }
 
+  .jump {
+    flex: 1 1 8rem;
+    width: auto;
+  }
+
   .read {
+    flex: 1 1 9rem;
     margin-left: 0;
-    width: 100%;
   }
 }
 

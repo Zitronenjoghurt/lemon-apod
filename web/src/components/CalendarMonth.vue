@@ -46,9 +46,9 @@ const days = computed(() => {
   })
 })
 
-const rows = computed(() => Math.ceil((lead.value + days.value.length) / 7))
-
+const ROWS = 6
 const MIN_CELL = 56
+const MAX_CELL = 150
 const SETTLED = 2
 
 const root = ref<HTMLElement>()
@@ -67,7 +67,8 @@ function measure() {
   const top = box.getBoundingClientRect().top + window.scrollY
 
   const free = window.innerHeight - top - spaceBelow(box) - (head.value?.offsetHeight ?? 0) - gap
-  const cell = Math.max((free - (rows.value - 1) * gap) / rows.value, MIN_CELL)
+  const room = (free - (ROWS - 1) * gap) / ROWS
+  const cell = Math.min(Math.max(room, MIN_CELL), MAX_CELL)
   const next = Math.floor(7 * cell + 6 * gap)
 
   if (capped.value !== undefined && Math.abs(next - capped.value) < SETTLED) return
@@ -75,11 +76,12 @@ function measure() {
 }
 
 function spaceBelow(box: HTMLElement): number {
+  const page: HTMLElement = box.closest('main') ?? document.body
   let below = 0
 
   let node: HTMLElement = box
 
-  while (node !== document.body) {
+  while (node !== page) {
     const parent: HTMLElement | null = node.parentElement
     if (!parent) break
 
@@ -115,7 +117,7 @@ onBeforeUnmount(() => {
   observer?.disconnect()
 })
 
-watch([rows, () => props.entries.length], () => void nextTick(measure))
+watch([() => props.month, () => props.entries.length], () => void nextTick(measure))
 </script>
 
 <template>

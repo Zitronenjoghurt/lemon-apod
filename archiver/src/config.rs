@@ -28,6 +28,7 @@ pub struct Config {
     pub modern_per_page: u32,
     pub modern_delay_multiplier: u32,
     pub modern_delay_min: Duration,
+    pub modern_refresh_days: u32,
     pub user_agent: String,
     pub fetch_legacy: bool,
     pub fetch_modern: bool,
@@ -173,6 +174,7 @@ impl Config {
             modern_per_page: env_or("APOD_MODERN_PER_PAGE", 100)?,
             modern_delay_multiplier: env_or("APOD_MODERN_DELAY_MULTIPLIER", 10)?,
             modern_delay_min: secs("APOD_MODERN_DELAY_MIN_SECS", 60)?,
+            modern_refresh_days: env_or("APOD_MODERN_REFRESH_DAYS", 0)?,
             user_agent: env_or(
                 "APOD_USER_AGENT",
                 format!(

@@ -36,6 +36,8 @@ const MODES: { label: string; value: ImportMode }[] = [
 
 const archiveTotal = computed(() => coverage.total.value || entries.value)
 
+const reminders = computed(() => acknowledged.value || welcomeGone.value)
+
 function exportData() {
   try {
     const name = download()
@@ -164,41 +166,118 @@ function bringBackWelcome() {
 <template>
   <Dialog
     v-model:visible="open"
-    :style="{ width: 'min(38rem, 94vw)' }"
+    :style="{ width: 'min(34rem, 94vw)' }"
+    class="settings"
     dismissable-mask
     header="Settings"
     modal
   >
-    <div class="stack panels">
-      <section class="stack panel">
-        <h3>Backup</h3>
-        <p class="muted">
-          Clearing site data or switching machines loses your settings, reads and favorites.
-        </p>
-
-        <div class="row controls">
-          <Button icon="pi pi-download" label="Export" outlined @click="exportData" />
-          <Button icon="pi pi-upload" label="Import" outlined @click="pickFile" />
-          <SelectButton
-            v-model="mode"
-            :allow-empty="false"
-            :options="MODES"
-            aria-labelledby="import-mode-label"
-            option-label="label"
-            option-value="value"
-            size="small"
-          />
-          <span id="import-mode-label" class="sr-only">What an import does</span>
+    <div class="panels">
+      <section class="panel">
+        <h3><i aria-hidden="true" class="pi pi-book" />Reading</h3>
+        <ReadProgress :read="countIn()" :total="archiveTotal" label="the archive" />
+        <div class="rows">
+          <div class="line">
+            <span class="name">Read</span>
+            <span class="value">{{ readCount.toLocaleString() }}</span>
+            <Button
+              :disabled="!readCount"
+              class="act"
+              icon="pi pi-eraser"
+              label="Mark all unread"
+              outlined
+              severity="danger"
+              size="small"
+              @click="confirmClearRead"
+            />
+          </div>
         </div>
+      </section>
 
-        <p class="muted hint">
-          <template v-if="mode === 'merge'">
-            Merging keeps what is here and adds whatever the backup has on top.
-          </template>
-          <template v-else>
-            Replacing throws away what is here first. It asks before it does.
-          </template>
-        </p>
+      <section class="panel">
+        <h3><i aria-hidden="true" class="pi pi-star" />Favorites</h3>
+        <div class="rows">
+          <div class="line">
+            <span class="name">Saved</span>
+            <span class="value">{{ favoriteCount.toLocaleString() }}</span>
+            <Button
+              :disabled="!favoriteCount"
+              class="act"
+              icon="pi pi-trash"
+              label="Remove all"
+              outlined
+              severity="danger"
+              size="small"
+              @click="confirmClearFavorites"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3><i aria-hidden="true" class="pi pi-calendar" />Calendar</h3>
+        <div class="rows">
+          <div class="line">
+            <span class="name">Week starts on</span>
+            <SelectButton
+              v-model="weekStart"
+              :allow-empty="false"
+              :options="WEEK_STARTS"
+              aria-label="Day the week starts on"
+              class="act"
+              option-label="label"
+              option-value="value"
+              size="small"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3><i aria-hidden="true" class="pi pi-database" />Backup</h3>
+        <p class="lead muted">All your data is stored solely in this browser.</p>
+        <div class="rows">
+          <div class="line">
+            <span class="name">Save a copy</span>
+            <Button
+              class="act"
+              icon="pi pi-download"
+              label="Export"
+              outlined
+              severity="secondary"
+              size="small"
+              @click="exportData"
+            />
+          </div>
+
+          <div class="line">
+            <span class="name">Load a copy</span>
+            <span class="act pair">
+              <SelectButton
+                v-model="mode"
+                :allow-empty="false"
+                :options="MODES"
+                aria-label="What an import does"
+                option-label="label"
+                option-value="value"
+                size="small"
+              />
+              <Button
+                :title="
+                  mode === 'merge'
+                    ? 'Keeps what exists and adds the backup on top'
+                    : 'Throws away what exists and replaces it with the backup'
+                "
+                icon="pi pi-upload"
+                label="Import"
+                outlined
+                severity="secondary"
+                size="small"
+                @click="pickFile"
+              />
+            </span>
+          </div>
+        </div>
 
         <input
           ref="file"
@@ -209,92 +288,34 @@ function bringBackWelcome() {
         />
       </section>
 
-      <section class="stack panel">
-        <h3>Calendar</h3>
-        <div class="row controls">
-          <span class="muted">Start of the week</span>
-          <SelectButton
-            v-model="weekStart"
-            :allow-empty="false"
-            :options="WEEK_STARTS"
-            aria-label="Day the week starts on"
-            option-label="label"
-            option-value="value"
-            size="small"
-          />
-        </div>
-      </section>
+      <section v-if="reminders" class="panel">
+        <h3><i aria-hidden="true" class="pi pi-bell" />Dismissed notices</h3>
+        <div class="rows">
+          <div v-if="acknowledged" class="line">
+            <span class="name">Warning before external links</span>
+            <Button
+              class="act"
+              icon="pi pi-shield"
+              label="Warn me again"
+              outlined
+              severity="secondary"
+              size="small"
+              @click="bringBackWarning"
+            />
+          </div>
 
-      <section class="stack panel">
-        <h3>Reading</h3>
-        <ReadProgress :read="countIn()" :total="archiveTotal" label="the archive" />
-        <div class="row controls">
-          <Button
-            :disabled="!readCount"
-            icon="pi pi-eraser"
-            label="Mark everything unread"
-            outlined
-            severity="danger"
-            size="small"
-            @click="confirmClearRead"
-          />
-        </div>
-      </section>
-
-      <section class="stack panel">
-        <h3>Favorites</h3>
-        <p class="muted">
-          {{ favoriteCount.toLocaleString() }}
-          {{ favoriteCount === 1 ? 'entry saved' : 'entries saved' }}.
-        </p>
-        <div class="row controls">
-          <Button
-            :disabled="!favoriteCount"
-            icon="pi pi-trash"
-            label="Remove all favorites"
-            outlined
-            severity="danger"
-            size="small"
-            @click="confirmClearFavorites"
-          />
-        </div>
-      </section>
-
-      <section class="stack panel">
-        <h3>External links</h3>
-        <p class="muted">
-          <template v-if="acknowledged">
-            You have told the site to stop warning you before following an external link.
-          </template>
-          <template v-else>
-            The first link you follow outside of the archive will warn you that we have not checked
-            that where it leads is safe.
-          </template>
-        </p>
-        <div v-if="acknowledged" class="row controls">
-          <Button
-            icon="pi pi-shield"
-            label="Warn me again"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="bringBackWarning"
-          />
-        </div>
-      </section>
-
-      <section v-if="welcomeGone" class="stack panel">
-        <h3>Welcome note</h3>
-        <p class="muted">You have dismissed the short note on the start page.</p>
-        <div class="row controls">
-          <Button
-            icon="pi pi-info-circle"
-            label="Show it again"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="bringBackWelcome"
-          />
+          <div v-if="welcomeGone" class="line">
+            <span class="name">Welcome note</span>
+            <Button
+              class="act"
+              icon="pi pi-info-circle"
+              label="Show it again"
+              outlined
+              severity="secondary"
+              size="small"
+              @click="bringBackWelcome"
+            />
+          </div>
         </div>
       </section>
     </div>
@@ -303,32 +324,96 @@ function bringBackWelcome() {
 
 <style scoped>
 .panels {
-  gap: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
 }
 
 .panel {
-  gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 h3 {
-  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   color: var(--text-muted);
   font-weight: 600;
 }
 
-p {
+h3 i {
+  font-size: 0.85em;
+}
+
+.lead {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
-.hint {
-  font-size: 0.82rem;
+.rows {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
 }
 
-.controls {
-  gap: 0.5rem;
+.line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  min-height: 3rem;
+}
+
+.line + .line {
+  border-top: 1px solid var(--border);
+}
+
+.name {
+  font-size: 0.92rem;
+  min-width: 0;
+}
+
+.value {
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.act {
+  margin-left: auto;
+  flex: none;
+}
+
+.pair {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 26rem) {
+  .line {
+    flex-wrap: wrap;
+  }
+
+  .pair {
+    justify-content: flex-end;
+  }
 }
 </style>
