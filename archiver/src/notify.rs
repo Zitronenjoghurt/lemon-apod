@@ -2,12 +2,12 @@ use crate::client::Client;
 use crate::config::{Config, Notify};
 use crate::shutdown::Shutdown;
 use anyhow::{Context, Result};
+use apod_core::ApodReader;
 use apod_core::db::DbConfig;
 use apod_core::notify::NotifyStore;
 use apod_core::sky::store::SkyReader;
 use apod_core::sky::weather::{Alert, Notice, WeatherReport};
 use apod_core::sky::{eclipse, moon, showers};
-use apod_core::ApodReader;
 use chrono::{DateTime, TimeDelta, Utc};
 
 const SUMMARY_CHARS: usize = 300;

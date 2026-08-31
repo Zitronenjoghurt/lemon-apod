@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::store::Explanation;
-use apod_core::{is_decommissioned, ApodEntry, MediaKind};
+use apod_core::{ApodEntry, MediaKind, is_decommissioned};
 use poise::serenity_prelude::{
     Colour, CreateAttachment, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
 };

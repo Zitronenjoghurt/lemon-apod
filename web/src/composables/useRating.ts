@@ -1,6 +1,6 @@
-import {computed, ref, type Ref, shallowRef} from 'vue'
-import {api, ApiError, type SpentBudget} from '@/api/client'
-import type {Ballot, RatingCategory, RatingOutcome} from '@/api/types'
+import { computed, ref, type Ref, shallowRef } from 'vue'
+import { api, ApiError, type SpentBudget } from '@/api/client'
+import type { Ballot, RatingCategory, RatingOutcome } from '@/api/types'
 
 export const CARD_KEY = 'apod:rating-card'
 const HELD_KEY = 'apod:rating-ballot'

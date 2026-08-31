@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
-use apod_core::db::{Db, DbConfig};
 use apod_core::ApodDate;
+use apod_core::db::{Db, DbConfig};
 use serde::{Deserialize, Serialize};
-use sqlx::migrate::Migrator;
 use sqlx::Row;
+use sqlx::migrate::Migrator;
 use std::collections::HashSet;
 use std::path::Path;
 use std::time::Duration;

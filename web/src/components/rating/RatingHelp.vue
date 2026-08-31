@@ -1,8 +1,8 @@
 <script lang="ts" setup>
-import {computed, ref, watch} from 'vue'
-import {api} from '@/api/client'
-import {spell} from '@/composables/useRating'
-import type {RatingTerms} from '@/api/types'
+import { computed, ref, watch } from 'vue'
+import { api } from '@/api/client'
+import { spell } from '@/composables/useRating'
+import type { RatingTerms } from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { default: false })
 

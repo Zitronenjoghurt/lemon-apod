@@ -1,13 +1,20 @@
 <script lang="ts" setup>
-import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import {RouterLink, useRoute, useRouter} from 'vue-router'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
 import RatingHelp from '@/components/rating/RatingHelp.vue'
 import RatingPicture from '@/components/rating/RatingPicture.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import type {RatingCategory, RatingOutcome} from '@/api/types'
-import {CATEGORIES, CATEGORY_ICONS, isCategory, otherCategory, spell, useRatingSession,} from '@/composables/useRating'
-import {useArrowKeys} from '@/composables/useArrowKeys'
+import type { RatingCategory, RatingOutcome } from '@/api/types'
+import {
+  CATEGORIES,
+  CATEGORY_ICONS,
+  isCategory,
+  otherCategory,
+  spell,
+  useRatingSession,
+} from '@/composables/useRating'
+import { useArrowKeys } from '@/composables/useArrowKeys'
 
 const route = useRoute()
 const router = useRouter()
@@ -179,7 +186,9 @@ onMounted(() => void open(true))
             @click="choose('tie')"
           />
           <p class="muted keys"><kbd>←</kbd> <kbd>→</kbd> to pick, <kbd>space</kbd> for a tie</p>
-          <p v-if="cast" class="muted tally">{{ cast }} vote{{ cast === 1 ? '' : 's' }} this visit</p>
+          <p v-if="cast" class="muted tally">
+            {{ cast }} vote{{ cast === 1 ? '' : 's' }} this visit
+          </p>
         </div>
       </template>
     </template>

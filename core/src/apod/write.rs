@@ -1,11 +1,11 @@
 use super::pictures::{self, Fingerprint, PictureGroup};
-use super::read::{to_dates, ApodReader, ApodResult};
+use super::read::{ApodReader, ApodResult, to_dates};
+use crate::PARSER_VERSION;
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
 use crate::media::{Media, Thumb};
 use crate::merge::Merged;
-use crate::PARSER_VERSION;
 use crate::{resource, text};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};

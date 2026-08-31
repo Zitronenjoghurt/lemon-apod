@@ -2,7 +2,7 @@ use super::model::{
     FieldDivergence, Filters, KindCount, Listing, Order, Page, SearchResults, Stats,
 };
 use super::query::fts_query;
-use super::{SchemaError, ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS};
+use super::{ENTRY_COLUMNS, MIN_SCHEMA_VERSION, SCHEMA_VERSION, SUMMARY_COLUMNS, SchemaError};
 use crate::date::ApodDate;
 use crate::db::{Db, DbConfig, DbError};
 use crate::entry::{ApodEntry, ApodSummary, Matched, Provenance, SearchHit};
