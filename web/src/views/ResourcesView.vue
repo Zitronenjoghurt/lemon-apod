@@ -212,15 +212,15 @@ function span(first?: string, last?: string): string {
 
 <style scoped>
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .head {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .controls {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .search {
@@ -247,7 +247,7 @@ h1 {
 }
 
 .count {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
@@ -255,15 +255,15 @@ h1 {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.9rem;
-  padding: 0.7rem 1rem;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
 }
 
 .body {
@@ -286,7 +286,7 @@ h1 {
 }
 
 .address {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -300,7 +300,7 @@ h1 {
 .meta {
   display: flex;
   align-items: baseline;
-  gap: 1rem;
+  gap: var(--space-4);
   text-align: right;
 }
 
@@ -309,25 +309,25 @@ h1 {
 }
 
 .years {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .refs {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .unit {
   font-weight: 400;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .lines {
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .empty {
-  padding: 3rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
 }
 
@@ -339,8 +339,8 @@ h1 {
 
 @media (max-width: 30rem) {
   .item {
-    padding: 0.6rem 0.8rem;
-    gap: 0.7rem;
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-3);
   }
 
   .unit {

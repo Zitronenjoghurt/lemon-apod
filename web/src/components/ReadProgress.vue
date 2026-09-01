@@ -54,7 +54,7 @@ const complete = computed(() => Boolean(props.total) && props.read >= (props.tot
 .read-progress {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -67,7 +67,7 @@ const complete = computed(() => Boolean(props.total) && props.read >= (props.tot
   min-width: 5rem;
   max-width: 18rem;
   height: 0.42rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
@@ -75,17 +75,17 @@ const complete = computed(() => Boolean(props.total) && props.read >= (props.tot
 .fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   transition: width 0.25s ease;
 }
 
 .fill.done {
-  background: color-mix(in srgb, var(--accent) 70%, #22c55e);
+  background: color-mix(in srgb, var(--accent) 70%, var(--good));
 }
 
 .note {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 

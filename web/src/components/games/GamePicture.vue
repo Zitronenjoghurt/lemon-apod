@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
-import ApodCredit from '@/components/ApodCredit.vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
+import type { Slide } from '@/components/MediaLightbox.vue'
+import MediaLightbox from '@/components/MediaLightbox.vue'
 import { api } from '@/api/client'
 import type { GamePicture } from '@/api/types'
 
@@ -24,7 +24,38 @@ const props = withDefaults(
 const loaded = ref(false)
 const failed = ref(false)
 const zoomed = ref(false)
-const fullLoaded = ref(false)
+const shown = useTemplateRef<HTMLImageElement>('shown')
+const revealed = ref<{ width: number; height: number } | null>(null)
+
+watch(
+  () => props.full,
+  (file) => {
+    revealed.value = null
+    if (!file) return
+
+    const probe = new Image()
+    probe.onload = () =>
+      (revealed.value = { width: probe.naturalWidth, height: probe.naturalHeight })
+    probe.src = file
+  },
+  { immediate: true },
+)
+
+const alone = computed<Slide[]>(() => {
+  const size = revealed.value
+  if (!props.full || !size) return []
+
+  return [
+    {
+      src: props.full,
+      width: size.width,
+      height: size.height,
+      alt: props.alt,
+      entry: props.date ? `/${props.date}` : undefined,
+      from: () => shown.value,
+    },
+  ]
+})
 
 const source = computed(() => api.games.picture(props.picture.picture))
 const credit = computed(() => props.picture.credit ?? [])
@@ -40,10 +71,6 @@ watch(source, () => {
   loaded.value = false
   failed.value = false
 })
-
-watch(zoomed, (open) => {
-  if (!open) fullLoaded.value = false
-})
 </script>
 
 <template>
@@ -56,6 +83,7 @@ watch(zoomed, (open) => {
       </p>
       <img
         v-show="loaded"
+        ref="shown"
         :alt="alt"
         :src="source"
         :style="{
@@ -79,44 +107,14 @@ watch(zoomed, (open) => {
     </p>
   </div>
 
-  <Dialog
-    v-if="zoomable"
-    v-model:visible="zoomed"
-    :header="alt"
-    :style="{ width: 'min(96rem, 96vw)' }"
-    dismissable-mask
-    modal
-  >
-    <div class="full-wrap">
-      <ApodCredit lead="This picture is from NASA's" variant="banner" />
-
-      <Skeleton v-if="!fullLoaded" height="60vh" width="100%" />
-      <img
-        v-show="fullLoaded"
-        :alt="alt"
-        :src="full ?? undefined"
-        class="full"
-        decoding="async"
-        @load="fullLoaded = true"
-      />
-
-      <p v-if="credit.length" class="muted shot-credit">
-        <span v-for="line in credit" :key="line">{{ line }}</span>
-      </p>
-
-      <RouterLink v-if="date" :to="`/${date}`" class="muted open-entry">
-        Open this entry
-        <i aria-hidden="true" class="pi pi-angle-right" />
-      </RouterLink>
-    </div>
-  </Dialog>
+  <MediaLightbox v-if="zoomable" :at="zoomed ? 0 : null" :slides="alone" @close="zoomed = false" />
 </template>
 
 <style scoped>
 .shot {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
   width: 100%;
   margin-inline: auto;
   max-width: calc(var(--cap, 200vh) * var(--ratio));
@@ -125,9 +123,9 @@ watch(zoomed, (open) => {
 .shot-credit {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0);
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   line-height: 1.35;
   text-wrap: pretty;
 }
@@ -172,11 +170,11 @@ watch(zoomed, (open) => {
   inset: 0;
   display: grid;
   place-content: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   justify-items: center;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   margin: 0;
-  padding: 1rem;
+  padding: var(--space-4);
   text-align: center;
 }
 
@@ -186,12 +184,12 @@ watch(zoomed, (open) => {
 }
 
 .right {
-  outline: 3px solid #16a34a;
+  outline: 3px solid var(--good);
   outline-offset: 2px;
 }
 
 .wrong {
-  outline: 3px solid #dc2626;
+  outline: 3px solid var(--bad);
   outline-offset: 2px;
   opacity: 0.75;
 }
@@ -202,14 +200,14 @@ watch(zoomed, (open) => {
   bottom: 0.45rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.5rem;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.6);
   color: #fff;
   font: inherit;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   opacity: 0.75;
   transition: opacity 0.15s ease;
@@ -225,33 +223,5 @@ watch(zoomed, (open) => {
   .zoom-label {
     display: none;
   }
-}
-
-.full-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  align-items: flex-start;
-}
-
-.full {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 78vh;
-  object-fit: contain;
-  border-radius: calc(var(--radius) / 2);
-}
-
-.open-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  font-size: 0.85rem;
-  text-decoration: none;
-}
-
-.open-entry:hover {
-  text-decoration: underline;
 }
 </style>

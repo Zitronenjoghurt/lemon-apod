@@ -85,16 +85,29 @@ const target = computed(() =>
   overflow: hidden;
   text-decoration: none;
   color: inherit;
+  animation: rise var(--dur-slow) var(--ease-out) var(--rise-delay, 0ms) backwards;
   transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease;
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .entry-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+}
+
+.entry-card:active {
+  transform: translateY(-1px);
+  transition-duration: var(--dur-fast);
 }
 
 .thumb {
@@ -108,6 +121,11 @@ const target = computed(() =>
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.entry-card:hover .thumb img {
+  transform: scale(1.045);
 }
 
 .fallback {
@@ -115,11 +133,11 @@ const target = computed(() =>
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .fallback.gone {
@@ -132,7 +150,7 @@ const target = computed(() =>
 }
 
 .fallback .what {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -148,8 +166,8 @@ const target = computed(() =>
   color: #fff;
   display: grid;
   place-items: center;
-  font-size: 0.75rem;
-  padding-left: 0.15rem;
+  font-size: var(--text-xs);
+  padding-left: var(--space-0);
 }
 
 .badge.encore {
@@ -164,7 +182,7 @@ const target = computed(() =>
   height: 0.4rem;
   border-radius: 50%;
   background: var(--accent);
-  margin-right: 0.4rem;
+  margin-right: var(--space-2);
   vertical-align: 0.08em;
 }
 
@@ -186,45 +204,45 @@ const target = computed(() =>
 }
 
 .body {
-  padding: 0.85rem 1rem 1.1rem;
+  padding: var(--space-3) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .date {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.02em;
   margin: 0;
 }
 
 .title {
-  font-size: 1.02rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .matched {
-  font-size: 0.85rem;
-  margin: 0.25rem 0 0;
+  font-size: var(--text-sm);
+  margin: var(--space-1) 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: var(--space-1);
   align-items: baseline;
 }
 
 .matched .where {
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.45rem;
-  font-size: 0.7rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   flex: none;
 }
 
 .snippet {
-  font-size: 0.88rem;
-  margin: 0.15rem 0 0;
+  font-size: var(--text-sm);
+  margin: var(--space-0) 0 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   line-clamp: 3;

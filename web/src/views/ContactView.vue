@@ -300,15 +300,15 @@ const elsewhere = computed(() => [
 .contact {
   max-width: 58rem;
   margin-inline: auto;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .head {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lede {
@@ -324,35 +324,35 @@ h1 {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.3rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .panel h2 {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
 }
 
 .fields {
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .field {
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .field label {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   font-weight: 550;
 }
 
 .counter {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .counter.over {
@@ -368,16 +368,16 @@ h1 {
 }
 
 .actions {
-  gap: 0.75rem;
-  margin-top: 0.2rem;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
 }
 
 .hint {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .fallback {
-  margin-left: 0.4rem;
+  margin-left: var(--space-2);
   white-space: nowrap;
 }
 
@@ -387,15 +387,15 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .links a {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.55rem 0.6rem;
-  border-radius: 0.6rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
 }
@@ -405,7 +405,7 @@ h1 {
 }
 
 .links i {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   color: var(--accent);
   width: 1.3rem;
   text-align: center;
@@ -419,20 +419,20 @@ h1 {
 }
 
 .label {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.4;
 }
 
 .value {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .note {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
   margin-top: auto;
 }

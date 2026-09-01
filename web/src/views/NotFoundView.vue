@@ -29,16 +29,16 @@ const links = [
 
 <style scoped>
 .notice {
-  padding: 4rem 2rem;
+  padding: 4rem var(--space-7);
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 h1 {
-  font-size: 1.5rem;
+  font-size: var(--text-title);
 }
 
 p {
@@ -48,13 +48,13 @@ p {
 code {
   font-size: 0.9em;
   background: color-mix(in srgb, var(--text) 8%, transparent);
-  padding: 0.1rem 0.35rem;
+  padding: var(--space-0) var(--space-1);
   border-radius: 4px;
 }
 
 .links {
-  gap: 0.6rem;
-  margin-top: 0.75rem;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
   justify-content: center;
 }
 

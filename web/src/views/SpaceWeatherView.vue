@@ -17,8 +17,8 @@ import {
   DST_FRAME,
   DST_MARKS,
   DST_TICKS,
+  FLUX_BANDS,
   FLUX_FRAME,
-  FLUX_MARKS,
   FLUX_TICKS,
   inForce,
   KP_BANDS,
@@ -324,12 +324,12 @@ function toggle(id: string): void {
                 The sun's radio output at a wavelength of 10.7 cm, in solar flux units. It tracks
                 the active regions on the disc and therefore shows how active the sun is.
               </p>
-              <ScaleKey :marks="FLUX_MARKS" />
+              <ScaleKey :bands="FLUX_BANDS" />
             </HintPopover>
           </h2>
           <SeriesChart
+            :bands="FLUX_BANDS"
             :frame="FLUX_FRAME"
-            :marks="FLUX_MARKS"
             :points="fluxPoints"
             :ticks="FLUX_TICKS"
             :zeroed="false"
@@ -464,15 +464,15 @@ function toggle(id: string): void {
 
 <style scoped>
 .weather {
-  gap: 1.25rem;
+  gap: var(--space-5);
 }
 
 .head {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .blurb {
@@ -481,25 +481,25 @@ h1 {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.25rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: var(--space-3);
 }
 
 .panel h2 {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  font-size: 0.72rem;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
 }
 
 .empty {
-  padding: 1.2rem;
+  padding: var(--space-5);
   margin: 0;
   color: var(--text-muted);
   text-wrap: pretty;
@@ -507,7 +507,7 @@ h1 {
 
 .now {
   display: grid;
-  gap: 1.25rem;
+  gap: var(--space-5);
   align-items: start;
 }
 
@@ -518,7 +518,7 @@ h1 {
 }
 
 .reading {
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .big {
@@ -526,11 +526,11 @@ h1 {
 }
 
 .right {
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .observed {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .stamp {
@@ -542,14 +542,14 @@ h1 {
 .odds-list {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
 }
 
 .odds {
   display: flex;
   align-items: baseline;
-  gap: 0.35rem;
-  font-size: 0.82rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .odds .chance {
@@ -571,17 +571,17 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .level {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.88rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  padding-bottom: 0.3rem;
+  padding-bottom: var(--space-1);
 }
 
 .level:last-child {
@@ -610,27 +610,27 @@ h1 {
 
 .eyebrow {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .note {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-wrap: pretty;
 }
 
 .in-force {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .raised {
   display: flex;
   align-items: baseline;
-  gap: 0.45rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -641,16 +641,16 @@ h1 {
 
 .scale,
 .until {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
 .quiet {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -661,13 +661,13 @@ h1 {
 .scales {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
 }
 
 .scales th,
 .scales td {
   text-align: left;
-  padding: 0.45rem 0.6rem 0.45rem 0;
+  padding: var(--space-2) var(--space-2) var(--space-2) 0;
   border-top: 1px solid var(--border);
   vertical-align: baseline;
   white-space: nowrap;
@@ -675,7 +675,7 @@ h1 {
 
 .scales thead th {
   border-top: none;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -685,14 +685,14 @@ h1 {
 .scales tbody th {
   font-weight: 500;
   border-top: 1px solid var(--border);
-  padding-right: 1rem;
+  padding-right: var(--space-4);
 }
 
 .band {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.05rem;
+  gap: var(--space-0);
 }
 
 .letter {
@@ -700,13 +700,13 @@ h1 {
 }
 
 .what {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .cell {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.35rem;
+  gap: var(--space-1);
   font-variant-numeric: tabular-nums;
 }
 
@@ -720,7 +720,7 @@ h1 {
 }
 
 .word {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .charts {
@@ -731,7 +731,7 @@ h1 {
 
 .notices-head {
   justify-content: space-between;
-  gap: 0.6rem 1rem;
+  gap: var(--space-2) var(--space-4);
 }
 
 .notices-head :deep(.p-togglebutton) {
@@ -741,7 +741,7 @@ h1 {
 .option {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .tally {
@@ -769,9 +769,9 @@ h1 {
 .notices button {
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: var(--space-2);
   width: 100%;
-  padding: 0.55rem 0;
+  padding: var(--space-2) 0;
   border: 0;
   background: none;
   color: inherit;
@@ -785,7 +785,7 @@ h1 {
 }
 
 .notices i {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   flex: none;
 }
@@ -797,10 +797,10 @@ h1 {
 .notices .what {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
+  gap: var(--space-0);
   min-width: 0;
   flex: 1;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
 }
 
 .line {
@@ -808,21 +808,21 @@ h1 {
 }
 
 .when {
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .chevron {
   margin-left: auto;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
 }
 
 .message {
-  margin: 0 0 0.75rem;
-  padding: 0.7rem 0.85rem;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--text) 5%, transparent);
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-x: auto;
@@ -830,7 +830,7 @@ h1 {
 
 .source {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 </style>

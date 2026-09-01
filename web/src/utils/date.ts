@@ -80,3 +80,11 @@ function parse(date: string): Date | null {
   const parsed = new Date(`${date}T00:00:00Z`)
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
+
+export function isoDate(text: string): string | null {
+  const trimmed = text.trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null
+
+  const parsed = parse(trimmed)
+  return parsed?.toISOString().slice(0, 10) === trimmed ? trimmed : null
+}

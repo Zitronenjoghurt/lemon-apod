@@ -18,10 +18,12 @@
     --space-8: 3rem;
     --gap: var(--space-5);
 
+    --text-2xs: 0.62rem;
     --text-xs: 0.75rem;
     --text-sm: 0.85rem;
     --text-md: 1rem;
     --text-lg: 1.25rem;
+    --text-title: 1.4rem;
     --text-xl: 1.6rem;
 
     --radius-sm: 0.25rem;
@@ -29,22 +31,35 @@
     --radius: 0.85rem;
     --radius-pill: 999px;
 
+    --dur-fast: 120ms;
+    --dur-base: 180ms;
+    --dur-slow: 280ms;
+    --dur-reveal: 700ms;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
     --bg: #f6f7fb;
     --bg-elevated: #ffffff;
     --border: #e2e6f0;
     --text: #131629;
     --text-muted: #5b6178;
     --accent: #4f46e5;
-    --diff-added: #16a34a;
-    --diff-removed: #dc2626;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --diff-added: var(--good);
+    --diff-removed: var(--bad);
     --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
     --scroll-thumb: color-mix(in srgb, var(--accent) 45%, transparent);
 
-    --tone-calm: 152 55% 32%;
-    --tone-raised: 38 92% 32%;
-    --tone-warn: 24 90% 40%;
-    --tone-alert: 4 78% 46%;
-    --tone-severe: 330 72% 44%;
+    --tone-calm: 152 58% 34%;
+    --tone-raised: 38 92% 38%;
+    --tone-warn: 24 90% 44%;
+    --tone-alert: 4 80% 50%;
+    --tone-severe: 330 74% 48%;
+
+    --zone-fill: 0.2;
+    --zone-edge: 0.5;
   }
 
   html.app-dark {
@@ -54,8 +69,8 @@
     --text: #e9ebf5;
     --text-muted: #969db8;
     --accent: #818cf8;
-    --diff-added: #4ade80;
-    --diff-removed: #f87171;
+    --good: #4ade80;
+    --bad: #f87171;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
 
     --tone-calm: 152 52% 52%;
@@ -63,6 +78,9 @@
     --tone-warn: 28 92% 60%;
     --tone-alert: 8 85% 64%;
     --tone-severe: 330 75% 64%;
+
+    --zone-fill: 0.11;
+    --zone-edge: 0.3;
   }
 
   *,
@@ -77,6 +95,12 @@
 
   html {
     scrollbar-color: var(--scroll-thumb) transparent;
+  }
+
+  @supports (interpolate-size: allow-keywords) {
+    :root {
+      interpolate-size: allow-keywords;
+    }
   }
 
   body {
@@ -189,13 +213,28 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    * {
+    *,
+    *::before,
+    *::after {
       transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-delay: 0s !important;
+      animation-delay: 0s !important;
     }
   }
 
   .prose {
     font-size: 1.06rem;
+  }
+
+  @media (min-width: 62rem) {
+    .prose {
+      font-size: 1.1rem;
+      text-align: justify;
+      hyphens: auto;
+    }
   }
 
   .prose a {

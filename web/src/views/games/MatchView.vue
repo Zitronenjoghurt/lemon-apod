@@ -479,17 +479,17 @@ watch(
 
 <style scoped>
 .board {
-  padding: 0.9rem 1.1rem 1.2rem;
+  padding: var(--space-4) var(--space-4) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-3);
 }
 
 .bar {
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  padding-bottom: 0.7rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -502,10 +502,10 @@ watch(
 .worth {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.05rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -526,14 +526,14 @@ watch(
 
 .round {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: start;
 }
 
 @media (min-width: 60rem) {
   .round {
     grid-template-columns: minmax(18rem, 27rem) minmax(0, 1fr);
-    gap: 1.5rem;
+    gap: var(--space-6);
   }
 
   .explanation {
@@ -546,19 +546,19 @@ watch(
 @media (min-width: 80rem) {
   .round {
     grid-template-columns: minmax(18rem, 24rem) minmax(0, 1fr);
-    gap: 2rem;
+    gap: var(--space-7);
   }
 
   .choices {
     --cap: 34vh;
-    gap: 1rem;
+    gap: var(--space-4);
   }
 }
 
 .text {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -568,11 +568,11 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.55rem 0.32em;
+  gap: var(--space-2) 0.32em;
   margin: 0;
   max-height: 32vh;
   overflow-y: auto;
-  padding-right: 0.6rem;
+  padding-right: var(--space-2);
 }
 
 .hole {
@@ -583,11 +583,11 @@ watch(
 }
 
 .uncover {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .read {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -598,15 +598,15 @@ watch(
 .ask strong {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .right {
-  color: #16a34a;
+  color: var(--good);
 }
 
 .wrong {
-  color: #dc2626;
+  color: var(--bad);
 }
 
 .choices {
@@ -615,7 +615,7 @@ watch(
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.8rem;
+  gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -653,9 +653,9 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--space-3);
   border-top: 1px solid var(--border);
-  padding-top: 0.85rem;
-  margin-top: 0.15rem;
+  padding-top: var(--space-3);
+  margin-top: var(--space-0);
 }
 </style>

@@ -68,7 +68,7 @@ const wanted = computed(() => props.progress.target.toLocaleString())
 .rating-progress {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -76,9 +76,9 @@ const wanted = computed(() => props.progress.target.toLocaleString())
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.6rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   flex-wrap: wrap;
 }
 
@@ -87,13 +87,13 @@ const wanted = computed(() => props.progress.target.toLocaleString())
 }
 
 .count {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .track {
   height: 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
@@ -107,7 +107,7 @@ const wanted = computed(() => props.progress.target.toLocaleString())
 
 .buys {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-wrap: pretty;
 }
 </style>

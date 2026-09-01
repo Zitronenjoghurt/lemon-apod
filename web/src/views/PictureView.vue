@@ -139,8 +139,8 @@ watch([picture, notFound], ([found, missing]) => {
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   text-decoration: none;
   align-self: flex-start;
 }
@@ -150,13 +150,13 @@ watch([picture, notFound], ([found, missing]) => {
 }
 
 .head {
-  padding: 1.2rem 1.3rem 1.3rem;
-  gap: 1rem;
+  padding: var(--space-5) var(--space-5) var(--space-5);
+  gap: var(--space-4);
 }
 
 .top {
   display: flex;
-  gap: 1.2rem;
+  gap: var(--space-5);
   align-items: flex-start;
 }
 
@@ -185,11 +185,11 @@ watch([picture, notFound], ([found, missing]) => {
   aspect-ratio: 16 / 10;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .fallback.gone {
@@ -202,36 +202,36 @@ watch([picture, notFound], ([found, missing]) => {
 }
 
 .fallback .what {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .about {
   flex: 1 1 20rem;
-  gap: 0.6rem;
+  gap: var(--space-2);
   min-width: 0;
 }
 
 h1 {
-  font-size: 1.45rem;
+  font-size: var(--text-title);
   text-wrap: balance;
 }
 
 .lede {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
-  gap: 0.7rem 1.2rem;
+  gap: var(--space-3) var(--space-5);
   margin: 0;
 }
 
 .facts dt {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -239,21 +239,21 @@ h1 {
 
 .facts dd {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
 }
 
 .facts .date {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .aka {
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .aka h2,
 h2.section {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -264,14 +264,14 @@ h2.section {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .aka li {
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
 }
 
 .times {
@@ -279,24 +279,24 @@ h2.section {
 }
 
 .timeline-card {
-  padding: 1.1rem 1.3rem 1.3rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
 .timeline-card h2 {
-  margin-bottom: 0.9rem;
+  margin-bottom: var(--space-4);
 }
 
 .notice {
-  padding: 3rem 2rem;
+  padding: var(--space-8) var(--space-7);
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: center;
 }
 
 .notice h1 {
-  font-size: 1.4rem;
+  font-size: var(--text-title);
 }
 
 .notice p {

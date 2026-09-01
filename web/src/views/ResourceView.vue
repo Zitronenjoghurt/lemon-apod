@@ -136,8 +136,8 @@ watch([name, notFound], ([named, missing]) => {
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   text-decoration: none;
   align-self: flex-start;
 }
@@ -147,17 +147,17 @@ watch([name, notFound], ([named, missing]) => {
 }
 
 .head {
-  padding: 1.2rem 1.3rem 1.3rem;
-  gap: 0.7rem;
+  padding: var(--space-5) var(--space-5) var(--space-5);
+  gap: var(--space-3);
 }
 
 h1 {
-  font-size: 1.45rem;
+  font-size: var(--text-title);
   text-wrap: balance;
 }
 
 .address {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   word-break: break-all;
   text-decoration: none;
 }
@@ -173,12 +173,12 @@ h1 {
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
-  gap: 0.7rem 1.2rem;
+  gap: var(--space-3) var(--space-5);
   margin: 0;
 }
 
 .facts dt {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -186,21 +186,21 @@ h1 {
 
 .facts dd {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
 }
 
 .facts .date {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .anchors {
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .anchors h2,
 h2.section {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -215,14 +215,14 @@ h2.section {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .anchors li {
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
 }
 
 .times {
@@ -230,7 +230,7 @@ h2.section {
 }
 
 .site {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   align-self: flex-start;
   text-decoration: none;
 }
@@ -240,16 +240,16 @@ h2.section {
 }
 
 .notice {
-  padding: 3rem 2rem;
+  padding: var(--space-8) var(--space-7);
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: center;
 }
 
 .notice h1 {
-  font-size: 1.4rem;
+  font-size: var(--text-title);
 }
 
 .notice p {

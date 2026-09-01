@@ -120,7 +120,7 @@ function toggle(date: string) {
 
 .timeline > li {
   position: relative;
-  padding: 0 0 1.1rem 1.4rem;
+  padding: 0 0 var(--space-4) var(--space-6);
   border-left: 2px solid var(--border);
 }
 
@@ -147,7 +147,7 @@ function toggle(date: string) {
 .stop {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
 }
 
 .when {
@@ -155,8 +155,8 @@ function toggle(date: string) {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .date {
@@ -174,33 +174,33 @@ function toggle(date: string) {
 }
 
 .note {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .title {
   margin: 0;
-  font-size: 0.98rem;
+  font-size: var(--text-md);
   text-wrap: pretty;
 }
 
 .tags {
   list-style: none;
-  margin: 0.25rem 0 0;
+  margin: var(--space-1) 0 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .tags li {
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.15rem 0.7rem;
-  font-size: 0.75rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-3);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--space-1);
 }
 
 .tags i {
@@ -217,17 +217,17 @@ function toggle(date: string) {
 
 .reveal {
   align-self: flex-start;
-  margin-top: 0.4rem;
+  margin-top: var(--space-2);
   padding: 0;
   border: 0;
   background: none;
   color: var(--text-muted);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .reveal:hover,
@@ -240,7 +240,7 @@ function toggle(date: string) {
 }
 
 .footnote {
-  font-size: 0.8rem;
-  margin: 0.9rem 0 0;
+  font-size: var(--text-sm);
+  margin: var(--space-4) 0 0;
 }
 </style>

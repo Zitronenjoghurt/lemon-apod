@@ -73,17 +73,17 @@ function confirmClear() {
 .read-filter {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .label {
-  margin-left: 0.35rem;
+  margin-left: var(--space-1);
 }
 
 .hidden-note {
-  font-size: 0.8rem;
-  margin-left: 0.2rem;
+  font-size: var(--text-sm);
+  margin-left: var(--space-1);
 }
 
 .sr-only {

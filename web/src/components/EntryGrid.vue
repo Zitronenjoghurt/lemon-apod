@@ -22,6 +22,8 @@ withDefaults(
   },
 )
 
+const STAGGER_CAP = 11
+
 function snippetOf(entry: ApodSummary | SearchHit): string | undefined {
   return 'snippet' in entry ? entry.snippet : undefined
 }
@@ -49,12 +51,13 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
 
     <div class="grid">
       <EntryCard
-        v-for="entry in entries"
+        v-for="(entry, index) in entries"
         :key="entry.date"
         :entry="entry"
         :hit="hitOf(entry)"
         :query="query"
         :snippet="snippetOf(entry)"
+        :style="{ '--rise-delay': `${Math.min(index, STAGGER_CAP) * 30}ms` }"
       />
     </div>
   </template>
@@ -71,14 +74,14 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
 }
 
 .lines {
-  padding: 0.9rem 1rem 1.2rem;
+  padding: var(--space-4) var(--space-4) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .empty {
-  padding: 3rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
 }
 </style>

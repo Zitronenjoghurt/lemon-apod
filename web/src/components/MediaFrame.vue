@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import ApodCredit from './ApodCredit.vue'
+import MediaLightbox from './MediaLightbox.vue'
+import type { Slide } from './MediaLightbox.vue'
 import { aspectRatio, isImage, isLost, isUndisplayableImage, type Media } from '@/api/types'
 
 const props = defineProps<{
@@ -8,11 +10,15 @@ const props = defineProps<{
   title: string
   maxHeight?: string
   source?: string
+  entry?: string
 }>()
 
 const SLOW_AFTER_MS = 6000
 
 const playing = ref(false)
+const zoomed = ref(false)
+const inline = useTemplateRef<HTMLImageElement>('inline')
+
 const loaded = ref(false)
 const failed = ref(false)
 const slow = ref(false)
@@ -84,6 +90,30 @@ const undisplayable = computed(
   () => isUndisplayableImage(props.media.kind) && !!props.media.thumb_url,
 )
 
+function slide(): Slide | null {
+  const element = inline.value
+  if (!element?.naturalWidth || !props.media.url) return null
+
+  return {
+    src: props.media.url,
+    width: element.naturalWidth,
+    height: element.naturalHeight,
+    alt: props.title,
+    hd: fullResolution.value ?? undefined,
+    thumb: props.media.thumb_url ?? undefined,
+    entry: props.entry,
+    source: props.source,
+    from: () => inline.value,
+  }
+}
+
+const alone = computed(() => {
+  if (!loaded.value) return []
+
+  const one = slide()
+  return one ? [one] : []
+})
+
 const showsImage = computed(() => isImage(props.media.kind) && !!props.media.url && !failed.value)
 const ratio = computed(() => aspectRatio(props.media))
 const frameStyle = computed(() => ({
@@ -94,68 +124,49 @@ const frameStyle = computed(() => ({
 
 <template>
   <figure :style="frameStyle" class="media">
-    <figcaption>
-      <ApodCredit :source="source" variant="caption">
-        <slot name="credit" />
-      </ApodCredit>
+    <figcaption class="source">
+      <ApodCredit :source="source" variant="caption" />
     </figcaption>
 
-    <Image
+    <button
       v-if="showsImage"
-      :alt="title"
-      :pt="{ toolbar: { class: 'shot-toolbar' } }"
+      :aria-label="`View ${title} at full size`"
       class="shot"
-      preview
+      type="button"
+      @click="zoomed = true"
     >
-      <template #image>
-        <div :class="{ guessed: !ratio }" class="frame reserved">
-          <img
-            v-if="media.thumb_url && !loaded"
-            :src="media.thumb_url"
-            alt=""
-            aria-hidden="true"
-            class="placeholder"
-          />
-          <img
-            :key="media.url ?? ''"
-            :alt="title"
-            :class="{ ready: loaded }"
-            :src="media.url ?? ''"
-            class="full"
-            decoding="async"
-            fetchpriority="high"
-            @error="failed = true"
-            @load="loaded = true"
-          />
-          <div v-if="!loaded" class="loading" role="status">
-            <span class="badge-loading">
-              <span aria-hidden="true" class="spinner" />
-              <span class="text">
-                Loading full image from NASA
-                <span v-if="slow" class="sub">This one is large, still downloading</span>
-              </span>
+      <div :class="{ guessed: !ratio }" class="frame reserved">
+        <img
+          v-if="media.thumb_url && !loaded"
+          :src="media.thumb_url"
+          alt=""
+          aria-hidden="true"
+          class="placeholder"
+        />
+        <img
+          :key="media.url ?? ''"
+          ref="inline"
+          :alt="title"
+          :class="{ ready: loaded }"
+          :src="media.url ?? ''"
+          class="full"
+          decoding="async"
+          fetchpriority="high"
+          @error="failed = true"
+          @load="loaded = true"
+        />
+        <div v-if="!loaded" class="loading" role="status">
+          <span class="badge-loading">
+            <span aria-hidden="true" class="spinner" />
+            <span class="text">
+              Loading full image from NASA
+              <span v-if="slow" class="sub">This one is large, still downloading</span>
             </span>
-          </div>
+          </span>
         </div>
-      </template>
-
-      <template #original="{ style, previewCallback }">
-        <div class="zoomed">
-          <ApodCredit :title="title" class="zoomed-credit" variant="overlay" />
-          <img
-            :alt="title"
-            :src="fullResolution ?? media.url ?? ''"
-            :style="style"
-            class="original"
-            @click="previewCallback"
-          />
-        </div>
-      </template>
-
-      <template #previewicon>
-        <i aria-hidden="true" class="pi pi-search-plus" />
-      </template>
-    </Image>
+      </div>
+      <span aria-hidden="true" class="magnify"><i class="pi pi-search-plus" /></span>
+    </button>
 
     <template v-else-if="undisplayable">
       <div class="frame reserved">
@@ -214,6 +225,16 @@ const frameStyle = computed(() => ({
       <i aria-hidden="true" class="pi pi-external-link" />
       <span>{{ placeholderLabel }}</span>
     </a>
+
+    <MediaLightbox :at="zoomed ? 0 : null" :slides="alone" @close="zoomed = false" />
+
+    <div v-if="$slots.credit" class="credit">
+      <slot name="credit" />
+    </div>
+
+    <div v-if="$slots.actions" class="doings">
+      <slot name="actions" />
+    </div>
   </figure>
 </template>
 
@@ -222,8 +243,31 @@ const frameStyle = computed(() => ({
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-elevated);
   --media-max: min(62vh, 40rem);
+}
+
+.source,
+.credit {
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.doings {
+  padding: var(--space-1) 0;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+
+.source {
+  border-bottom: 1px solid var(--border);
+}
+
+.credit {
+  border-top: 1px solid var(--border);
 }
 
 @media (max-width: 61.99rem) {
@@ -232,14 +276,50 @@ const frameStyle = computed(() => ({
   }
 }
 
+.shot {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  line-height: 0;
+}
+
+.magnify {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: rgb(8 10 20 / 0.6);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: var(--text-sm);
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.9);
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+.shot:hover .magnify,
+.shot:focus-visible .magnify {
+  opacity: 1;
+  transform: none;
+}
+
 .frame {
   display: block;
   width: 100%;
   max-height: var(--media-max);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   overflow: hidden;
-  background: color-mix(in srgb, var(--bg-elevated) 30%, var(--bg));
+  background: color-mix(in srgb, var(--text) 4%, transparent);
   position: relative;
 }
 
@@ -259,7 +339,7 @@ const frameStyle = computed(() => ({
 
 .frame.reserved:has(.full.ready) {
   animation: none;
-  background: color-mix(in srgb, var(--bg-elevated) 30%, var(--bg));
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .frame.guessed:has(.full.ready) {
@@ -322,7 +402,7 @@ video.frame,
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 0.75rem;
+  padding: var(--space-3);
   pointer-events: none;
   animation: fade-in 0.2s ease 0.4s both;
 }
@@ -330,10 +410,10 @@ video.frame,
 .badge-loading {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   max-width: min(100%, 20rem);
-  padding: 0.6rem 0.9rem;
-  border-radius: 0.7rem;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
   background: rgb(8 10 20 / 0.68);
   backdrop-filter: blur(6px);
   box-shadow: 0 2px 12px rgb(0 0 0 / 0.3);
@@ -349,7 +429,7 @@ video.frame,
 
 .sub {
   display: block;
-  margin-top: 0.15rem;
+  margin-top: var(--space-0);
   font-size: 0.9em;
   color: rgb(255 255 255 / 0.72);
 }
@@ -385,26 +465,6 @@ video.frame,
   }
 }
 
-.original {
-  max-width: 95vw;
-  max-height: calc(95vh - 4rem);
-  object-fit: contain;
-}
-
-.zoomed {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.zoomed-credit {
-  flex: none;
-  align-self: flex-start;
-  max-width: 100%;
-}
-
 .facade {
   padding: 0;
   cursor: pointer;
@@ -422,7 +482,7 @@ video.frame,
 }
 
 .facade .play i {
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   color: #fff;
   background: rgb(0 0 0 / 0.55);
   backdrop-filter: blur(4px);
@@ -431,7 +491,7 @@ video.frame,
   height: 4rem;
   display: grid;
   place-items: center;
-  padding-left: 0.25rem;
+  padding-left: var(--space-1);
   transition:
     transform 0.2s ease,
     background 0.2s ease;
@@ -444,7 +504,9 @@ video.frame,
 
 .tiff-note {
   margin: 0;
-  font-size: 0.88rem;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-wrap: pretty;
 }
@@ -453,7 +515,7 @@ video.frame,
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   padding-inline: var(--space-5);
   color: var(--text-muted);
   text-decoration: none;
@@ -481,7 +543,7 @@ video.frame,
 }
 
 .placeholder-card i {
-  font-size: 1.5rem;
+  font-size: var(--text-title);
 }
 
 .sr-only {
@@ -490,46 +552,5 @@ video.frame,
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-</style>
-
-<style>
-.shot {
-  display: block;
-  position: relative;
-  border-radius: var(--radius);
-}
-
-.shot .p-image-preview-mask {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: rgb(8 10 20 / 0.55);
-  color: #fff;
-  font-size: 1.5rem;
-  cursor: zoom-in;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.shot .p-image-preview-mask:hover,
-.shot .p-image-preview-mask:focus-visible {
-  opacity: 1;
-}
-
-.shot-toolbar {
-  gap: 0.35rem;
-}
-
-.p-image-mask {
-  background: rgb(4 5 12 / 0.94);
-  backdrop-filter: blur(4px);
 }
 </style>

@@ -139,16 +139,16 @@ watch(favorites, load, { immediate: true })
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .note {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .empty {
-  padding: 3rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
   line-height: 2.2;
 }

@@ -24,7 +24,7 @@ const popover = useTemplateRef<{ toggle: (event: Event) => void }>('popover')
   display: inline-grid;
   place-items: center;
   flex: none;
-  padding: 0.45rem;
+  padding: var(--space-2);
   margin: -0.45rem;
   border: 0;
   background: none;
@@ -46,9 +46,9 @@ const popover = useTemplateRef<{ toggle: (event: Event) => void }>('popover')
 .hint-body {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
   max-width: 22rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .hint-body :slotted(p) {

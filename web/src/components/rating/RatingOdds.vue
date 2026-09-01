@@ -56,32 +56,32 @@ const exact = computed(
 .odds {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 .figure {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
 
 .figure strong {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   font-weight: 650;
   color: var(--text);
 }
 
 .range {
-  font-size: 0.74rem;
+  font-size: var(--text-xs);
 }
 
 .track {
   position: relative;
   height: 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
@@ -115,7 +115,7 @@ const exact = computed(
 
 .note {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 </style>

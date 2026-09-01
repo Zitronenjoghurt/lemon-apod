@@ -71,16 +71,16 @@ watch([entry, notFound, gap], ([found, missing, empty]) => {
 
 <style scoped>
 .notice {
-  padding: 3rem 2rem;
+  padding: var(--space-8) var(--space-7);
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: center;
 }
 
 .notice h1 {
-  font-size: 1.4rem;
+  font-size: var(--text-title);
 }
 
 .notice p {

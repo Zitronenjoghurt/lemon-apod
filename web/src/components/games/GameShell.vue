@@ -123,20 +123,20 @@ const played = computed(() => resultFor(dailyDay.value))
 
 <style scoped>
 .head {
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-0);
   text-decoration: none;
   color: inherit;
   width: fit-content;
 }
 
 .head .back {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -145,11 +145,11 @@ const played = computed(() => resultFor(dailyDay.value))
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .title-row {
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .blurb {
@@ -167,8 +167,8 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.45rem;
-  padding: 1.1rem 1.25rem 1.15rem;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5) var(--space-5);
   text-align: left;
   font: inherit;
   color: inherit;
@@ -185,8 +185,8 @@ h1 {
 }
 
 .choice-head {
-  gap: 0.5rem;
-  font-size: 1.1rem;
+  gap: var(--space-2);
+  font-size: var(--text-md);
 }
 
 .choice-head > i {
@@ -194,16 +194,16 @@ h1 {
 }
 
 .line {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .state {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-top: 0.15rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  margin-top: var(--space-0);
+  font-size: var(--text-sm);
 }
 
 .state i {
@@ -221,34 +221,34 @@ h1 {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
-  border-radius: 999px;
-  padding: 0.05rem 0.5rem;
-  font-size: 0.75rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
+  font-size: var(--text-xs);
 }
 
 .rules {
   margin: 0;
-  padding-left: 1.1rem;
+  padding-left: var(--space-4);
   color: var(--text-muted);
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: var(--space-2);
   text-wrap: pretty;
 }
 
 .game {
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .bar {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .bar h1 {
-  font-size: 1.2rem;
+  font-size: var(--text-lg);
 }
 
 .bar .back:hover h1 {
@@ -258,12 +258,12 @@ h1 {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   margin-left: auto;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.1rem 0.7rem;
-  font-size: 0.8rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-3);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -279,7 +279,7 @@ h1 {
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: none;
   color: var(--text-muted);

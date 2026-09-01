@@ -89,14 +89,14 @@ const entries = computed<Entry[]>(() => [
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
   max-width: 22rem;
 }
 
 .entry {
   display: flex;
-  gap: 0.6rem;
+  gap: var(--space-2);
   align-items: start;
 }
 
@@ -104,7 +104,7 @@ const entries = computed<Entry[]>(() => [
   flex: none;
   width: 0.8rem;
   height: 0.8rem;
-  margin-top: 0.28rem;
+  margin-top: var(--space-1);
   border-radius: 2px;
 }
 
@@ -118,10 +118,10 @@ const entries = computed<Entry[]>(() => [
   place-items: center;
   width: 1.1rem;
   height: 1.1rem;
-  margin-top: 0.1rem;
+  margin-top: var(--space-0);
   border: 1px solid var(--border);
   border-radius: 3px;
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 1;
 }
@@ -166,14 +166,14 @@ const entries = computed<Entry[]>(() => [
 .text {
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: var(--space-0);
   min-width: 0;
 }
 
 .head {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
@@ -181,7 +181,7 @@ const entries = computed<Entry[]>(() => [
   font-weight: 600;
   color: var(--text);
   text-transform: uppercase;
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.05em;
 }
 
@@ -190,7 +190,7 @@ const entries = computed<Entry[]>(() => [
 }
 
 .range {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 

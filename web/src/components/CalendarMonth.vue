@@ -193,7 +193,7 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
 }
 
 .weekday {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   text-align: center;
@@ -202,7 +202,7 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
 .cell {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   overflow: hidden;
   display: block;
 }
@@ -217,7 +217,7 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 0.1rem;
+  gap: var(--space-0);
   text-decoration: none;
   color: var(--text-muted);
 }
@@ -282,15 +282,15 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
   position: absolute;
   left: 0.25rem;
   top: 0.15rem;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   line-height: 1.4;
 }
 
 .filled .day {
   color: #fff;
-  padding-inline: 0.2rem;
-  border-radius: 0.25rem;
+  padding-inline: var(--space-1);
+  border-radius: var(--radius-sm);
   background: rgb(0 0 0 / 0.45);
 }
 
@@ -328,11 +328,11 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
   }
 
   .cell {
-    border-radius: 0.35rem;
+    border-radius: var(--radius-sm);
   }
 
   .day {
-    font-size: 0.62rem;
+    font-size: var(--text-2xs);
     left: 0.1rem;
   }
 

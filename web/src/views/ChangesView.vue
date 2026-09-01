@@ -113,19 +113,19 @@ onMounted(() => {
 .changes {
   max-width: 62rem;
   margin-inline: auto;
-  gap: 1.2rem;
+  gap: var(--space-5);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-0);
   width: fit-content;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-decoration: none;
   color: var(--text-muted);
 }
@@ -142,21 +142,21 @@ h1 {
 }
 
 .filters {
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .filters button {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.3rem 0.7rem;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
   border-radius: 1.1rem;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -174,21 +174,21 @@ h1 {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .row-card {
-  padding: 0.8rem 1rem;
+  padding: var(--space-3) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .when {
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
   align-items: baseline;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .original {

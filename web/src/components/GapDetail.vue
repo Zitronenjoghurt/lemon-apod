@@ -93,26 +93,26 @@ const span = computed(() =>
 .gap {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: var(--space-4);
 }
 
 .head {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .justify {
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .when {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.9rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -121,15 +121,15 @@ const span = computed(() =>
 }
 
 .nav {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .kicker {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin: 0.2rem 0 0;
-  font-size: 0.72rem;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
@@ -139,20 +139,20 @@ const span = computed(() =>
 }
 
 .title {
-  font-size: 1.7rem;
+  font-size: var(--text-xl);
   text-wrap: balance;
 }
 
 .span {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: var(--space-3);
   max-width: 68ch;
 }
 
@@ -163,7 +163,7 @@ const span = computed(() =>
 }
 
 .care {
-  padding-left: 0.9rem;
+  padding-left: var(--space-4);
   border-left: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   color: var(--text-muted);
 }
@@ -171,8 +171,8 @@ const span = computed(() =>
 .source a {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.9rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -185,7 +185,7 @@ const span = computed(() =>
 }
 
 .lead {
-  margin-top: 0.2rem;
-  font-size: 0.9rem;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
 }
 </style>

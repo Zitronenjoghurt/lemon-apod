@@ -120,15 +120,15 @@ const setup = [
 .discord {
   max-width: 52rem;
   margin-inline: auto;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .head {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lede {
@@ -137,14 +137,14 @@ h1 {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.3rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .panel h2 {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   margin: 0;
@@ -159,13 +159,13 @@ h1 {
 .invite {
   flex-direction: column;
   align-items: stretch;
-  gap: 1.1rem;
+  gap: var(--space-4);
 }
 
 .buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .buttons a {
@@ -185,7 +185,7 @@ h1 {
 }
 
 .pitch {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .steps,
@@ -195,24 +195,24 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .steps li {
   display: flex;
-  gap: 0.7rem;
+  gap: var(--space-3);
   align-items: flex-start;
 }
 
 .steps i {
-  margin-top: 0.15rem;
+  margin-top: var(--space-0);
   color: var(--text-muted);
 }
 
 .text {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
   min-width: 0;
 }
 
@@ -230,7 +230,7 @@ h1 {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.2rem 0.7rem;
+  gap: var(--space-1) var(--space-3);
 }
 
 .name {

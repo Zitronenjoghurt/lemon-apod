@@ -110,20 +110,20 @@ const tally = computed(() => {
 .diff {
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
-  margin-top: 0.6rem;
-  padding: 0.75rem 0.9rem;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: 0.7rem;
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--text) 3%, transparent);
 }
 
 .note {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 0.9rem;
+  gap: var(--space-1) var(--space-4);
   align-items: baseline;
 }
 
@@ -133,12 +133,12 @@ const tally = computed(() => {
 
 .pair i {
   font-size: 0.7em;
-  margin-inline: 0.1rem;
+  margin-inline: var(--space-0);
 }
 
 .tally {
   display: inline-flex;
-  gap: 0.35rem;
+  gap: var(--space-1);
   font-variant-numeric: tabular-nums;
 }
 
@@ -155,12 +155,12 @@ const tally = computed(() => {
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-1);
 }
 
 .label {
   margin: 0;
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;

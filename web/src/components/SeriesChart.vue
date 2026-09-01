@@ -114,21 +114,33 @@ const bars = computed(() =>
   }),
 )
 
+function xAt(index: number): number {
+  if (props.kind !== 'line') return index * COLUMN + COLUMN / 2
+
+  const last = props.points.length - 1
+  return last > 0 ? (index / last) * width.value : width.value / 2
+}
+
 const path = computed(() =>
   props.points
-    .map(
-      (point, index) =>
-        `${index === 0 ? 'M' : 'L'}${index * COLUMN + COLUMN / 2} ${y(point.value)}`,
-    )
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${xAt(index)} ${y(point.value)}`)
     .join(' '),
 )
+
+const LABEL_ROOM = 16
 
 const zones = computed(() =>
   props.bands
     .map((band) => {
       const top = Math.max(Math.min(band.from, band.to), floor.value)
       const bottom = Math.min(Math.max(band.from, band.to), ceiling.value)
-      return { ...band, top: y(bottom), height: y(top) - y(bottom) }
+      const height = y(top) - y(bottom)
+      return {
+        ...band,
+        top: y(bottom),
+        height,
+        roomy: (height / 100) * props.height >= LABEL_ROOM,
+      }
     })
     .filter((band) => band.height > 0.5),
 )
@@ -172,7 +184,7 @@ const reading = computed(() => (at.value === undefined ? undefined : props.point
 const marker = computed(() => {
   if (at.value === undefined) return undefined
   const point = props.points[at.value]
-  return point ? { x: at.value * COLUMN + COLUMN / 2, y: y(point.value) } : undefined
+  return point ? { x: xAt(at.value), y: y(point.value) } : undefined
 })
 
 const ends = computed(() => ({
@@ -199,7 +211,7 @@ const ends = computed(() => ({
         :style="{ top: `${zone.top}%`, height: `${zone.height}%` }"
         class="zone"
       >
-        <span v-if="zone.label" class="zone-label">{{ zone.label }}</span>
+        <span v-if="zone.label && zone.roomy" class="zone-label">{{ zone.label }}</span>
       </div>
 
       <div
@@ -279,13 +291,13 @@ const ends = computed(() => ({
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .head {
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.85rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   flex-wrap: nowrap;
 }
 
@@ -299,7 +311,7 @@ const ends = computed(() => ({
 
 .range {
   flex: none;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -328,8 +340,15 @@ svg {
   position: absolute;
   inset-inline: 0;
   z-index: 0;
-  background: hsl(var(--tone) / 0.11);
-  border-top: 1px solid hsl(var(--tone) / 0.3);
+  background: hsl(var(--tone) / var(--zone-fill));
+  border-top: 1px solid hsl(var(--tone) / var(--zone-edge));
+  animation: settle var(--dur-slow) var(--ease-out) backwards;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+  }
 }
 
 .zone:first-of-type {
@@ -360,7 +379,7 @@ svg {
   position: absolute;
   right: 0.25rem;
   top: 0.1rem;
-  font-size: 0.6rem;
+  font-size: var(--text-2xs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: hsl(var(--tone) / 0.95);
@@ -390,8 +409,8 @@ svg {
   top: 0;
   transform: translateY(-50%);
   z-index: 4;
-  padding-right: 0.25rem;
-  font-size: 0.62rem;
+  padding-right: var(--space-1);
+  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
   pointer-events: none;
@@ -431,8 +450,8 @@ svg {
   right: 0;
   top: 0;
   transform: translateY(-50%);
-  padding: 0 0.25rem;
-  font-size: 0.62rem;
+  padding: 0 var(--space-1);
+  font-size: var(--text-2xs);
   font-weight: 600;
   color: hsl(var(--tone));
   background: var(--bg-elevated);
@@ -441,6 +460,15 @@ svg {
 
 .bar {
   fill: color-mix(in srgb, var(--accent) 62%, transparent);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: grow var(--dur-reveal) var(--ease-out) backwards;
+}
+
+@keyframes grow {
+  from {
+    transform: scaleY(0);
+  }
 }
 
 .bar[data-tone] {
@@ -494,6 +522,16 @@ svg {
   stroke-width: 2;
   stroke-linejoin: round;
   stroke-linecap: round;
+  animation: draw var(--dur-reveal) var(--ease-in-out) backwards;
+}
+
+@keyframes draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
 
 .guide {
@@ -505,8 +543,8 @@ svg {
 
 .axis {
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.72rem;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 </style>

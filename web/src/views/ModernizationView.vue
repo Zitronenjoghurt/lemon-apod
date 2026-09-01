@@ -140,15 +140,15 @@ onMounted(run)
 .modernization {
   max-width: 62rem;
   margin-inline: auto;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   margin: 0;
 }
 
@@ -159,27 +159,27 @@ h2 {
 }
 
 .tile {
-  padding: 1rem 1.1rem;
+  padding: var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
 }
 
 .tile .name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .tile .value {
-  font-size: 1.7rem;
+  font-size: var(--text-xl);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .tile .foot {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .panel {
@@ -195,16 +195,16 @@ h2 {
 }
 
 .note {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .dates {
   list-style: none;
   margin: 0;
   padding: 0;
-  gap: 0.4rem 0.9rem;
+  gap: var(--space-2) var(--space-4);
   flex-wrap: wrap;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -263,14 +263,14 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .breakdown li {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.35rem;
+  gap: var(--space-4);
+  padding-bottom: var(--space-1);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 

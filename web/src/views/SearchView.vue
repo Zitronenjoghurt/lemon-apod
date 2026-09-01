@@ -540,8 +540,8 @@ const onlyExclusions = computed(
 .chips button {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem 0.6rem;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-2);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -562,12 +562,12 @@ const onlyExclusions = computed(
 
 .summary {
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .count {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
@@ -578,16 +578,16 @@ const onlyExclusions = computed(
 .syntax {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.4rem 0.9rem;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
   max-width: 22rem;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .syntax dt code {
   background: color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 0.3rem;
-  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-0) var(--space-1);
   white-space: nowrap;
 }
 
@@ -597,7 +597,7 @@ const onlyExclusions = computed(
 }
 
 .empty {
-  padding: 3rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
   text-wrap: pretty;
 }

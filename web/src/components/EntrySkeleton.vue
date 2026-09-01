@@ -37,17 +37,17 @@
 }
 
 .stack {
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .lines {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 @media (min-width: 62rem) {
   .layout {
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
-    gap: 2rem;
+    gap: var(--space-7);
   }
 }
 </style>

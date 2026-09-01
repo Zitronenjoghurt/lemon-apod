@@ -530,37 +530,37 @@ watch(
 .area {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .board {
-  padding: 1rem 1.3rem 1.3rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
 }
 
 .bar {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 1.5rem;
+  gap: var(--space-6);
   flex-wrap: wrap;
-  padding-bottom: 0.8rem;
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 
 .counts {
-  gap: 1.2rem;
+  gap: var(--space-5);
 }
 
 .figure {
   display: flex;
   align-items: baseline;
-  gap: 0.3rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .figure strong {
-  font-size: 1.1rem;
+  font-size: var(--text-md);
   font-variant-numeric: tabular-nums;
 }
 
@@ -569,8 +569,8 @@ watch(
   max-width: 15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .meter-head {
@@ -579,28 +579,28 @@ watch(
 
 .track {
   height: 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   transition: width 0.3s ease;
 }
 
 .layout {
   display: grid;
-  gap: 1.2rem;
+  gap: var(--space-5);
   align-items: start;
 }
 
 @media (min-width: 58rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr) minmax(15rem, 22rem);
-    gap: 1.6rem;
+    gap: var(--space-6);
   }
 
   .shot {
@@ -628,12 +628,12 @@ watch(
   --cap: 34vh;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .key {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-wrap: pretty;
 }
 
@@ -643,16 +643,16 @@ watch(
 }
 
 .cloze.title {
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-weight: 650;
   letter-spacing: -0.01em;
-  margin-bottom: 1rem;
-  padding-bottom: 1rem;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
 .cloze.body {
-  font-size: 1.02rem;
+  font-size: var(--text-md);
 }
 
 .piece {
@@ -735,22 +735,22 @@ watch(
 }
 
 .piece.filled {
-  background: color-mix(in srgb, #16a34a 26%, transparent);
+  background: color-mix(in srgb, var(--good) 26%, transparent);
 }
 
 /* Every place the last guess opened up, so a hit in the middle of a long entry is not a hunt. The
    solid fill is what tells it apart from the earlier hits, and from a coloured blank beside it. */
 .piece.filled.fresh {
-  background: #16a34a;
+  background: var(--good);
   color: #fff;
 }
 
 .piece.revealed {
-  background: color-mix(in srgb, #dc2626 24%, transparent);
+  background: color-mix(in srgb, var(--bad) 24%, transparent);
 }
 
 .playing {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .dock {
@@ -759,12 +759,12 @@ watch(
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .entry {
-  gap: 0.5rem;
-  padding: 0.5rem;
+  gap: var(--space-2);
+  padding: var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--bg) 85%, transparent);
@@ -787,13 +787,13 @@ watch(
 .notice {
   align-self: flex-start;
   max-width: 100%;
-  margin: 0 0 0 0.15rem;
-  padding: 0 0.5rem;
+  margin: 0 0 0 var(--space-0);
+  padding: 0 var(--space-2);
   min-height: 1.2rem;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   line-height: 1.2rem;
   color: var(--text-muted);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   text-wrap: pretty;
   opacity: 0;
   transition: opacity 0.2s ease;
@@ -819,17 +819,17 @@ watch(
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .tried li {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.05rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
 }
 
 .tried li i {
@@ -848,7 +848,7 @@ watch(
 
 .count {
   font-variant-numeric: tabular-nums;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   opacity: 0.8;
 }
 </style>

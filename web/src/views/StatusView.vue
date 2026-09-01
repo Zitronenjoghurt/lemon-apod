@@ -228,7 +228,7 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             <div class="attribution">
               <ApodCredit
                 :source="featuredFull ? apodPageUrl(featuredFull) : undefined"
-                lead="This picture is from NASA's"
+                lead="NASA's"
                 variant="banner"
               />
               <p v-if="credits.length" class="muted credit">
@@ -337,15 +337,15 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
 
 <style scoped>
 .status {
-  gap: 1.25rem;
+  gap: var(--space-5);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .panel h2 {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
@@ -392,23 +392,23 @@ h1 {
   border-radius: 50%;
   background: rgb(0 0 0 / 0.55);
   color: #fff;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 1.1rem 1.2rem;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
   min-width: 0;
 }
 
 .kicker {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -427,7 +427,7 @@ h1 {
 }
 
 .title {
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   text-wrap: balance;
 }
 
@@ -443,16 +443,16 @@ h1 {
 .date {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
 }
 
 .tag-read {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.45rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
 }
 
 .tag-read i {
@@ -462,37 +462,37 @@ h1 {
 .attribution {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin: 0.25rem 0 0.1rem;
-  padding-left: 0.75rem;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 var(--space-0);
+  padding-left: var(--space-3);
   border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .credit {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0);
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .actions {
-  gap: 0.5rem;
-  margin-top: 0.35rem;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
 .empty {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .ahead {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1.1rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   flex-wrap: wrap;
 }
@@ -505,7 +505,7 @@ h1 {
 .ahead p {
   margin: 0;
   flex: 1 1 18rem;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -516,16 +516,16 @@ h1 {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.25rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .countdown {
   display: flex;
   align-items: baseline;
-  gap: 0.7rem;
+  gap: var(--space-3);
   margin: 0;
   flex-wrap: wrap;
 }
@@ -533,7 +533,7 @@ h1 {
 .part {
   display: flex;
   align-items: baseline;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .figure {
@@ -545,36 +545,36 @@ h1 {
 }
 
 .unit {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .soon {
-  font-size: 1.35rem;
+  font-size: var(--text-title);
   font-weight: 600;
 }
 
 .facts {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-6);
   margin: 0;
   flex-wrap: wrap;
 }
 
 .facts dt {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .facts dd {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-variant-numeric: tabular-nums;
 }
 
 .note {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
   margin-top: auto;
 }
@@ -589,7 +589,7 @@ h1 {
   }
 
   .title {
-    font-size: 1.3rem;
+    font-size: var(--text-lg);
   }
 }
 </style>

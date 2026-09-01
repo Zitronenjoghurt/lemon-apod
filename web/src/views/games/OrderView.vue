@@ -455,20 +455,20 @@ watch(
 
 <style scoped>
 .board {
-  padding: 0.9rem 1rem 1.1rem;
+  padding: var(--space-4) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-3);
 }
 
 .bar {
   position: sticky;
   top: var(--header-h);
   z-index: 2;
-  gap: 0.75rem;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
   margin: -0.9rem -1rem 0;
-  padding: 0.7rem 1rem;
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
   background: var(--bg-elevated);
@@ -482,30 +482,30 @@ watch(
 
 .count i {
   font-size: 0.85em;
-  margin-right: 0.15rem;
+  margin-right: var(--space-0);
 }
 
 .ask {
   margin: 0;
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .ask strong {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .right {
-  color: #16a34a;
+  color: var(--good);
 }
 
 .wrong {
-  color: #dc2626;
+  color: var(--bad);
 }
 
 .pair {
@@ -525,7 +525,7 @@ watch(
 .side {
   display: grid;
   grid-template-rows: 1fr auto;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .side :deep(.game-picture) {
@@ -536,15 +536,15 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   margin: 0;
 }
 
 .when {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.88rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -560,7 +560,7 @@ watch(
 /* The two answers sit under the picture they are about, which is the one being placed. */
 .choices {
   justify-content: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: nowrap;
 }
 
@@ -573,9 +573,9 @@ watch(
 .carried {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 

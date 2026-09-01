@@ -36,7 +36,7 @@ const pieces = computed<Piece[]>(() =>
 <style scoped>
 .text {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   line-height: 1.55;
   text-wrap: pretty;
   overflow-wrap: anywhere;
@@ -45,7 +45,7 @@ const pieces = computed<Piece[]>(() =>
 
 ins,
 del {
-  border-radius: 0.2rem;
+  border-radius: var(--radius-sm);
   padding: 0.02em 0.12em;
   text-decoration: none;
 }

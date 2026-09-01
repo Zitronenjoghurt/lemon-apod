@@ -74,15 +74,15 @@ const filling = computed(() => board.value?.provisional ?? true)
 .rating-card {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1rem 0.9rem 1.1rem 1.2rem;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -90,9 +90,9 @@ const filling = computed(() => board.value?.provisional ?? true)
 .kicker {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
@@ -102,19 +102,19 @@ const filling = computed(() => board.value?.provisional ?? true)
 }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   text-wrap: balance;
 }
 
 .line {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .actions {
-  gap: 0.5rem;
-  margin-top: 0.15rem;
+  gap: var(--space-2);
+  margin-top: var(--space-0);
   flex-wrap: wrap;
 }
 

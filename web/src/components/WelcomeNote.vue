@@ -38,26 +38,26 @@ const { dismissed, dismiss } = useWelcome()
 .welcome {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1.1rem 0.9rem 1.15rem 1.2rem;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-5) var(--space-5);
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
   min-width: 0;
 }
 
 h2 {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   text-wrap: balance;
 }
 
 p {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
   color: var(--text-muted);
 }

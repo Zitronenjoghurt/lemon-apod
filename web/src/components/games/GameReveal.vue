@@ -47,12 +47,12 @@ defineProps<{
 .reveal {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .answer {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   font-weight: 600;
   text-wrap: pretty;
 }
@@ -68,9 +68,9 @@ defineProps<{
 .facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem 1.5rem;
+  gap: var(--space-1) var(--space-6);
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .facts div {
@@ -79,7 +79,7 @@ defineProps<{
 }
 
 .facts dt {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -90,7 +90,7 @@ defineProps<{
 }
 
 .facts .exact {
-  color: #16a34a;
+  color: var(--good);
   font-weight: 600;
 }
 </style>

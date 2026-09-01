@@ -46,7 +46,7 @@ const sides = computed(() => [
 .field {
   margin: 0;
   width: fit-content;
-  padding: 0.1rem 0.5rem;
+  padding: var(--space-0) var(--space-2);
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 8%, transparent);
   font-size: var(--text-xs);
@@ -65,7 +65,7 @@ const sides = computed(() => [
 .pair li {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
   min-width: 0;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);

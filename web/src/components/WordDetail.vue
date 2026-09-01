@@ -98,18 +98,18 @@ const reach = computed(() => use.value?.entries ?? 0)
 
 <style scoped>
 .body {
-  gap: 1.2rem;
+  gap: var(--space-5);
 }
 
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
-  gap: 0.6rem 1rem;
+  gap: var(--space-2) var(--space-4);
   margin: 0;
 }
 
 .facts dt {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -117,20 +117,20 @@ const reach = computed(() => use.value?.entries ?? 0)
 
 .facts dd {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
 }
 
 .facts .date {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .top {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 h3 {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -143,14 +143,14 @@ ul {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.9rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 li {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .count {

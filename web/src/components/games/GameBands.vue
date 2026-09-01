@@ -29,21 +29,21 @@ const slots = () => Math.max(props.total, props.bands.length)
 <style scoped>
 .bands {
   display: inline-flex;
-  gap: 0.22rem;
+  gap: var(--space-1);
   vertical-align: -0.1em;
 }
 
 .band {
   width: 0.85rem;
   height: 0.85rem;
-  border-radius: 0.22rem;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
 }
 
 .small .band {
   width: 0.62rem;
   height: 0.62rem;
-  border-radius: 0.17rem;
+  border-radius: var(--radius-sm);
 }
 
 .band.todo {

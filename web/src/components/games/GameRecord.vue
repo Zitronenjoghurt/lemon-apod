@@ -199,14 +199,14 @@ function confirmClear() {
 
 <style scoped>
 .record {
-  padding: 1rem 1.25rem 1.1rem;
+  padding: var(--space-4) var(--space-5) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 h2 {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
@@ -214,11 +214,11 @@ h2 {
 }
 
 h3 {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 h3 i {
@@ -228,15 +228,15 @@ h3 i {
 
 .split {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
 .side {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.85rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
@@ -244,7 +244,7 @@ h3 i {
 .figures {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
-  gap: 0.75rem 1.1rem;
+  gap: var(--space-3) var(--space-4);
 }
 
 .figure {
@@ -254,13 +254,13 @@ h3 i {
 }
 
 .figure strong {
-  font-size: 1.3rem;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
 .figure span {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -268,13 +268,13 @@ h3 i {
 .best {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0);
   margin: auto 0 0;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .best span {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -282,22 +282,22 @@ h3 i {
 .history {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .history-head {
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .games {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .games td {
-  padding: 0.5rem 1.15rem 0.5rem 0;
+  padding: var(--space-2) var(--space-5) var(--space-2) 0;
   border-top: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -315,7 +315,7 @@ h3 i {
 .kind {
   width: 1%;
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .marks {
@@ -327,8 +327,8 @@ h3 i {
 .copy {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.2rem 0.3rem;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1);
   margin-right: -0.3rem;
   border: 0;
   border-radius: 0.4rem;
@@ -338,7 +338,7 @@ h3 i {
 }
 
 .copy .pi {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   opacity: 0.45;
   transition: opacity 0.15s ease;
 }
@@ -356,28 +356,28 @@ h3 i {
 
 .empty {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .foot {
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-2);
   border-top: 1px solid var(--border);
-  padding-top: 0.6rem;
+  padding-top: var(--space-2);
 }
 
 :deep(.p-paginator) {
   background: transparent;
-  padding: 0.35rem 0;
+  padding: var(--space-1) 0;
 }
 
 @media (max-width: 32rem) {
   .games {
-    font-size: 0.85rem;
+    font-size: var(--text-sm);
   }
 
   .games td {
-    padding-right: 0.6rem;
+    padding-right: var(--space-2);
   }
 
   .squares {
@@ -387,7 +387,7 @@ h3 i {
   .copy {
     justify-content: flex-end;
     min-width: 2.5rem;
-    padding: 0.6rem 0.4rem;
+    padding: var(--space-2) var(--space-2);
     margin: -0.45rem -0.4rem -0.45rem 0;
   }
 }

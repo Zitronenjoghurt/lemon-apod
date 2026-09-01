@@ -89,20 +89,20 @@ async function copy() {
 .outcome {
   max-width: 34rem;
   margin-inline: auto;
-  padding: 1.5rem 1.5rem 1.4rem;
+  padding: var(--space-6) var(--space-6) var(--space-6);
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.09em;
   font-weight: 600;
@@ -116,7 +116,7 @@ async function copy() {
 
 .headline {
   margin: 0;
-  font-size: 1.7rem;
+  font-size: var(--text-xl);
   font-weight: 650;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
@@ -132,15 +132,15 @@ async function copy() {
 .detail {
   align-self: stretch;
   text-align: left;
-  margin-top: 0.35rem;
+  margin-top: var(--space-1);
 }
 
 .meter {
   align-self: stretch;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .meter-head {
@@ -149,26 +149,26 @@ async function copy() {
 
 .track {
   height: 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
 }
 
 .actions {
   justify-content: center;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
 }
 
 .note {
-  margin: 0.15rem 0 0;
+  margin: var(--space-0) 0 0;
   max-width: 46ch;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 </style>

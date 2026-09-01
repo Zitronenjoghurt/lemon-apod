@@ -142,12 +142,12 @@ async function forget(): Promise<void> {
 .help {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: var(--space-4);
 }
 
 h3 {
-  margin: 0 0 0.3rem;
-  font-size: 0.72rem;
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
@@ -155,8 +155,8 @@ h3 {
 }
 
 p {
-  margin: 0 0 0.45rem;
-  font-size: 0.9rem;
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
   line-height: 1.55;
   text-wrap: pretty;
 }
@@ -166,18 +166,18 @@ p:last-child {
 }
 
 .actions {
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin-top: 0.7rem;
+  margin-top: var(--space-3);
 }
 
 .done {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
 }
 
 .warn {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 </style>

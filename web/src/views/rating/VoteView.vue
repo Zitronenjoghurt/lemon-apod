@@ -199,18 +199,18 @@ onMounted(() => void open(true))
 
 <style scoped>
 .vote {
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .bar {
-  gap: 0.75rem;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-0);
   margin-right: auto;
   text-decoration: none;
   color: inherit;
@@ -221,20 +221,20 @@ onMounted(() => void open(true))
 }
 
 h1 {
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.7rem;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-elevated);
   color: inherit;
   font: inherit;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -264,7 +264,7 @@ h1 {
   border-radius: 50%;
   background: none;
   color: var(--text-muted);
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
@@ -276,15 +276,15 @@ h1 {
 
 .ask {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   text-wrap: balance;
 }
 
 .budget {
-  gap: 0.55rem;
+  gap: var(--space-2);
   align-items: center;
-  padding: 2.2rem 1.2rem;
+  padding: 2.2rem var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-elevated);
@@ -292,30 +292,30 @@ h1 {
 }
 
 .budget > i {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
   color: var(--accent);
 }
 
 .budget h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
 }
 
 .budget p {
   margin: 0;
   max-width: 34rem;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   line-height: 1.55;
   text-wrap: pretty;
 }
 
 .board {
-  margin-top: 0.3rem;
-  font-size: 0.88rem;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .credit {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
 }
 
 .pair {
@@ -334,29 +334,29 @@ h1 {
 }
 
 .controls {
-  gap: 0.9rem;
+  gap: var(--space-4);
   justify-content: center;
   flex-wrap: wrap;
 }
 
 .keys {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .tally {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 kbd {
   font: inherit;
-  font-size: 0.73rem;
+  font-size: var(--text-xs);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
-  border-radius: 0.3rem;
-  padding: 0 0.3rem;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
 }
 
 @media (max-width: 42rem) {
@@ -365,11 +365,11 @@ kbd {
   }
 
   .ask {
-    font-size: 1.05rem;
+    font-size: var(--text-md);
   }
 
   .credit {
-    font-size: 0.76rem;
+    font-size: var(--text-xs);
   }
 }
 </style>

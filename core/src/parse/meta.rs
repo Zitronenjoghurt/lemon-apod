@@ -15,6 +15,11 @@ const TEASER_STOPS: &[&str] = &[
     "a service of:",
     "we keep an archive file",
     "<",
+    // The 1995 and 1996 pages put their navigation on the same line as the teaser, separated by
+    // literal pipes: "Tomorrow's picture: A Venus Landing | Archive | Glossary | About APOD |".
+    // A teaser is a picture's name and never contains a pipe, so the first one ends it. This is the
+    // whole rule: matching the nav's words instead would need a list that grows with the site.
+    "|",
 ];
 
 const TEASER_MAX_CHARS: usize = 120;
@@ -87,6 +92,14 @@ mod tests {
             "<body><p>Tomorrow's picture: open water Authors & editors: Someone</p></body>",
         );
         assert_eq!(tomorrow_teaser(&doc).as_deref(), Some("open water"));
+    }
+
+    #[test]
+    fn stops_the_teaser_before_the_page_navigation() {
+        let doc = Html::parse_document(
+            "<body><p>Tomorrow's picture: A Venus Landing | Archive | Glossary | About APOD |</p></body>",
+        );
+        assert_eq!(tomorrow_teaser(&doc).as_deref(), Some("A Venus Landing"));
     }
 
     #[test]

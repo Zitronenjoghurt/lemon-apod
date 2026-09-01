@@ -326,21 +326,21 @@ function bringBackWelcome() {
 .panels {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: var(--space-6);
 }
 
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 h3 {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
@@ -366,8 +366,8 @@ h3 i {
 .line {
   display: flex;
   align-items: center;
-  gap: 0.5rem 0.75rem;
-  padding: 0.6rem 0.75rem;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   min-height: 3rem;
 }
 
@@ -376,12 +376,12 @@ h3 i {
 }
 
 .name {
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   min-width: 0;
 }
 
 .value {
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
@@ -394,7 +394,7 @@ h3 i {
 .pair {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: flex-end;
 }

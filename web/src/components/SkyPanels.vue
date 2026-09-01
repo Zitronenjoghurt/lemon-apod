@@ -334,21 +334,21 @@ function magnitude(value: number): string {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.25rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 h2 {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
 }
 
 .moon-row {
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: nowrap;
 }
 
@@ -358,7 +358,7 @@ h2 {
 
 .phase {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-weight: 620;
   letter-spacing: -0.02em;
   line-height: 1.25;
@@ -367,7 +367,7 @@ h2 {
 
 .lit {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -377,35 +377,35 @@ h2 {
 
 .drift i {
   font-size: 0.75em;
-  margin-right: 0.1rem;
+  margin-right: var(--space-0);
   color: var(--accent);
 }
 
 .facts {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-6);
   margin: 0;
   flex-wrap: wrap;
 }
 
 .facts dt {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .facts dd {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .facts dd span {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .note {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -415,14 +415,14 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .planets li {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
-  font-size: 0.92rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .planet-name {
@@ -437,18 +437,18 @@ h2 {
 }
 
 .where {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
 .foot {
   margin-top: auto;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
 }
 
 .mag {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   min-width: 3ch;
   text-align: right;
 }
@@ -460,20 +460,20 @@ h2 {
 .gauge {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .track {
   position: relative;
   height: 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   transition: width 0.3s ease;
 }
@@ -493,7 +493,7 @@ h2 {
   height: 0.5rem;
   margin-left: -0.25rem;
   transform: translateY(-50%);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-elevated);
   border: 2px solid var(--accent);
 }
@@ -501,9 +501,9 @@ h2 {
 .ends {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
@@ -534,23 +534,23 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.82rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .bands li {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .mark {
   min-width: 2.6rem;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.45rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
   text-align: center;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 
@@ -561,15 +561,15 @@ h2 {
 }
 
 .band-name {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .raised {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -581,9 +581,9 @@ h2 {
 .more {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
+  gap: var(--space-1);
   margin-top: auto;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-decoration: none;
   width: fit-content;
 }
@@ -599,10 +599,10 @@ h2 {
 }
 
 .list {
-  padding: 1.1rem 1.2rem 1.25rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: var(--space-3);
   container-type: inline-size;
 }
 
@@ -615,7 +615,7 @@ h2 {
 .events {
   list-style: none;
   margin: 0;
-  padding: 0 0.35rem 0 0;
+  padding: 0 var(--space-1) 0 0;
   display: flex;
   flex-direction: column;
   max-height: 28rem;
@@ -627,8 +627,8 @@ h2 {
   display: grid;
   grid-template-columns: 1.4rem 5.5rem minmax(0, 1fr) auto;
   align-items: baseline;
-  gap: 0.7rem;
-  padding: 0.5rem 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
   border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
 }
 
@@ -655,7 +655,7 @@ h2 {
 
 .events i {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   justify-self: center;
 }
 
@@ -671,13 +671,13 @@ h2 {
 }
 
 .day {
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   font-weight: 550;
   white-space: nowrap;
 }
 
 .hour {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
@@ -689,7 +689,7 @@ h2 {
 }
 
 .title {
-  font-size: 0.94rem;
+  font-size: var(--text-md);
   text-wrap: pretty;
 }
 
@@ -708,7 +708,7 @@ a.title i {
   font-size: 0.62em;
   opacity: 0.55;
   vertical-align: 0.15em;
-  margin-left: 0.15rem;
+  margin-left: var(--space-0);
 }
 
 a.title:hover i {
@@ -716,27 +716,27 @@ a.title:hover i {
 }
 
 .detail {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .away {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
 @container (max-width: 30rem) {
   .events li {
     grid-template-columns: 1.2rem minmax(0, 1fr) auto;
-    row-gap: 0.15rem;
-    column-gap: 0.6rem;
+    row-gap: var(--space-0);
+    column-gap: var(--space-2);
     align-items: start;
   }
 
   .events i {
     grid-column: 1;
     grid-row: 1 / span 2;
-    padding-top: 0.2rem;
+    padding-top: var(--space-1);
   }
 
   .at {
@@ -744,7 +744,7 @@ a.title:hover i {
     grid-row: 1;
     flex-direction: row;
     align-items: baseline;
-    gap: 0.4rem;
+    gap: var(--space-2);
   }
 
   .away {

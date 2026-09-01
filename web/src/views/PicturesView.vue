@@ -193,16 +193,16 @@ function span(first: string, last: string): string {
 
 <style scoped>
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .lede {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .controls {
-  gap: 0.7rem;
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
 }
@@ -224,9 +224,9 @@ h1 {
 }
 
 .toggle {
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
@@ -235,7 +235,7 @@ h1 {
 }
 
 .count {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -254,7 +254,7 @@ h1 {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .item {
@@ -294,11 +294,11 @@ h1 {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .fallback.gone {
@@ -311,7 +311,7 @@ h1 {
 }
 
 .fallback .what {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -320,30 +320,30 @@ h1 {
   position: absolute;
   right: 0.6rem;
   bottom: 0.6rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgb(0 0 0 / 0.65);
   color: #fff;
-  padding: 0.1rem 0.55rem;
-  font-size: 0.78rem;
+  padding: var(--space-0) var(--space-2);
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .body {
-  padding: 0.8rem 1rem 1rem;
+  padding: var(--space-3) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 .years,
 .detail {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .title {
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
   text-wrap: pretty;
 }

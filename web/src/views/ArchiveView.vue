@@ -13,7 +13,7 @@ import { useCoverage } from '@/composables/useCoverage'
 import { usePreferences } from '@/composables/usePreferences'
 import { useLatestDate } from '@/composables/useStatus'
 import { provideReadScope, useRead } from '@/composables/useRead'
-import { FIRST_ENTRY, month as monthOf, year as yearOf } from '@/utils/date'
+import { FIRST_ENTRY, isoDate, month as monthOf, year as yearOf } from '@/utils/date'
 
 const FIRST_YEAR = yearOf(FIRST_ENTRY)
 const FIRST_MONTH = monthOf(FIRST_ENTRY)
@@ -153,7 +153,43 @@ function toIso(date: Date): string {
 }
 
 function openDate(date: Date) {
+  jumpProblem.value = undefined
+  typed.value = ''
   void router.push(`/${toIso(date)}`)
+}
+
+const jumpProblem = ref<string>()
+const typed = ref('')
+
+const span = computed(() => ({ first: FIRST_ENTRY, last: latest.value ?? toIso(new Date()) }))
+
+function onJumpInput(event: Event) {
+  typed.value = (event.target as HTMLInputElement | null)?.value ?? ''
+  jumpProblem.value = undefined
+}
+
+function jumpToTyped() {
+  const text = typed.value.trim()
+  if (!text) return
+
+  const date = isoDate(text)
+  if (!date) {
+    jumpProblem.value = `Type the date as YYYY-MM-DD. ${text} is not one.`
+    return
+  }
+
+  if (date < span.value.first || date > span.value.last) {
+    jumpProblem.value = `The archive runs from ${span.value.first} to ${span.value.last}.`
+    return
+  }
+
+  jumpProblem.value = undefined
+  void router.push(`/${date}`)
+}
+
+function onJumpKey(event: Event) {
+  if ((event as KeyboardEvent).key !== 'Enter') return
+  jumpToTyped()
 }
 
 function browse(nextYear: number, nextMonth: number) {
@@ -386,12 +422,19 @@ const countLabel = computed(() => {
           placeholder="Go to a date"
           show-icon
           @date-select="openDate"
+          @input="onJumpInput"
+          @keydown="onJumpKey"
           @month-change="onMonthChange"
           @year-change="onYearChange"
         />
 
         <ReadFilter class="read" />
       </div>
+
+      <p v-if="jumpProblem" aria-live="polite" class="row jump-problem">
+        <i aria-hidden="true" class="pi pi-exclamation-circle" />
+        {{ jumpProblem }}
+      </p>
 
       <ReadProgress
         v-if="periodTotal"
@@ -443,32 +486,32 @@ const countLabel = computed(() => {
 
 <style scoped>
 .head {
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .justify {
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .view-label {
-  margin-left: 0.35rem;
+  margin-left: var(--space-1);
 }
 
 .pickers {
-  gap: 0.6rem 0.9rem;
+  gap: var(--space-2) var(--space-4);
   flex-wrap: wrap;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .stepper {
-  gap: 0.35rem;
+  gap: var(--space-1);
   flex-wrap: nowrap;
 }
 
@@ -488,6 +531,13 @@ h1 {
   width: 100%;
 }
 
+.jump-problem {
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-sm);
+  color: hsl(var(--tone-warn));
+}
+
 .read {
   margin-left: auto;
 }
@@ -496,13 +546,13 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
 }
 
 .count {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .sr-only {

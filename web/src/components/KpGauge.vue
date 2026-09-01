@@ -32,13 +32,13 @@ const dial = computed(() => kpPercent(props.kp))
   --kp-figure: 1.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .reading {
   display: flex;
   align-items: baseline;
-  gap: 0.35rem;
+  gap: var(--space-1);
   margin: 0;
   flex-wrap: wrap;
 }
@@ -52,27 +52,27 @@ const dial = computed(() => kpPercent(props.kp))
 }
 
 .unit {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .verdict {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 600;
-  margin-left: 0.3rem;
+  margin-left: var(--space-1);
   text-wrap: balance;
 }
 
 .track {
   position: relative;
   height: 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   transition: width 0.3s ease;
 }
@@ -88,7 +88,7 @@ const dial = computed(() => kpPercent(props.kp))
 
 .caption {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-wrap: pretty;
 }
 </style>

@@ -270,7 +270,7 @@ router.afterEach(() => (menuOpen.value = false))
   left: -9999px;
   top: 0;
   background: var(--bg-elevated);
-  padding: 0.6rem 1rem;
+  padding: var(--space-2) var(--space-4);
   z-index: 10;
 }
 
@@ -291,14 +291,14 @@ router.afterEach(() => (menuOpen.value = false))
 .bar {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   min-height: var(--header-h);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   font-weight: 650;
   letter-spacing: -0.01em;
   text-decoration: none;
@@ -348,7 +348,7 @@ router.afterEach(() => (menuOpen.value = false))
     flex: none;
     align-self: stretch;
     width: var(--rail-w);
-    padding: 0.9rem 0.5rem;
+    padding: var(--space-4) var(--space-2);
     border-right: 1px solid var(--border);
   }
 
@@ -363,7 +363,7 @@ router.afterEach(() => (menuOpen.value = false))
   .sidebar .nav-link {
     position: relative;
     justify-content: center;
-    padding: 0.7rem 0.5rem;
+    padding: var(--space-3) var(--space-2);
   }
 
   .sidebar .nav-link .label {
@@ -376,7 +376,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   .sidebar .group {
     height: 1px;
-    margin: 0.5rem 0.55rem;
+    margin: var(--space-2) var(--space-2);
     padding: 0;
     overflow: hidden;
     color: transparent;
@@ -388,15 +388,15 @@ router.afterEach(() => (menuOpen.value = false))
     top: 0.15rem;
     right: 0.2rem;
     margin: 0;
-    font-size: 0.6rem;
-    padding: 0 0.25rem;
+    font-size: var(--text-2xs);
+    padding: 0 var(--space-1);
   }
 }
 
 @media (min-width: 64rem) {
   .sidebar {
     width: var(--sidebar-w);
-    padding: 1rem 0.6rem;
+    padding: var(--space-4) var(--space-2);
   }
 
   .sidebar .menu {
@@ -406,7 +406,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   .sidebar .nav-link {
     justify-content: flex-start;
-    padding: 0.55rem 0.65rem;
+    padding: var(--space-2) var(--space-3);
   }
 
   .sidebar .nav-link .label {
@@ -418,8 +418,8 @@ router.afterEach(() => (menuOpen.value = false))
 
   .sidebar .group {
     height: auto;
-    margin: 0.75rem 0 0.15rem;
-    padding: 0 0.65rem;
+    margin: var(--space-3) 0 var(--space-0);
+    padding: 0 var(--space-3);
     overflow: visible;
     color: var(--text-muted);
     background: none;
@@ -428,36 +428,36 @@ router.afterEach(() => (menuOpen.value = false))
   .sidebar .count {
     position: static;
     margin-left: auto;
-    font-size: 0.72rem;
-    padding: 0 0.4rem;
+    font-size: var(--text-xs);
+    padding: 0 var(--space-2);
   }
 }
 
 .trailing {
-  gap: 0.15rem;
+  gap: var(--space-0);
   flex: none;
 }
 
 .count {
   display: inline-block;
-  margin-left: 0.35rem;
-  font-size: 0.72rem;
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent);
-  border-radius: 999px;
-  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
 }
 
 .menu {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
 }
 
 .group {
-  margin: 0.75rem 0 0.15rem;
-  padding: 0 0.65rem;
-  font-size: 0.66rem;
+  margin: var(--space-3) 0 var(--space-0);
+  padding: 0 var(--space-3);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.09em;
   font-weight: 600;
@@ -471,9 +471,9 @@ router.afterEach(() => (menuOpen.value = false))
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 0.75rem;
-  border-radius: 0.6rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: var(--text);
 }
@@ -504,17 +504,17 @@ router.afterEach(() => (menuOpen.value = false))
   z-index: 20;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.45rem 1rem;
-  font-size: 0.88rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
   box-shadow: var(--shadow);
   display: flex;
-  gap: 0.45rem;
+  gap: var(--space-2);
   align-items: center;
 }
 
 .page {
-  padding-block: 2rem 3rem;
+  padding-block: var(--space-7) var(--space-8);
   flex: 1 0 auto;
 }
 
@@ -525,32 +525,32 @@ router.afterEach(() => (menuOpen.value = false))
 .site-footer {
   position: relative;
   border-top: 1px solid var(--border);
-  padding-block: 1.1rem 1.4rem;
-  font-size: 0.8rem;
+  padding-block: var(--space-4) var(--space-6);
+  font-size: var(--text-sm);
 }
 
 .version {
   position: absolute;
   left: 0.75rem;
   bottom: 0.5rem;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
 .foot {
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .foot-links {
   justify-content: center;
-  gap: 1.25rem;
+  gap: var(--space-5);
 }
 
 .foot-links a {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   color: var(--text-muted);
   text-decoration: none;
 }

@@ -100,20 +100,18 @@ async function share() {
 .actions {
   display: flex;
   align-items: stretch;
-  gap: 0.1rem;
-  padding-top: 0.4rem;
-  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: var(--space-0);
 }
 
 .actions :deep(.act) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0.45rem 0.4rem;
+  min-width: max-content;
+  padding: var(--space-2) var(--space-2);
   border: 0;
   border-radius: var(--radius-md);
   background: none;
@@ -146,7 +144,7 @@ async function share() {
 
 .actions :deep(.act i) {
   flex: none;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 @media (max-width: 22rem) {

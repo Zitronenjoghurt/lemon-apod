@@ -180,15 +180,15 @@ function appLink(topic: string): string {
 .notifications {
   max-width: 52rem;
   margin-inline: auto;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .head {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .lede {
@@ -197,14 +197,14 @@ h1 {
 }
 
 .panel {
-  padding: 1.1rem 1.2rem 1.3rem;
+  padding: var(--space-4) var(--space-5) var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .panel h2 {
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
@@ -212,7 +212,7 @@ h1 {
 
 .note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -222,15 +222,15 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .items a {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.6rem;
-  border-radius: 0.6rem;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
   text-decoration: none;
   color: inherit;
 }
@@ -241,7 +241,7 @@ h1 {
 
 .items i,
 .topics i {
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   color: var(--accent);
   width: 1.3rem;
   text-align: center;
@@ -256,25 +256,25 @@ h1 {
 }
 
 .label {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   line-height: 1.45;
   text-wrap: pretty;
 }
 
 .cadence {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-left: auto;
 }
 
 .value {
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   font-weight: 550;
 }
 
 .url {
-  font-size: 0.76rem;
+  font-size: var(--text-xs);
   opacity: 0.7;
   overflow-wrap: anywhere;
 }
@@ -285,15 +285,15 @@ h1 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .topics > li {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.5rem 0.7rem;
-  padding: 0.8rem 0.9rem;
-  border-radius: 0.6rem;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
@@ -313,7 +313,7 @@ h1 {
   grid-row: 2;
   display: flex;
   align-items: center;
-  gap: 0.5rem 0.75rem;
+  gap: var(--space-2) var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -326,9 +326,9 @@ h1 {
 .apps {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
 }
 
 @media (max-width: 40rem) {

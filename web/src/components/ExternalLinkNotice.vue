@@ -68,7 +68,7 @@ watch(pending, (value) => {
 
 <style scoped>
 .body {
-  gap: 0.85rem;
+  gap: var(--space-3);
 }
 
 p {
@@ -81,21 +81,21 @@ p {
 }
 
 .address {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   background: color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 0.45rem;
-  padding: 0.5rem 0.65rem;
+  padding: var(--space-2) var(--space-3);
   word-break: break-all;
   color: var(--text-muted);
 }
 
 .remember {
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .remember label {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 </style>

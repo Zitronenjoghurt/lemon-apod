@@ -346,20 +346,20 @@ const endNote = computed(() => {
 .feed {
   max-width: 52rem;
   margin-inline: auto;
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 .head {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .justify {
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -369,21 +369,21 @@ h1 {
 
 .note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .placeholder {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  padding: 1.1rem;
+  gap: var(--space-4);
+  padding: var(--space-4);
 }
 
 .skipped,
 .end {
   text-align: center;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
   margin: 0;
   text-wrap: balance;
 }
@@ -392,18 +392,18 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.7rem;
-  padding-block: 1rem;
+  gap: var(--space-3);
+  padding-block: var(--space-4);
   text-align: center;
 }
 
 .more p {
   margin: 0;
-  font-size: 0.88rem;
+  font-size: var(--text-sm);
 }
 
 .end {
-  padding-block: 1.5rem;
+  padding-block: var(--space-6);
 }
 
 .sentinel {
@@ -438,7 +438,7 @@ h1 {
 
 @media (max-width: 40rem) {
   .feed {
-    gap: 1.1rem;
+    gap: var(--space-4);
   }
 
   .note {

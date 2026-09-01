@@ -148,32 +148,35 @@ export const KP_BANDS: ChartBand[] = [
   },
 ]
 
-export const FLUX_FRAME = { min: 60 }
-export const FLUX_TICKS = [100, 200, 300]
-export const FLUX_MARKS: ChartMark[] = [
+export const FLUX_FRAME = { min: 60, max: 260 }
+export const FLUX_TICKS = [100, 200]
+export const FLUX_BANDS: ChartBand[] = [
   {
-    at: 250,
-    label: 'major',
+    from: 250,
+    to: 400,
     tone: 'alert',
+    label: 'major',
     range: 'above 250 sfu',
     effect:
       'Large active solar regions facing Earth with a severely increased flare and blackout risk.',
   },
   {
-    at: 150,
-    label: 'active',
+    from: 150,
+    to: 250,
     tone: 'warn',
-    range: 'around 150 to 200 sfu',
+    label: 'active',
+    range: '150 to 250 sfu',
     effect:
       'Ordinary solar maximum with an increased risk for solar flares. The upper atmosphere swells and drags low satellites down faster.',
   },
   {
-    at: 70,
-    label: 'quiet',
+    from: 0,
+    to: 150,
     tone: 'calm',
-    range: 'around 70 sfu',
+    label: 'quiet',
+    range: 'below 150 sfu',
     effect:
-      "Few sunspots, little flaring and minimal effect on Earth's atmosphere. Low satellites hold their altitude longer.",
+      'Below the level at which flare risk climbs. Near 70 sfu the sun is close to spotless and the upper atmosphere is at its thinnest, so low satellites hold their altitude longer.',
   },
 ]
 

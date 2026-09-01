@@ -137,7 +137,7 @@ watch(zoomed, (open) => {
 .rating-picture {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
   min-width: 0;
   max-width: calc(var(--cap, 200vh) * var(--ratio));
   margin-inline: auto;
@@ -189,10 +189,10 @@ watch(zoomed, (open) => {
   inset: 0;
   display: grid;
   place-content: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   justify-items: center;
-  font-size: 0.85rem;
-  padding: 1rem;
+  font-size: var(--text-sm);
+  padding: var(--space-4);
   text-align: center;
 }
 
@@ -202,13 +202,13 @@ watch(zoomed, (open) => {
   left: 0.5rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
+  gap: var(--space-1);
+  padding: var(--space-0) var(--space-2);
+  border-radius: var(--radius-pill);
   background: rgb(8 10 20 / 0.72);
   backdrop-filter: blur(6px);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   letter-spacing: 0.04em;
 }
 
@@ -224,26 +224,26 @@ watch(zoomed, (open) => {
 .under {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0);
   min-width: 0;
 }
 
 .line {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: 0.7rem;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
 }
 
 .tag i {
@@ -253,7 +253,7 @@ watch(zoomed, (open) => {
 .peek {
   display: inline-flex;
   align-items: center;
-  gap: 0.1rem;
+  gap: var(--space-0);
   margin-left: auto;
 }
 
@@ -283,7 +283,7 @@ watch(zoomed, (open) => {
   -webkit-line-clamp: 2;
   overflow: hidden;
   margin: 0;
-  font-size: 0.72rem;
+  font-size: var(--text-xs);
   line-height: 1.35;
   text-wrap: pretty;
 }
@@ -295,15 +295,15 @@ watch(zoomed, (open) => {
 .full-wrap {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: var(--space-2);
   align-items: flex-start;
 }
 
 .full-wrap .credit {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
-  font-size: 0.8rem;
+  gap: var(--space-0);
+  font-size: var(--text-sm);
   -webkit-line-clamp: none;
 }
 
@@ -323,8 +323,8 @@ watch(zoomed, (open) => {
 .open-entry {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 

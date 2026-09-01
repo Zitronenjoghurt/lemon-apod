@@ -43,11 +43,11 @@ const games = useGameSummary()
 
 <style scoped>
 .head {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .games {
@@ -60,9 +60,9 @@ h1 {
 .game {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   height: 100%;
-  padding: 1.1rem 1.25rem;
+  padding: var(--space-4) var(--space-5);
   text-decoration: none;
   color: inherit;
   transition:
@@ -76,8 +76,8 @@ h1 {
 }
 
 .title {
-  gap: 0.5rem;
-  font-size: 1.05rem;
+  gap: var(--space-2);
+  font-size: var(--text-md);
 }
 
 .title i {
@@ -86,29 +86,29 @@ h1 {
 
 .game .blurb {
   flex: 1 1 auto;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
 .foot {
-  gap: 0.6rem;
-  font-size: 0.8rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
-  border-radius: 999px;
-  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
 }
 
 .today {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .today i {
@@ -120,7 +120,7 @@ h1 {
 }
 
 .note {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   margin: 0;
   text-wrap: pretty;
 }

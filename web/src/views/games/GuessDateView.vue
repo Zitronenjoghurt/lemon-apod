@@ -518,17 +518,17 @@ onUnmounted(stopTicking)
 
 <style scoped>
 .board {
-  padding: 0.9rem 1rem 1.1rem;
+  padding: var(--space-4) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--space-3);
 }
 
 .bar {
   justify-content: space-between;
-  gap: 0.75rem;
-  font-size: 0.85rem;
-  padding-bottom: 0.7rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border);
 }
 
@@ -545,7 +545,7 @@ onUnmounted(stopTicking)
 .stage {
   --cap: 32vh;
   display: grid;
-  gap: 0.9rem;
+  gap: var(--space-4);
   align-items: start;
 }
 
@@ -553,7 +553,7 @@ onUnmounted(stopTicking)
   .stage {
     --cap: 58vh;
     grid-template-columns: minmax(0, 1.05fr) minmax(18rem, 0.95fr);
-    gap: 1.25rem;
+    gap: var(--space-5);
     align-items: center;
   }
 }
@@ -562,13 +562,13 @@ onUnmounted(stopTicking)
 .settled {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 /* The reveal fills the column the controls it replaced filled, so the strip and the score line up
    with the meters that were there a moment ago. Only the button keeps to its own width. */
 .settled {
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .settled :deep(.p-button) {
@@ -578,22 +578,22 @@ onUnmounted(stopTicking)
 .clue {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.85rem;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
 }
 
 .clue-head {
-  gap: 0.35rem 0.6rem;
+  gap: var(--space-1) var(--space-2);
   min-height: 2rem;
 }
 
 .worth {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.05rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -614,12 +614,12 @@ onUnmounted(stopTicking)
 }
 
 .clue-head :deep(.p-button) {
-  padding-block: 0.15rem;
+  padding-block: var(--space-0);
 }
 
 .track {
   height: 0.4rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 10%, transparent);
   overflow: hidden;
 }
@@ -630,7 +630,7 @@ onUnmounted(stopTicking)
 
 .fill {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
   transition: width 0.6s ease;
 }
@@ -641,40 +641,40 @@ onUnmounted(stopTicking)
 }
 
 .small {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .score-head {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .grade {
   font-weight: 650;
   color: var(--mark);
   background: color-mix(in srgb, var(--mark) 16%, transparent);
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-0) var(--space-2);
 }
 
 .gap {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .earned {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.35rem;
-  font-size: 1.4rem;
+  gap: var(--space-1);
+  font-size: var(--text-title);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   margin-left: auto;
 }
 
 .of {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-weight: 400;
   letter-spacing: 0;
 }
@@ -702,9 +702,9 @@ onUnmounted(stopTicking)
 .answer {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: var(--space-0);
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   font-weight: 600;
   text-wrap: pretty;
 }
@@ -718,20 +718,20 @@ onUnmounted(stopTicking)
 }
 
 .reruns {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-weight: 400;
 }
 
 .landed {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .scale {
   position: relative;
   height: 1.1rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
@@ -741,7 +741,7 @@ onUnmounted(stopTicking)
   height: 0.28rem;
   min-width: 1px;
   transform: translateY(-50%);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--mark);
   opacity: 0.75;
 }
@@ -753,7 +753,7 @@ onUnmounted(stopTicking)
   height: 0.62rem;
   margin-left: -0.31rem;
   transform: translateY(-50%);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .pin.you {
@@ -762,23 +762,23 @@ onUnmounted(stopTicking)
 }
 
 .pin.truth {
-  background: #16a34a;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #16a34a 25%, transparent);
+  background: var(--good);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--good) 25%, transparent);
 }
 
 .legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.2rem 1rem;
+  gap: var(--space-1) var(--space-4);
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .key {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
   color: var(--text-muted);
 }
 
@@ -786,7 +786,7 @@ onUnmounted(stopTicking)
   content: '';
   width: 0.55rem;
   height: 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .key.you::before {
@@ -795,7 +795,7 @@ onUnmounted(stopTicking)
 }
 
 .key.truth::before {
-  background: #16a34a;
+  background: var(--good);
 }
 
 .timeline input[type='range'] {
@@ -806,12 +806,12 @@ onUnmounted(stopTicking)
 .ends {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .picker {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .date-input {
@@ -819,33 +819,33 @@ onUnmounted(stopTicking)
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 0.6rem;
-  padding: 0.5rem 0.7rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
   font-variant-numeric: tabular-nums;
 }
 
 .rounds {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9rem;
-  margin-top: 0.3rem;
+  font-size: var(--text-sm);
+  margin-top: var(--space-1);
 }
 
 .rounds td {
-  padding: 0.3rem 0;
+  padding: var(--space-1) 0;
   border-top: 1px solid var(--border);
   vertical-align: middle;
 }
 
 .rounds td:first-child {
   width: 1%;
-  padding-right: 0.6rem;
+  padding-right: var(--space-2);
   font-variant-numeric: tabular-nums;
 }
 
 .rounds td:nth-child(2) {
   width: 1%;
-  padding-right: 0.7rem;
+  padding-right: var(--space-3);
 }
 
 .pts {

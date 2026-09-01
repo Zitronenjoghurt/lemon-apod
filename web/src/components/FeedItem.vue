@@ -136,6 +136,7 @@ onBeforeUnmount(() => {
 
     <MediaFrame
       v-if="media"
+      :entry="`/${date}`"
       :media="media"
       :source="entry ? apodPageUrl(entry) : undefined"
       :title="title"
@@ -168,15 +169,17 @@ onBeforeUnmount(() => {
           </template>
         </dl>
       </template>
+
+      <template #actions>
+        <EntryActions :date="date" :source-url="entry?.source_url" :title="title">
+          <RouterLink :to="`/${date}`" aria-label="Open this entry on its own page" class="act">
+            <i aria-hidden="true" class="pi pi-arrow-up-right" />
+            <span class="label">Open</span>
+          </RouterLink>
+        </EntryActions>
+      </template>
     </MediaFrame>
     <Skeleton v-else height="18rem" />
-
-    <EntryActions :date="date" :source-url="entry?.source_url" :title="title">
-      <RouterLink :to="`/${date}`" aria-label="Open this entry on its own page" class="act">
-        <i aria-hidden="true" class="pi pi-arrow-up-right" />
-        <span class="label">Open</span>
-      </RouterLink>
-    </EntryActions>
 
     <Message v-if="error && missing" :closable="false" severity="secondary">{{ error }}</Message>
 
@@ -196,8 +199,8 @@ onBeforeUnmount(() => {
 .feed-item {
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  padding: 1.1rem;
+  gap: var(--space-4);
+  padding: var(--space-4);
   content-visibility: auto;
   contain-intrinsic-size: auto 42rem;
 }
@@ -205,11 +208,11 @@ onBeforeUnmount(() => {
 .head {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-1);
 }
 
 .date {
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
 }
 
 .title a {
@@ -233,7 +236,7 @@ onBeforeUnmount(() => {
   height: 0.42rem;
   border-radius: 50%;
   background: var(--accent);
-  margin-right: 0.4rem;
+  margin-right: var(--space-2);
   vertical-align: 0.08em;
 }
 
@@ -244,22 +247,22 @@ onBeforeUnmount(() => {
 }
 
 .lines {
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 
 .credits {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.2rem 0.75rem;
-  font-size: 0.85rem;
+  gap: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
   margin: 0;
 }
 
 .credits dt {
-  font-size: 0.7rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding-top: 0.15rem;
+  padding-top: var(--space-0);
   opacity: 0.75;
 }
 
@@ -269,11 +272,11 @@ onBeforeUnmount(() => {
 
 .rights {
   display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.05rem 0.45rem;
+  margin-left: var(--space-2);
+  padding: var(--space-0) var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.72rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
   white-space: nowrap;
   vertical-align: 0.05em;
   text-decoration: none;
@@ -285,7 +288,7 @@ a.rights:hover {
 
 @media (max-width: 40rem) {
   .feed-item {
-    padding: 0.9rem;
+    padding: var(--space-4);
   }
 }
 </style>

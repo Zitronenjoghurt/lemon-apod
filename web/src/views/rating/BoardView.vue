@@ -286,30 +286,30 @@ onMounted(() => void run())
 
 <style scoped>
 .board {
-  gap: 1.1rem;
+  gap: var(--space-4);
 }
 
 .head {
-  gap: 0.75rem;
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
   text-wrap: balance;
   margin-right: auto;
 }
 
 .tools {
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .pick-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .pick-label i {
@@ -326,7 +326,7 @@ h1 {
   border-radius: 50%;
   background: none;
   color: var(--text-muted);
-  font-size: 1.05rem;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
@@ -337,35 +337,35 @@ h1 {
 }
 
 .state {
-  padding: 0.95rem 1.15rem 1rem;
+  padding: var(--space-4) var(--space-5) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 
 .banner {
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .ask {
   margin: 0;
   flex: 1 1 16rem;
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 600;
   text-wrap: pretty;
 }
 
 .asked {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .call {
-  gap: 0.8rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  padding: 0.7rem 0 0.15rem;
+  padding: var(--space-3) 0 var(--space-0);
 }
 
 .call :deep(.p-button) {
@@ -374,25 +374,25 @@ h1 {
 
 .facts {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-6);
   margin: 0;
   flex-wrap: wrap;
 }
 
 .facts dt {
-  font-size: 0.68rem;
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .facts dd {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
 .credit {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .empty {
@@ -403,7 +403,7 @@ h1 {
 .tiers {
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: var(--space-6);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -412,7 +412,7 @@ h1 {
 .tier {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .tier-head {
@@ -421,9 +421,9 @@ h1 {
   z-index: 3;
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: var(--space-2);
   margin: 0;
-  padding: 0.45rem 0 0.35rem;
+  padding: var(--space-2) 0 var(--space-1);
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
@@ -431,12 +431,12 @@ h1 {
 }
 
 .tier-name {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 650;
 }
 
 .tier-note {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .cards {
@@ -470,19 +470,19 @@ h1 {
   display: grid;
   place-items: center;
   color: var(--text-muted);
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 .entry .body {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.7rem 0.85rem 0.8rem;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-3) var(--space-3);
   min-width: 0;
 }
 
 h3 {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   line-height: 1.3;
   text-wrap: balance;
 }
@@ -499,19 +499,19 @@ h3 a:hover {
 .when {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  font-size: 0.7rem;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 0.4rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
 }
 
 .tag i {
@@ -519,15 +519,15 @@ h3 a:hover {
 }
 
 .odds {
-  margin-top: 0.3rem;
+  margin-top: var(--space-1);
 }
 
 .credit-lines {
   display: flex;
   flex-direction: column;
-  gap: 0.05rem;
-  margin: 0.15rem 0 0;
-  font-size: 0.72rem;
+  gap: var(--space-0);
+  margin: var(--space-0) 0 0;
+  font-size: var(--text-xs);
   line-height: 1.35;
   text-wrap: pretty;
 }

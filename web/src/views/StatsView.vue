@@ -473,20 +473,20 @@ function count(value: number | undefined): string {
 
 <style scoped>
 .stats {
-  gap: 1.5rem;
+  gap: var(--space-6);
 }
 
 h1 {
-  font-size: 1.6rem;
+  font-size: var(--text-xl);
 }
 
 h2 {
-  font-size: 1.1rem;
-  margin-bottom: 0.35rem;
+  font-size: var(--text-md);
+  margin-bottom: var(--space-1);
 }
 
 .head {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .tiles {
@@ -496,27 +496,27 @@ h2 {
 }
 
 .tile {
-  padding: 1rem 1.1rem;
+  padding: var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-0);
 }
 
 .tile .name {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
 .tile .value {
-  font-size: 1.7rem;
+  font-size: var(--text-xl);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
 
 .tile .foot {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
 }
 
 .which {
@@ -538,12 +538,12 @@ h2 {
 .gaps {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-2);
   max-width: 22rem;
 }
 
 .gaps .lede {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   text-wrap: pretty;
 }
 
@@ -553,15 +553,15 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 
 .gaps li {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1.25rem;
-  font-size: 0.88rem;
+  gap: var(--space-5);
+  font-size: var(--text-sm);
 }
 
 .gaps .when {
@@ -571,12 +571,12 @@ h2 {
 .gaps .tail {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: var(--space-2);
   white-space: nowrap;
 }
 
 .gaps .howmany {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -584,8 +584,8 @@ h2 {
 .gaps .why {
   display: inline-flex;
   align-items: baseline;
-  gap: 0.1rem;
-  font-size: 0.8rem;
+  gap: var(--space-0);
+  font-size: var(--text-sm);
   text-decoration: none;
 }
 
@@ -598,21 +598,21 @@ h2 {
 }
 
 .panel {
-  padding: 1.2rem 1.3rem 1.4rem;
+  padding: var(--space-5) var(--space-5) var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: var(--space-4);
 }
 
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
-  gap: 0.8rem 1.2rem;
+  gap: var(--space-3) var(--space-5);
   margin: 0;
 }
 
 .facts dt {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -620,13 +620,13 @@ h2 {
 
 .facts dd {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
   font-variant-numeric: tabular-nums;
 }
 
 .lede {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .lede strong {
@@ -640,15 +640,15 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .bands li {
   display: grid;
   grid-template-columns: 5.5rem 1fr 4rem;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.85rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .band-name {
@@ -661,8 +661,8 @@ h2 {
 }
 
 .extremes {
-  gap: 1.5rem;
-  font-size: 0.88rem;
+  gap: var(--space-6);
+  font-size: var(--text-sm);
   flex-wrap: wrap;
 }
 
@@ -676,7 +676,7 @@ h2 {
 
 .charts {
   display: grid;
-  gap: 1.4rem 1.6rem;
+  gap: var(--space-6) var(--space-6);
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
 }
 
@@ -686,20 +686,20 @@ h2 {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: var(--space-2);
 }
 
 .kinds li {
   display: grid;
   grid-template-columns: 8rem 1fr 4rem;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.88rem;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
 }
 
 .meter {
   height: 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text) 8%, transparent);
   overflow: hidden;
 }
@@ -707,7 +707,7 @@ h2 {
 .fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
 }
 
@@ -716,7 +716,7 @@ h2 {
 }
 
 .controls {
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 
 .word-search {
@@ -738,7 +738,7 @@ h2 {
 }
 
 .count {
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
   margin: 0;
 }
 
@@ -747,26 +747,26 @@ h2 {
   margin: 0;
   padding: 0;
   columns: 19rem;
-  column-gap: 1rem;
+  column-gap: var(--space-4);
 }
 
 .words li {
   break-inside: avoid;
-  margin-bottom: 0.4rem;
+  margin-bottom: var(--space-2);
 }
 
 .word {
   width: 100%;
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
   transition:
@@ -799,23 +799,23 @@ h2 {
 }
 
 .word .entries {
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   flex: none;
 }
 
 .lines {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 
 .empty {
-  padding: 1.5rem 0;
+  padding: var(--space-6) 0;
   text-align: center;
 }
 
 code {
   background: color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 0.3rem;
-  padding: 0.05rem 0.3rem;
+  border-radius: var(--radius-sm);
+  padding: var(--space-0) var(--space-1);
   font-size: 0.9em;
 }
 
@@ -823,8 +823,8 @@ code {
   .kinds li,
   .bands li {
     grid-template-columns: 5rem 1fr 3.5rem;
-    gap: 0.5rem;
-    font-size: 0.82rem;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
   }
 }
 </style>

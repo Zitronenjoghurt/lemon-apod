@@ -28,7 +28,7 @@ defineEmits<{ retry: [] }>()
 .row {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
