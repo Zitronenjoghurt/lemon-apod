@@ -319,10 +319,12 @@ async fn backfill(
     let mut caught_up = false;
 
     while !shutdown.is_triggered() {
+        let now = Utc::now().timestamp();
         let today = today_in(cfg.daily.timezone);
+        let start = backfill_bound(&cfg.daily, today, now);
 
         let bound = match archive
-            .next_target(today, source, cfg.retry_backoff_max, Utc::now().timestamp())
+            .next_target(start, source, cfg.retry_backoff_max, now)
             .await?
         {
             Next::Fetch(date) => date,
@@ -590,11 +592,7 @@ async fn daily(
         let now = Utc::now().with_timezone(&cfg.daily.timezone);
         let today = ApodDate::from(now.date_naive());
 
-        if archive
-            .get(today, source)
-            .await?
-            .is_some_and(|record| record.is_success())
-        {
+        if archive.has(today, source).await? {
             if !sleep_until(
                 &mut shutdown,
                 next_window(&cfg, now),
@@ -654,7 +652,7 @@ async fn daily(
             regroup(&index).await;
         }
 
-        let kept_waiting = match advance.stored {
+        let kept_waiting = match archive.has(today, source).await? {
             true => {
                 sleep_until(
                     &mut shutdown,
@@ -889,6 +887,24 @@ pub fn window_on(daily: &Daily, date: chrono::NaiveDate) -> Option<DateTime<Tz>>
     daily.timezone.from_local_datetime(&naive).earliest()
 }
 
+pub fn still_publishing(daily: &Daily, date: ApodDate, now: i64) -> bool {
+    let Some(opens) = window_on(daily, date.naive()) else {
+        return false;
+    };
+    let Ok(window) = chrono::TimeDelta::from_std(daily.window) else {
+        return false;
+    };
+
+    now < (opens.with_timezone(&Utc) + window).timestamp()
+}
+
+fn backfill_bound(daily: &Daily, today: ApodDate, now: i64) -> ApodDate {
+    match still_publishing(daily, today, now) {
+        true => today.prev(),
+        false => today,
+    }
+}
+
 fn next_window(cfg: &Config, now: DateTime<Tz>) -> DateTime<Utc> {
     let tomorrow = now.date_naive() + chrono::TimeDelta::days(1);
     window_on(&cfg.daily, tomorrow)
@@ -950,6 +966,32 @@ mod tests {
         assert!(
             pace * u32::try_from(windows).unwrap() <= week,
             "the whole collection has to fit inside the period, not overrun it"
+        );
+    }
+
+    #[test]
+    fn the_backfill_starts_behind_the_date_the_daily_poll_is_still_working_on() {
+        let cfg = Config::from_env().unwrap();
+        let today = ApodDate::from_ymd(2026, 9, 1).unwrap();
+        let opens = window_on(&cfg.daily, today.naive())
+            .unwrap()
+            .with_timezone(&Utc)
+            .timestamp();
+
+        assert_eq!(
+            backfill_bound(&cfg.daily, today, opens + 60),
+            today.prev(),
+            "while the window is open the daily poll owns today, and one host should not be \
+             asked for the same date by two workers at once"
+        );
+        assert_eq!(
+            backfill_bound(
+                &cfg.daily,
+                today,
+                opens + cfg.daily.window.as_secs() as i64 + 60
+            ),
+            today,
+            "once the poll has given up the date is the backfill's to chase"
         );
     }
 

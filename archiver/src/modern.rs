@@ -307,6 +307,10 @@ pub async fn fetch_window(
         .recorded_between(Source::Modern, covered.0, covered.1)
         .await?;
     for date in absent_in(covered, &present, &recorded) {
+        if crate::workers::still_publishing(&cfg.daily, date, now) {
+            continue;
+        }
+
         archive
             .record_failure(
                 date,
@@ -665,6 +669,42 @@ mod tests {
         assert_eq!(cfg_delay(&cfg, 1), Duration::from_secs(60));
         assert_eq!(cfg_delay(&cfg, 6), Duration::from_secs(60));
         assert_eq!(cfg_delay(&cfg, 9), Duration::from_secs(90));
+    }
+
+    #[test]
+    fn a_date_still_inside_its_publication_window_is_not_called_missing() {
+        use crate::workers::still_publishing;
+        let cfg = Config::from_env().unwrap();
+        let today = date(2026, 9, 1);
+        let opens = crate::workers::window_on(&cfg.daily, today.naive())
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+            .timestamp();
+
+        assert!(
+            still_publishing(&cfg.daily, today, opens + 60),
+            "a minute after the window opens, NASA has simply not posted yet"
+        );
+        assert!(
+            still_publishing(
+                &cfg.daily,
+                today,
+                opens + cfg.daily.window.as_secs() as i64 - 60
+            ),
+            "and it still has not run out of time a minute before the window closes"
+        );
+        assert!(
+            !still_publishing(
+                &cfg.daily,
+                today,
+                opens + cfg.daily.window.as_secs() as i64 + 60
+            ),
+            "once the window has closed, absent is a fact worth writing down"
+        );
+        assert!(
+            !still_publishing(&cfg.daily, date(2007, 7, 16), opens),
+            "and a date from years ago was never going to arrive late"
+        );
     }
 
     fn cfg_delay(cfg: &Config, seconds: u64) -> Duration {

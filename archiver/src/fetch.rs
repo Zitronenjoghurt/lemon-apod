@@ -36,15 +36,17 @@ pub async fn fetch_and_store(
     let body = match client.get(&url).await {
         Ok(Response::Body(body)) => body,
         Ok(Response::NotFound) => {
-            archive
-                .record_failure(
-                    date,
-                    Source::Legacy,
-                    &url,
-                    Failure::new(Some(404), "not published"),
-                    now,
-                )
-                .await?;
+            if !crate::workers::still_publishing(&cfg.daily, date, now) {
+                archive
+                    .record_failure(
+                        date,
+                        Source::Legacy,
+                        &url,
+                        Failure::new(Some(404), "not published"),
+                        now,
+                    )
+                    .await?;
+            }
             return Ok(Outcome::Absent);
         }
         Ok(Response::Redirected { status, location }) => {

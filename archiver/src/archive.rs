@@ -141,6 +141,13 @@ impl ArchiveStore {
         crate::media::MediaStore::new(self.db.clone())
     }
 
+    pub async fn has(&self, date: ApodDate, source: Source) -> Result<bool> {
+        Ok(self
+            .get(date, source)
+            .await?
+            .is_some_and(|record| record.is_success()))
+    }
+
     pub async fn get(&self, date: ApodDate, source: Source) -> Result<Option<FetchRecord>> {
         let row: Option<(Option<i64>, Option<String>)> = sqlx::query_as(
             "SELECT http_status, sha256 FROM fetches WHERE date_id = ?1 AND source = ?2",
@@ -525,6 +532,41 @@ mod tests {
             .record_success(date, Source::Legacy, "u", "h", 100, now)
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_date_the_collection_has_no_record_for_is_not_a_date_in_hand() {
+        let store = store().await;
+        let yesterday = date(2026, 8, 31);
+        let today = date(2026, 9, 1);
+
+        store
+            .record_success(yesterday, Source::Modern, "u", "h", 100, 10)
+            .await
+            .unwrap();
+        store
+            .record_failure(
+                today,
+                Source::Modern,
+                "u",
+                Failure::new(
+                    Some(404),
+                    "the modern archive holds no record for this date",
+                ),
+                10,
+            )
+            .await
+            .unwrap();
+
+        assert!(store.has(yesterday, Source::Modern).await.unwrap());
+        assert!(
+            !store.has(today, Source::Modern).await.unwrap(),
+            "not published yet is not published, however much else the same pass brought back"
+        );
+        assert!(
+            !store.has(today, Source::Legacy).await.unwrap(),
+            "and one source answering says nothing about the other"
+        );
     }
 
     async fn stale(store: &ArchiveStore, cutoff: i64) -> Option<ApodDate> {
