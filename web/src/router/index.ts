@@ -156,6 +156,7 @@ const router = createRouter({
   scrollBehavior(to, from, saved) {
     if (to.name === 'feed') return false
     if (saved) return saved
+    if (to.path === from.path) return false
     if (
       to.name === from.name &&
       ['search', 'resources', 'pictures', 'stats', 'rating', 'modernization-changes'].includes(

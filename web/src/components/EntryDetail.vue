@@ -245,6 +245,44 @@ watch([() => props.entry.date, hits], async () => {
         <h1 v-else class="title">{{ entry.title }}</h1>
       </header>
 
+      <div v-if="highlight" class="row hits">
+        <i aria-hidden="true" class="pi pi-search" />
+        <span class="term">{{ highlight }}</span>
+        <span aria-live="polite" class="muted count">
+          {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
+        </span>
+        <span v-if="hits" class="row step">
+          <Button
+            aria-label="Previous match"
+            class="hop"
+            icon="pi pi-chevron-up"
+            rounded
+            severity="secondary"
+            size="small"
+            text
+            @click="jump(-1)"
+          />
+          <Button
+            aria-label="Next match"
+            class="hop"
+            icon="pi pi-chevron-down"
+            rounded
+            severity="secondary"
+            size="small"
+            text
+            @click="jump(1)"
+          />
+        </span>
+        <Button
+          class="clear"
+          label="Clear"
+          severity="secondary"
+          size="small"
+          text
+          @click="clearHighlight"
+        />
+      </div>
+
       <div v-if="(entry.picture && !encoreFailed) || changed.length || absent" class="meta">
         <nav
           v-if="entry.picture && !encoreFailed"
@@ -326,42 +364,6 @@ watch([() => props.entry.date, hits], async () => {
             </div>
           </Transition>
         </div>
-      </div>
-
-      <div v-if="highlight" class="row hits">
-        <i aria-hidden="true" class="pi pi-search" />
-        <span class="term">{{ highlight }}</span>
-        <span aria-live="polite" class="muted count">
-          {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
-        </span>
-        <span v-if="hits" class="row step">
-          <Button
-            aria-label="Previous match"
-            icon="pi pi-chevron-up"
-            rounded
-            severity="secondary"
-            size="small"
-            text
-            @click="jump(-1)"
-          />
-          <Button
-            aria-label="Next match"
-            icon="pi pi-chevron-down"
-            rounded
-            severity="secondary"
-            size="small"
-            text
-            @click="jump(1)"
-          />
-        </span>
-        <Button
-          class="clear"
-          label="Clear"
-          severity="secondary"
-          size="small"
-          text
-          @click="clearHighlight"
-        />
       </div>
 
       <div class="layout">
@@ -579,8 +581,6 @@ watch([() => props.entry.date, hits], async () => {
 }
 
 .meta {
-  --rail-min: 3.15rem;
-
   display: flex;
   flex-direction: column;
   align-self: stretch;
@@ -694,6 +694,8 @@ watch([() => props.entry.date, hits], async () => {
 }
 
 .entry {
+  --rail-min: 3.15rem;
+
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -898,18 +900,28 @@ a.rights:hover {
 
 .hits {
   position: sticky;
-  top: var(--header-h);
+  top: calc(var(--header-h) + var(--space-2));
   z-index: 4;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
+  flex-direction: row;
+  align-items: center;
   flex-wrap: wrap;
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  min-height: var(--rail-min);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  align-self: flex-start;
-  max-width: 100%;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, var(--text));
+  backdrop-filter: blur(8px);
+  font-size: var(--text-sm);
+}
+
+.hits .hop,
+.hits .clear {
+  height: 1.65rem;
+}
+
+.hits .hop {
+  width: 1.65rem;
 }
 
 .hits .term {
@@ -933,12 +945,6 @@ a.rights:hover {
 }
 
 @media (max-width: 30rem) {
-  .hits {
-    align-self: stretch;
-    border-radius: var(--radius);
-    padding: var(--space-2) var(--space-2);
-  }
-
   .hits .count {
     order: 3;
     width: 100%;
