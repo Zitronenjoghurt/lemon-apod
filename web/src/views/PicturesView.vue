@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
+import IndexTabs from '@/components/IndexTabs.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import { isLost, type PictureSort, type SortOrder } from '@/api/types'
@@ -52,26 +53,29 @@ const {
 
 let debounce: ReturnType<typeof setTimeout> | undefined
 
+function load() {
+  void router.replace({
+    name: 'pictures',
+    query: {
+      q: query.value || undefined,
+      retitled: retitled.value ? '1' : undefined,
+      page: page.value === 1 ? undefined : String(page.value),
+    },
+  })
+  void run()
+}
+
 function search(resetPage: boolean) {
   if (resetPage) page.value = 1
 
   clearTimeout(debounce)
-  debounce = setTimeout(() => {
-    void router.replace({
-      name: 'pictures',
-      query: {
-        q: query.value || undefined,
-        retitled: retitled.value ? '1' : undefined,
-        page: page.value === 1 ? undefined : String(page.value),
-      },
-    })
-    void run()
-  }, DEBOUNCE_MS)
+  debounce = setTimeout(load, DEBOUNCE_MS)
 }
 
 function onPage(event: { page: number }) {
   page.value = event.page + 1
-  search(false)
+  clearTimeout(debounce)
+  load()
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -90,14 +94,9 @@ function span(first: string, last: string): string {
 
 <template>
   <div class="stack">
-    <header class="stack head">
-      <h1>Encores</h1>
-      <p class="muted lede">
-        Some pictures are too good to be shown just once. Sometimes there is new context or a
-        clearer version of the same image. This is an overview of all APODs that have been reused
-        over time.
-      </p>
-    </header>
+    <h1>Encores</h1>
+
+    <IndexTabs />
 
     <div class="row controls">
       <IconField class="search">
@@ -130,10 +129,10 @@ function span(first: string, last: string): string {
 
     <RetryNotice v-if="error" :busy="loading" :message="error" @retry="run" />
 
-    <h2 v-if="listing" aria-live="polite" class="count">
+    <p v-if="listing" aria-live="polite" class="muted count">
       {{ listing.total.toLocaleString() }} {{ listing.total === 1 ? 'encore' : 'encores' }}
       <template v-if="retitled">that were renamed</template>
-    </h2>
+    </p>
 
     <ApodCredit v-if="listing?.items.length" variant="banner" />
 
@@ -196,15 +195,8 @@ h1 {
   font-size: var(--text-xl);
 }
 
-.lede {
-  margin: 0;
-  font-size: var(--text-sm);
-}
-
 .controls {
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .search {
@@ -231,20 +223,16 @@ h1 {
 }
 
 .sort {
-  flex: 0 0 auto;
+  min-width: 12rem;
 }
 
 .count {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  font-weight: 600;
-  margin: 0 0 -0.5rem;
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
 .empty {
-  padding: 2.5rem 0;
+  padding: var(--space-8) 0;
   text-align: center;
 }
 
@@ -346,5 +334,11 @@ h1 {
   font-size: var(--text-md);
   font-weight: 600;
   text-wrap: pretty;
+}
+
+@media (max-width: 30rem) {
+  .sort {
+    width: 100%;
+  }
 }
 </style>

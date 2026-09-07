@@ -1,5 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::response;
+use crate::bot::BotNumbers;
 use crate::config::{Contact, Discord, Notify};
 use crate::schedule::Schedule;
 use crate::state::ServerState;
@@ -18,7 +19,14 @@ struct Status {
     rating: Rating,
     contact: Contact,
     notify: Notify,
-    discord: Discord,
+    discord: DiscordBlock,
+}
+
+#[derive(Debug, Serialize)]
+struct DiscordBlock {
+    #[serde(flatten)]
+    config: Discord,
+    numbers: Option<BotNumbers>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -57,7 +65,10 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
         rating: rating(&state).await?,
         contact: state.config.contact.clone(),
         notify: state.config.notify.clone(),
-        discord: state.config.discord.clone(),
+        discord: DiscordBlock {
+            config: state.config.discord.clone(),
+            numbers: state.bot.numbers().await,
+        },
     };
 
     Ok(response::cached(state.config.cache_status_secs, status))
@@ -65,4 +76,48 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
 
 pub fn router() -> Router<ServerState> {
     Router::new().route("/", get(get_status))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_discord_block_keeps_the_invite_urls_where_the_web_app_reads_them() {
+        let block = DiscordBlock {
+            config: Discord {
+                invite_url: Some("https://discord.com/invite".to_owned()),
+                user_install_url: Some("https://discord.com/install".to_owned()),
+            },
+            numbers: Some(BotNumbers {
+                announcing: Some(2),
+                subscribers: None,
+                favorites: None,
+                favorite_entries: None,
+            }),
+        };
+
+        let json = serde_json::to_value(&block).unwrap();
+
+        assert_eq!(json["invite_url"], "https://discord.com/invite");
+        assert_eq!(json["user_install_url"], "https://discord.com/install");
+        assert_eq!(json["numbers"]["announcing"], 2);
+        assert!(json["numbers"]["subscribers"].is_null());
+    }
+
+    #[test]
+    fn a_deployment_without_a_bot_still_offers_the_invite_urls() {
+        let block = DiscordBlock {
+            config: Discord {
+                invite_url: Some("https://discord.com/invite".to_owned()),
+                user_install_url: Some("https://discord.com/install".to_owned()),
+            },
+            numbers: None,
+        };
+
+        let json = serde_json::to_value(&block).unwrap();
+
+        assert_eq!(json["invite_url"], "https://discord.com/invite");
+        assert!(json["numbers"].is_null());
+    }
 }

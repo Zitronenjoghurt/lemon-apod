@@ -4,6 +4,7 @@ import type { Slide } from '@/components/MediaLightbox.vue'
 import MediaLightbox from '@/components/MediaLightbox.vue'
 import { api } from '@/api/client'
 import type { GamePicture } from '@/api/types'
+import { measure } from '@/utils/image'
 
 const props = withDefaults(
   defineProps<{
@@ -29,21 +30,19 @@ const revealed = ref<{ width: number; height: number } | null>(null)
 
 watch(
   () => props.full,
-  (file) => {
+  async (file) => {
     revealed.value = null
     if (!file) return
 
-    const probe = new Image()
-    probe.onload = () =>
-      (revealed.value = { width: probe.naturalWidth, height: probe.naturalHeight })
-    probe.src = file
+    const size = await measure(file)
+    if (props.full === file) revealed.value = size
   },
   { immediate: true },
 )
 
 const alone = computed<Slide[]>(() => {
   const size = revealed.value
-  if (!props.full || !size) return []
+  if (!props.full || !size?.width) return []
 
   return [
     {

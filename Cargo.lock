@@ -90,7 +90,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apod-api"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "apod-core",
@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "apod-archiver"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "apod-core",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "apod-core"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "chrono",
  "encoding_rs",
@@ -154,12 +154,13 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.19",
  "tokio",
+ "unicode-normalization",
  "url",
 ]
 
 [[package]]
 name = "apod-discord-bot"
-version = "0.20.0"
+version = "0.21.0"
 dependencies = [
  "anyhow",
  "apod-core",

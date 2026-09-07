@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use apod_core::db::Db;
 use apod_core::{ApodDate, Media, MediaKind};
 use sqlx::Row;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
 const NAME_MAX: usize = 96;
@@ -271,6 +271,7 @@ fn verified(bytes: &[u8], role: Role) -> Result<Format, String> {
 pub enum Outcome {
     Stored { bytes: usize },
     Adopted { bytes: usize },
+    Shared { bytes: usize, path: String },
     Missing,
     Rejected(String),
     Failed(String),
@@ -308,13 +309,32 @@ pub async fn fetch_and_store(
         match client.get_limited(source, limit).await {
             Ok(Response::Body(bytes)) => match verified(&bytes, target.role) {
                 Ok(format) => {
+                    let digest = sha256(&bytes);
+
+                    if let Some(shared) = store.stored_with_digest(target.date, &digest).await? {
+                        store
+                            .record_stored(
+                                target,
+                                &shared,
+                                &digest,
+                                bytes.len(),
+                                format.content_type(),
+                                now,
+                            )
+                            .await?;
+                        return Ok(Outcome::Shared {
+                            bytes: bytes.len(),
+                            path: shared,
+                        });
+                    }
+
                     let path = stored_path(target.date, &named(source, siblings, format));
                     fetch::write_atomically(&cfg.media_path(&path), &bytes)?;
                     store
                         .record_stored(
                             target,
                             &path,
-                            &sha256(&bytes),
+                            &digest,
                             bytes.len(),
                             format.content_type(),
                             now,
@@ -421,9 +441,17 @@ impl Attempted {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Counts {
     pub stored: i64,
+    pub files: i64,
     pub missing: i64,
     pub failed: i64,
     pub bytes: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Duplicate {
+    pub date: ApodDate,
+    pub keep: String,
+    pub extra: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -516,6 +544,64 @@ impl MediaStore {
             .context("looking up an archived media file")
     }
 
+    pub async fn stored_with_digest(&self, date: ApodDate, digest: &str) -> Result<Option<String>> {
+        sqlx::query_scalar(
+            "SELECT path FROM media
+             WHERE date_id = ?1 AND sha256 = ?2 AND path IS NOT NULL
+             ORDER BY path LIMIT 1",
+        )
+        .bind(date.days())
+        .bind(digest)
+        .fetch_optional(self.db.reader())
+        .await
+        .map(Option::flatten)
+        .context("looking for these bytes among what this date has already stored")
+    }
+
+    pub async fn duplicates(&self) -> Result<Vec<Duplicate>> {
+        let rows: Vec<(i64, String, String)> = sqlx::query_as(
+            "SELECT date_id, sha256, path FROM media
+             WHERE path IS NOT NULL AND sha256 IS NOT NULL
+             ORDER BY date_id, sha256, path",
+        )
+        .fetch_all(self.db.reader())
+        .await
+        .context("reading what is stored")?;
+
+        let mut groups: BTreeMap<(i64, String), Vec<String>> = BTreeMap::new();
+        for (days, digest, path) in rows {
+            let paths = groups.entry((days, digest)).or_default();
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+
+        Ok(groups
+            .into_iter()
+            .filter(|(_, paths)| paths.len() > 1)
+            .map(|((days, _), mut paths)| {
+                paths.sort();
+                let keep = paths.remove(0);
+                Duplicate {
+                    date: ApodDate::from_days(days as i32),
+                    keep,
+                    extra: paths,
+                }
+            })
+            .collect())
+    }
+
+    pub async fn repoint(&self, from: &str, to: &str) -> Result<u64> {
+        let done = sqlx::query("UPDATE media SET path = ?2 WHERE path = ?1")
+            .bind(from)
+            .bind(to)
+            .execute(self.db.writer()?)
+            .await
+            .context("pointing a duplicate at the copy that is kept")?;
+
+        Ok(done.rows_affected())
+    }
+
     pub async fn record_stored(
         &self,
         target: &Target,
@@ -605,24 +691,33 @@ impl MediaStore {
     }
 
     pub async fn counts(&self) -> Result<Counts> {
-        let (stored, missing, failed, bytes): (i64, i64, i64, i64) = sqlx::query_as(
+        let (stored, files, missing, failed): (i64, i64, i64, i64) = sqlx::query_as(
             "SELECT
                COUNT(*) FILTER (WHERE path IS NOT NULL),
+               COUNT(DISTINCT path),
                COUNT(*) FILTER (WHERE path IS NULL AND http_status IN (404, 410)),
                COUNT(*) FILTER (WHERE path IS NULL AND (http_status IS NULL
-                                                        OR http_status NOT IN (404, 410))),
-               COALESCE(SUM(bytes), 0)
+                                                        OR http_status NOT IN (404, 410)))
              FROM media",
         )
         .fetch_one(self.db.reader())
         .await
         .context("counting media")?;
 
+        let bytes_on_disk: i64 = sqlx::query_scalar(
+            "SELECT COALESCE(SUM(bytes), 0) FROM
+               (SELECT MAX(bytes) AS bytes FROM media WHERE path IS NOT NULL GROUP BY path)",
+        )
+        .fetch_one(self.db.reader())
+        .await
+        .context("measuring what is on disk")?;
+
         Ok(Counts {
             stored,
+            files,
             missing,
             failed,
-            bytes,
+            bytes: bytes_on_disk,
         })
     }
 }
@@ -1214,5 +1309,168 @@ mod tests {
             Next::Fetch(stale),
             "then, among the ones now due, the one asked about longest ago"
         );
+    }
+
+    fn pair(date: ApodDate) -> (Target, Target) {
+        (
+            Target {
+                url: "https://assets.science.nasa.gov/content/dam/x/Eclipse_1059.jpg".to_owned(),
+                date,
+                role: Role::Image,
+            },
+            Target {
+                url: "https://apod.nasa.gov/apod/image/2608/Eclipse_1059.jpg".to_owned(),
+                date,
+                role: Role::LegacyImage,
+            },
+        )
+    }
+
+    #[tokio::test]
+    async fn one_picture_a_date_holds_twice_is_found_by_its_digest_not_its_name() {
+        let store = store().await;
+        let when = date(2026, 8, 25);
+        let (origin, legacy) = pair(when);
+
+        store
+            .record_stored(
+                &origin,
+                "2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg",
+                "same",
+                4096,
+                "image/jpeg",
+                1,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            store.stored_with_digest(when, "same").await.unwrap(),
+            Some("2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg".to_owned()),
+            "the second fetch of these bytes has somewhere to point instead of writing a copy"
+        );
+        assert_eq!(
+            store.stored_with_digest(when, "different").await.unwrap(),
+            None
+        );
+        assert_eq!(
+            store
+                .stored_with_digest(date(2026, 8, 26), "same")
+                .await
+                .unwrap(),
+            None,
+            "the same picture on another date is its own file and stays one"
+        );
+
+        store
+            .record_stored(
+                &legacy,
+                "2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg",
+                "same",
+                4096,
+                "image/jpeg",
+                2,
+            )
+            .await
+            .unwrap();
+
+        let counts = store.counts().await.unwrap();
+        assert_eq!(counts.stored, 2, "both URLs are archived and both resolve");
+        assert_eq!(counts.files, 1, "and one file answers for both");
+        assert_eq!(
+            counts.bytes, 4096,
+            "a shared copy is counted once, or status reports an archive bigger than the disk"
+        );
+        assert_eq!(
+            store.stored_path(&legacy.url).await.unwrap().as_deref(),
+            Some("2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg"),
+            "asking for the legacy URL still answers with the picture"
+        );
+    }
+
+    #[tokio::test]
+    async fn what_is_already_stored_twice_is_gathered_by_date_and_digest() {
+        let store = store().await;
+        let when = date(2026, 8, 25);
+        let (origin, legacy) = pair(when);
+
+        store
+            .record_stored(
+                &origin,
+                "2026/08/2026-08-25/Eclipse_1059-bbbbbbbb.jpg",
+                "same",
+                4096,
+                "image/jpeg",
+                1,
+            )
+            .await
+            .unwrap();
+        store
+            .record_stored(
+                &legacy,
+                "2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg",
+                "same",
+                4096,
+                "image/jpeg",
+                1,
+            )
+            .await
+            .unwrap();
+
+        let duplicates = store.duplicates().await.unwrap();
+        assert_eq!(duplicates.len(), 1);
+        assert_eq!(
+            duplicates[0],
+            Duplicate {
+                date: when,
+                keep: "2026/08/2026-08-25/Eclipse_1059-aaaaaaaa.jpg".to_owned(),
+                extra: vec!["2026/08/2026-08-25/Eclipse_1059-bbbbbbbb.jpg".to_owned()],
+            },
+            "which copy stays has to be the same on every run, or a rerun churns the archive"
+        );
+
+        assert_eq!(
+            store
+                .repoint(&duplicates[0].extra[0], &duplicates[0].keep)
+                .await
+                .unwrap(),
+            1
+        );
+        assert!(
+            store.duplicates().await.unwrap().is_empty(),
+            "once they share a file there is nothing left to gather"
+        );
+
+        let counts = store.counts().await.unwrap();
+        assert_eq!((counts.stored, counts.files, counts.bytes), (2, 1, 4096));
+    }
+
+    #[tokio::test]
+    async fn a_picture_two_dates_show_is_left_alone() {
+        let store = store().await;
+        let earlier = target(
+            "https://apod.nasa.gov/apod/image/0208/lights.jpg",
+            date(2002, 8, 12),
+        );
+        let later = target(
+            "https://apod.nasa.gov/apod/image/0610/lights.jpg",
+            date(2006, 10, 5),
+        );
+
+        for (target, path) in [
+            (&earlier, "2002/08/2002-08-12/lights.jpg"),
+            (&later, "2006/10/2006-10-05/lights.jpg"),
+        ] {
+            store
+                .record_stored(target, path, "same", 2048, "image/jpeg", 1)
+                .await
+                .unwrap();
+        }
+
+        assert!(
+            store.duplicates().await.unwrap().is_empty(),
+            "an encore is a second entry with its own picture on disk, not a duplicate to reclaim"
+        );
+        assert_eq!(store.counts().await.unwrap().files, 2);
     }
 }

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import PhotoSwipeLightbox from 'photoswipe/lightbox'
 import 'photoswipe/style.css'
 import { APOD_URL } from '@/utils/links'
+import { measure } from '@/utils/image'
 
 export interface Slide {
   src: string
@@ -14,6 +15,7 @@ export interface Slide {
   thumb?: string
   entry?: string
   source?: string
+  credit?: string[]
   from?: () => HTMLImageElement | null
 }
 
@@ -28,15 +30,6 @@ const router = useRouter()
 
 let gallery: PhotoSwipeLightbox | null = null
 
-function sizeOf(url: string): Promise<{ width: number; height: number }> {
-  return new Promise((resolve) => {
-    const probe = new Image()
-    probe.onload = () => resolve({ width: probe.naturalWidth, height: probe.naturalHeight })
-    probe.onerror = () => resolve({ width: 0, height: 0 })
-    probe.src = url
-  })
-}
-
 function creditFor(slide: Slide): string {
   return `
     <span class="apod-mark">
@@ -45,6 +38,7 @@ function creditFor(slide: Slide): string {
         Astronomy Picture of the Day
       </a>
       <span class="apod-work"></span>
+      <span class="apod-credit-lines"></span>
     </span>
   `
 }
@@ -99,8 +93,10 @@ function show(index: number) {
           if (!slide) return
           const link = element.querySelector<HTMLAnchorElement>('.apod-name')
           const work = element.querySelector('.apod-work')
+          const lines = element.querySelector('.apod-credit-lines')
           if (link) link.href = slide.source || APOD_URL
           if (work) work.textContent = slide.alt
+          if (lines) lines.textContent = slide.credit?.join(' · ') ?? ''
         }
         paint()
         pswp.on('change', paint)
@@ -194,7 +190,7 @@ async function upgrade() {
   const shown = pswp.currSlide?.data
   if (!shown || shown.src === big) return
 
-  const size = await sizeOf(big)
+  const size = await measure(big)
   if (!size.width || !gallery?.pswp || gallery.pswp.currIndex !== index) return
 
   const current = gallery.pswp.currSlide?.data
@@ -277,8 +273,23 @@ onBeforeUnmount(close)
   text-wrap: pretty;
 }
 
+.apod-credit-lines {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: rgb(255 255 255 / 0.7);
+  text-wrap: pretty;
+}
+
+.apod-credit-lines:empty {
+  display: none;
+}
+
 @media (max-width: 30rem) {
-  .apod-work {
+  .apod-work,
+  .apod-credit-lines {
     display: none;
   }
 }

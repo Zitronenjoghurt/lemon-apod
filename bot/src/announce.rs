@@ -4,7 +4,9 @@ use crate::store::{Explanation, Guild};
 use apod_core::ApodEntry;
 use chrono::{DateTime, NaiveTime, TimeDelta, Utc};
 use poise::serenity_prelude as serenity;
-use serenity::{ChannelId, CreateAttachment, CreateEmbed, CreateMessage, HttpError, UserId};
+use serenity::{
+    ChannelId, CreateActionRow, CreateAttachment, CreateEmbed, CreateMessage, HttpError, UserId,
+};
 use std::collections::HashMap;
 
 const CONTENT_MAX: usize = 2000;
@@ -67,6 +69,12 @@ pub async fn pass(
     let attachment = card::thumbnail(&state.config, &entry).await;
     let mut embeds: HashMap<Explanation, CreateEmbed> = HashMap::new();
 
+    let buttons = card::buttons(
+        &state.config,
+        &entry,
+        state.store.favorite_count(entry.date).await?,
+    );
+
     let mut pass = Pass::default();
     for guild in owed {
         let embed = embeds
@@ -81,7 +89,7 @@ pub async fn pass(
             })
             .clone();
 
-        match post(ctx, &guild, embed, attachment.clone()).await {
+        match post(ctx, &guild, embed, attachment.clone(), buttons.clone()).await {
             Ok(()) => {
                 state
                     .store
@@ -117,7 +125,15 @@ pub async fn pass(
             })
             .clone();
 
-        match dm(ctx, user.user_id, embed, attachment.clone()).await {
+        match dm(
+            ctx,
+            user.user_id,
+            embed,
+            attachment.clone(),
+            buttons.clone(),
+        )
+        .await
+        {
             Ok(()) => {
                 state
                     .store
@@ -149,8 +165,9 @@ pub async fn dm(
     user_id: u64,
     embed: CreateEmbed,
     attachment: Option<CreateAttachment>,
+    buttons: Vec<CreateActionRow>,
 ) -> serenity::Result<()> {
-    let mut message = CreateMessage::new().embed(embed);
+    let mut message = CreateMessage::new().embed(embed).components(buttons);
     if let Some(attachment) = attachment {
         message = message.add_file(attachment);
     }
@@ -172,12 +189,13 @@ pub async fn post(
     guild: &Guild,
     embed: CreateEmbed,
     attachment: Option<CreateAttachment>,
+    buttons: Vec<CreateActionRow>,
 ) -> serenity::Result<()> {
     let Some(channel_id) = guild.channel_id else {
         return Ok(());
     };
 
-    let mut message = CreateMessage::new().embed(embed);
+    let mut message = CreateMessage::new().embed(embed).components(buttons);
 
     if let Some(content) = content(guild) {
         message = message.content(content);

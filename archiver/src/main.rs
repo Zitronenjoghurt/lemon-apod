@@ -19,7 +19,7 @@ mod video;
 mod weather;
 mod workers;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use apod_core::ApodDate;
 use apod_core::ApodWriter;
 use archive::{ArchiveStore, Next, Source};
@@ -84,6 +84,13 @@ enum Command {
         /// Stop after this many files.
         #[arg(long)]
         limit: Option<usize>,
+    },
+
+    /// Keep one copy of every picture a date holds under more than one name.
+    MediaDedup {
+        /// List what would go without touching anything.
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Generate thumbnails.
@@ -219,6 +226,7 @@ async fn main() -> Result<()> {
         Command::Fetch { date, force } => fetch_one(cfg, date, force).await,
         Command::Reparse { stale, from, to } => reparse_range(cfg, stale, from, to).await,
         Command::Media { limit } => media_backfill(cfg, limit).await,
+        Command::MediaDedup { dry_run } => media_dedup(cfg, dry_run).await,
         Command::Thumbs { force, limit } => thumbs(cfg, force, limit).await,
         Command::Pictures { force, show } => group_pictures(cfg, force, show).await,
         Command::Quality {
@@ -488,7 +496,7 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     scan.finish_and_clear();
 
     let bar = progress::bar("media", limit.unwrap_or(targets.len()));
-    let (mut stored, mut adopted, mut missing, mut failed) = (0, 0, 0, 0);
+    let (mut stored, mut adopted, mut shared, mut missing, mut failed) = (0, 0, 0, 0, 0);
     let mut bytes = 0usize;
     let mut done = 0;
 
@@ -520,6 +528,10 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
                 bytes += size;
                 false
             }
+            Some(media::Outcome::Shared { .. }) => {
+                shared += 1;
+                true
+            }
             Some(media::Outcome::Missing) => {
                 missing += 1;
                 true
@@ -538,11 +550,83 @@ async fn media_backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
     progress::done(
         &bar,
         format!(
-            "stored {stored}, adopted {adopted}, gone {missing}, failed {failed}, {:.1} MB",
+            "stored {stored}, adopted {adopted}, shared {shared}, gone {missing}, \
+             failed {failed}, {:.1} MB",
             bytes as f64 / 1_048_576.0
         ),
     );
     Ok(())
+}
+
+async fn media_dedup(cfg: Config, dry_run: bool) -> Result<()> {
+    let archive = ArchiveStore::open(&cfg.archive_db).await?;
+    let store = archive.media();
+
+    let scan = progress::spinner("reading", "looking for a picture stored twice for one date");
+    let duplicates = store.duplicates().await?;
+    scan.finish_and_clear();
+
+    let (mut dates, mut removed, mut moved, mut reclaimed) = (0usize, 0usize, 0u64, 0u64);
+
+    for duplicate in &duplicates {
+        if !cfg.media_path(&duplicate.keep).exists() {
+            println!(
+                "  {} skipped: {} is recorded but not on disk",
+                duplicate.date, duplicate.keep
+            );
+            continue;
+        }
+
+        dates += 1;
+        for path in &duplicate.extra {
+            let file = cfg.media_path(path);
+            let size = std::fs::metadata(&file).map_or(0, |meta| meta.len());
+            println!("  {} {path} -> {}", duplicate.date, duplicate.keep);
+
+            if dry_run {
+                removed += 1;
+                reclaimed += size;
+                continue;
+            }
+
+            moved += store.repoint(path, &duplicate.keep).await?;
+            match std::fs::remove_file(&file) {
+                Ok(()) => {
+                    removed += 1;
+                    reclaimed += size;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => removed += 1,
+                Err(error) => {
+                    return Err(error).with_context(|| format!("removing {}", file.display()));
+                }
+            }
+        }
+    }
+
+    let freed = format!("{:.1} MB", reclaimed as f64 / 1_048_576.0);
+    let files = plural(removed, "file", "files");
+    let across = plural(dates, "date", "dates");
+
+    match (duplicates.is_empty(), dry_run) {
+        (true, _) => println!("no date holds one picture under more than one name"),
+        (false, true) => println!(
+            "\n{files} across {across} would go, freeing {freed}. \
+             Run it again without --dry-run"
+        ),
+        (false, false) => println!(
+            "\nremoved {files} across {across}, moved {} rows, freed {freed}",
+            moved
+        ),
+    }
+
+    Ok(())
+}
+
+fn plural(count: usize, one: &str, many: &str) -> String {
+    match count {
+        1 => format!("1 {one}"),
+        count => format!("{count} {many}"),
+    }
 }
 
 async fn fetch_one(cfg: Config, date: ApodDate, force: bool) -> Result<()> {

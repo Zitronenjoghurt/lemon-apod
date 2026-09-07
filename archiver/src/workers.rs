@@ -569,6 +569,13 @@ pub async fn media_step(
         media::Outcome::Adopted { bytes } => {
             tracing::debug!(%date, role, bytes, "media already on disk")
         }
+        media::Outcome::Shared { bytes, path } => tracing::info!(
+            %date,
+            role,
+            bytes,
+            %path,
+            "the same bytes are already stored for this date, so no second copy was written"
+        ),
         media::Outcome::Missing => tracing::info!(%date, role, url = %target.url, "media is gone"),
         media::Outcome::Rejected(reason) => {
             tracing::warn!(%date, role, %reason, "refusing to store the response")

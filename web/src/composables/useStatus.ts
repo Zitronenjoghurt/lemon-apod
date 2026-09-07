@@ -52,6 +52,7 @@ export function useStatus() {
     discord,
     botInvite: computed(() => discord.value?.invite_url ?? null),
     botUserInstall: computed(() => discord.value?.user_install_url ?? null),
+    botNumbers: computed(() => discord.value?.numbers ?? null),
     loaded: computed(() => arrived.value),
     latestDate: computed(() => latest.value?.date ?? null),
     refresh: load,

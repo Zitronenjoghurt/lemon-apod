@@ -1,5 +1,6 @@
 #[cfg(feature = "data-read")]
 pub mod apod;
+pub mod contributor;
 pub mod date;
 #[cfg(feature = "data")]
 pub mod db;
@@ -10,6 +11,7 @@ pub mod media;
 pub mod merge;
 #[cfg(feature = "notify-data")]
 pub mod notify;
+pub mod object;
 pub mod original;
 pub mod parse;
 pub mod quality;
@@ -18,16 +20,18 @@ pub mod rating;
 pub mod resource;
 #[cfg(feature = "sky")]
 pub mod sky;
+pub mod table;
 pub mod text;
 
 #[cfg(feature = "data-write")]
 pub use apod::ApodWriter;
 #[cfg(feature = "data-read")]
 pub use apod::{
-    AnchorCount, ApodError, ApodReader, ApodResult, Appearance, Changed, Cloze, ClozePiece, Deal,
-    FieldDivergence, Filters, Fingerprint, GameEntry, HostCount, Listing, Order, Page, Picture,
-    PictureAppearances, PictureFilters, PictureGroup, PictureOrder, PictureSummary, Resource,
-    ResourceFilters, ResourceOrder, ResourceRef, ResourceRefs, SearchResults, Snippet, Stats,
+    AnchorCount, ApodError, ApodReader, ApodResult, Appearance, CatalogCount, Changed, Cloze,
+    ClozePiece, Contributor, CreditOrder, Deal, FieldDivergence, Filters, Fingerprint, GameEntry,
+    HostCount, Listing, ObjectCount, ObjectOrder, Order, Page, Picture, PictureAppearances,
+    PictureFilters, PictureGroup, PictureOrder, PictureSummary, Resource, ResourceFilters,
+    ResourceOrder, ResourceRef, ResourceRefs, RoleCount, SearchResults, Snippet, Stats,
     TextSummary, Timeline, Word, WordFilters, WordOrder, WordUse,
 };
 pub use date::ApodDate;
@@ -42,5 +46,4 @@ pub use parse::{ParseError, parse_page};
 pub use quality::{QualityWarning, quality_control};
 
 pub const APOD_BASE_URL: &str = "https://apod.nasa.gov/apod/";
-
-pub const PARSER_VERSION: u32 = 7;
+pub const PARSER_VERSION: u32 = 10;

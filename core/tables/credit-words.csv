@@ -1,0 +1,160 @@
+role,word
+group,observatory
+group,university
+group,univ
+group,institute
+group,institution
+group,laboratory
+group,labs
+group,collaboration
+group,consortium
+group,team
+group,project
+group,mission
+group,survey
+group,society
+group,foundation
+group,college
+group,school
+group,department
+group,telescope
+group,spacecraft
+group,orbiter
+group,rover
+group,satellite
+group,agency
+group,center
+group,centre
+group,association
+group,program
+group,programme
+group,press
+group,magazine
+group,museum
+group,archive
+group,systems
+group,academy
+group,collective
+group,network
+group,initiative
+group,corporation
+prefix,u
+prefix,univ
+prefix,inst
+prefix,dept
+prefix,dep
+prefix,obs
+ignore,the
+ignore,and
+ignore,with
+ignore,of
+ignore,et al
+ignore,others
+ignore,copyright
+ignore,credit
+ignore,credits
+ignore,acknowledgment
+ignore,acknowledgement
+ignore,image
+ignore,images
+ignore,picture
+ignore,video
+ignore,animation
+ignore,illustration
+ignore,processing
+ignore,data
+ignore,text
+ignore,music
+ignore,sound
+ignore,x-ray
+ignore,xray
+ignore,x ray
+ignore,optical
+ignore,infrared
+ignore,ultraviolet
+ignore,uv
+ignore,radio
+ignore,gamma
+ignore,gamma-ray
+ignore,visible
+ignore,submillimeter
+ignore,submillimetre
+ignore,microwave
+ignore,composite
+ignore,by
+ignore,at
+ignore,et
+ignore,al
+ignore,in
+ignore,on
+ignore,as
+ignore,via
+ignore,from
+ignore,for
+ignore,courtesy
+ignore,jr
+ignore,sr
+ignore,inc
+ignore,ltd
+ignore,llc
+ignore,gmbh
+ignore,team member
+ignore,see
+ignore,also
+ignore,more
+ignore,here
+ignore,link
+ignore,links
+ignore,adapted
+ignore,based
+ignore,after
+ignore,original
+ignore,source
+ignore,sources
+ignore,additional
+ignore,special
+ignore,thanks
+ignore,assistance
+ignore,support
+ignore,help
+ignore,translation
+ignore,narration
+ignore,editing
+strip,image processing by
+strip,data processing by
+strip,colour photography by
+strip,color photography by
+strip,photographed by
+strip,photography by
+strip,photograph by
+strip,processing by
+strip,animation by
+strip,illustration by
+strip,composite by
+strip,mosaic by
+strip,imaging by
+strip,narration by
+strip,images by
+strip,video by
+strip,image by
+strip,text by
+strip,music by
+strip,courtesy of
+strip,courtesy
+ignore,crew
+group,observatoire
+group,observatorio
+group,osservatorio
+group,sternwarte
+group,groupe
+group,grupo
+group,universite
+group,universidad
+group,universitat
+strip,image processed by
+strip,image montage by
+strip,reprocessed by
+strip,processed by
+strip,stitched by
+strip,montage by
+strip,anaglyph by

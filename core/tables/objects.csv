@@ -1,0 +1,274 @@
+name,id,catalog
+Sun,Sun,solar
+Moon,Moon,solar
+Mercury,Mercury,solar
+Venus,Venus,solar
+Earth,Earth,solar
+Mars,Mars,solar
+Jupiter,Jupiter,solar
+Saturn,Saturn,solar
+Uranus,Uranus,solar
+Neptune,Neptune,solar
+Pluto,Pluto,solar
+Ceres,Ceres,solar
+Vesta,Vesta,solar
+Io,Io,solar
+Europa,Europa,solar
+Ganymede,Ganymede,solar
+Callisto,Callisto,solar
+Titan,Titan,solar
+Enceladus,Enceladus,solar
+Iapetus,Iapetus,solar
+Mimas,Mimas,solar
+Dione,Dione,solar
+Rhea,Rhea,solar
+Tethys,Tethys,solar
+Triton,Triton,solar
+Charon,Charon,solar
+Phobos,Phobos,solar
+Deimos,Deimos,solar
+Comet Halley,Comet Halley,comet
+Halley's Comet,Comet Halley,comet
+Comet Hale-Bopp,Comet Hale-Bopp,comet
+Comet Hyakutake,Comet Hyakutake,comet
+Comet NEOWISE,Comet NEOWISE,comet
+Comet McNaught,Comet McNaught,comet
+Comet Lovejoy,Comet Lovejoy,comet
+Comet ISON,Comet ISON,comet
+Comet Leonard,Comet Leonard,comet
+Comet Holmes,Comet Holmes,comet
+Comet Tsuchinshan-ATLAS,Comet Tsuchinshan-ATLAS,comet
+Churyumov-Gerasimenko,67P,comet
+67P,67P,comet
+Milky Way,Milky Way,named
+Large Magellanic Cloud,Large Magellanic Cloud,named
+Small Magellanic Cloud,Small Magellanic Cloud,named
+LMC,LMC,named
+SMC,SMC,named
+Orion Nebula,M42,messier
+Great Nebula in Orion,M42,messier
+Andromeda Galaxy,M31,messier
+Pleiades,M45,messier
+Ring Nebula,M57,messier
+Crab Nebula,M1,messier
+Lagoon Nebula,M8,messier
+Trifid Nebula,M20,messier
+Eagle Nebula,M16,messier
+Sombrero Galaxy,M104,messier
+Whirlpool Galaxy,M51,messier
+Beehive Cluster,M44,messier
+Dumbbell Nebula,M27,messier
+Owl Nebula,M97,messier
+Sunflower Galaxy,M63,messier
+Pinwheel Galaxy,M101,messier
+Cigar Galaxy,M82,messier
+Triangulum Galaxy,M33,messier
+Black Eye Galaxy,M64,messier
+Wild Duck Cluster,M11,messier
+Swan Nebula,M17,messier
+Omega Nebula,M17,messier
+Butterfly Cluster,M6,messier
+Ptolemy Cluster,M7,messier
+Southern Pinwheel,M83,messier
+Little Dumbbell,M76,messier
+Horsehead Nebula,Barnard 33,barnard
+Helix Nebula,NGC 7293,ngc
+Rosette Nebula,NGC 2237,ngc
+North America Nebula,NGC 7000,ngc
+Veil Nebula,NGC 6960,ngc
+Cone Nebula,NGC 2264,ngc
+Christmas Tree Cluster,NGC 2264,ngc
+Flame Nebula,NGC 2024,ngc
+Carina Nebula,NGC 3372,ngc
+Tarantula Nebula,NGC 2070,ngc
+Omega Centauri,NGC 5139,ngc
+Cat's Eye Nebula,NGC 6543,ngc
+Eskimo Nebula,NGC 2392,ngc
+California Nebula,NGC 1499,ngc
+Bubble Nebula,NGC 7635,ngc
+Crescent Nebula,NGC 6888,ngc
+Jewel Box,NGC 4755,ngc
+Sculptor Galaxy,NGC 253,ngc
+Antennae Galaxies,NGC 4038,ngc
+Iris Nebula,NGC 7023,ngc
+Fireworks Galaxy,NGC 6946,ngc
+Needle Galaxy,NGC 4565,ngc
+Cat's Paw Nebula,NGC 6334,ngc
+Heart Nebula,IC 1805,ic
+Soul Nebula,IC 1848,ic
+Elephant's Trunk Nebula,IC 1396,ic
+Witch Head Nebula,IC 2118,ic
+Flaming Star Nebula,IC 405,ic
+Seagull Nebula,IC 2177,ic
+Cocoon Nebula,IC 5146,ic
+Betelgeuse,Betelgeuse,star
+Sirius,Sirius,star
+Antares,Antares,star
+Polaris,Polaris,star
+Vega,Vega,star
+Deneb,Deneb,star
+Altair,Altair,star
+Rigel,Rigel,star
+Arcturus,Arcturus,star
+Aldebaran,Aldebaran,star
+Spica,Spica,star
+Canopus,Canopus,star
+Capella,Capella,star
+Alpha Centauri,Alpha Centauri,star
+Proxima Centauri,Proxima Centauri,star
+Algol,Algol,star
+Mira,Mira,star
+Eta Carinae,Eta Carinae,star
+Rho Ophiuchi,Rho Ophiuchi,star
+Alnitak,Alnitak,star
+Alnilam,Alnilam,star
+Mintaka,Mintaka,star
+Fomalhaut,Fomalhaut,star
+Achernar,Achernar,star
+Bellatrix,Bellatrix,star
+Castor,Castor,star
+Pollux,Pollux,star
+Regulus,Regulus,star
+Albireo,Albireo,star
+Mizar,Mizar,star
+Alcor,Alcor,star
+Thuban,Thuban,star
+Sadr,Sadr,star
+Denebola,Denebola,star
+Shaula,Shaula,star
+Alphard,Alphard,star
+Hamal,Hamal,star
+Markab,Markab,star
+Menkar,Menkar,star
+Rasalhague,Rasalhague,star
+Vindemiatrix,Vindemiatrix,star
+Zubenelgenubi,Zubenelgenubi,star
+Gacrux,Gacrux,star
+Acrux,Acrux,star
+Mimosa,Mimosa,star
+Sheliak,Sheliak,star
+Sulafat,Sulafat,star
+Tabby's Star,Tabby's Star,star
+Barnard's Star,Barnard's Star,star
+Perseids,Perseids,shower
+Perseid,Perseids,shower
+Leonids,Leonids,shower
+Leonid,Leonids,shower
+Geminids,Geminids,shower
+Geminid,Geminids,shower
+Quadrantids,Quadrantids,shower
+Quadrantid,Quadrantids,shower
+Orionids,Orionids,shower
+Orionid,Orionids,shower
+Lyrids,Lyrids,shower
+Lyrid,Lyrids,shower
+Taurids,Taurids,shower
+Taurid,Taurids,shower
+Draconids,Draconids,shower
+Draconid,Draconids,shower
+Eta Aquariids,Eta Aquariids,shower
+Eta Aquarids,Eta Aquariids,shower
+Ursids,Ursids,shower
+Andromedids,Andromedids,shower
+Andromeda,Andromeda,constellation
+Antlia,Antlia,constellation
+Apus,Apus,constellation
+Aquarius,Aquarius,constellation
+Aquila,Aquila,constellation
+Ara,Ara,constellation
+Aries,Aries,constellation
+Auriga,Auriga,constellation
+Bootes,Bootes,constellation
+Caelum,Caelum,constellation
+Camelopardalis,Camelopardalis,constellation
+Canes Venatici,Canes Venatici,constellation
+Canis Major,Canis Major,constellation
+Canis Minor,Canis Minor,constellation
+Capricornus,Capricornus,constellation
+Carina,Carina,constellation
+Cassiopeia,Cassiopeia,constellation
+Centaurus,Centaurus,constellation
+Cepheus,Cepheus,constellation
+Cetus,Cetus,constellation
+Chamaeleon,Chamaeleon,constellation
+Circinus,Circinus,constellation
+Columba,Columba,constellation
+Coma Berenices,Coma Berenices,constellation
+Corona Australis,Corona Australis,constellation
+Corona Borealis,Corona Borealis,constellation
+Corvus,Corvus,constellation
+Crux,Crux,constellation
+Cygnus,Cygnus,constellation
+Delphinus,Delphinus,constellation
+Dorado,Dorado,constellation
+Draco,Draco,constellation
+Equuleus,Equuleus,constellation
+Eridanus,Eridanus,constellation
+Fornax,Fornax,constellation
+Gemini,Gemini,constellation
+Grus,Grus,constellation
+Hercules,Hercules,constellation
+Horologium,Horologium,constellation
+Hydra,Hydra,constellation
+Hydrus,Hydrus,constellation
+Lacerta,Lacerta,constellation
+Leo Minor,Leo Minor,constellation
+Lepus,Lepus,constellation
+Libra,Libra,constellation
+Lupus,Lupus,constellation
+Lynx,Lynx,constellation
+Lyra,Lyra,constellation
+Microscopium,Microscopium,constellation
+Monoceros,Monoceros,constellation
+Musca,Musca,constellation
+Ophiuchus,Ophiuchus,constellation
+Orion,Orion,constellation
+Pavo,Pavo,constellation
+Pegasus,Pegasus,constellation
+Perseus,Perseus,constellation
+Pisces,Pisces,constellation
+Piscis Austrinus,Piscis Austrinus,constellation
+Puppis,Puppis,constellation
+Pyxis,Pyxis,constellation
+Sagitta,Sagitta,constellation
+Sagittarius,Sagittarius,constellation
+Scorpius,Scorpius,constellation
+Scutum,Scutum,constellation
+Serpens,Serpens,constellation
+Sextans,Sextans,constellation
+Taurus,Taurus,constellation
+Telescopium,Telescopium,constellation
+Triangulum Australe,Triangulum Australe,constellation
+Tucana,Tucana,constellation
+Ursa Major,Ursa Major,constellation
+Ursa Minor,Ursa Minor,constellation
+Vulpecula,Vulpecula,constellation
+Volans,Volans,constellation
+International Space Station,International Space Station,named
+ISS,International Space Station,named
+Galactic Center,Galactic Centre,named
+Galactic Centre,Galactic Centre,named
+Sagittarius A*,Galactic Centre,named
+Sgr A*,Galactic Centre,named
+Eros,433 Eros,solar
+433 Eros,433 Eros,solar
+Bennu,Bennu,solar
+Ryugu,Ryugu,solar
+Itokawa,Itokawa,solar
+Pallas,Pallas,solar
+Juno,Juno,solar
+Psyche,Psyche,solar
+Dimorphos,Dimorphos,solar
+Didymos,Didymos,solar
+Arrokoth,Arrokoth,solar
+Oumuamua,Oumuamua,solar
+'Oumuamua,Oumuamua,solar
+Comet Ikeya-Zhang,Comet Ikeya-Zhang,comet
+Comet Pons-Brooks,Comet Pons-Brooks,comet
+Comet Lulin,Comet Lulin,comet
+Comet Nishimura,Comet Nishimura,comet
+Comet Pojmanski,Comet Pojmanski,comet
+Comet Borrelly,Comet Borrelly,comet
+Comet Encke,Comet Encke,comet
+Comet Hartley,Comet Hartley,comet
+Comet Garradd,Comet Garradd,comet

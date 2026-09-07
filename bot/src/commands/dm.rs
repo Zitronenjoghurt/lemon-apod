@@ -1,14 +1,12 @@
 use crate::Context;
+use crate::colour::{GREEN, GREY};
 use crate::error::{BotError, BotResult};
 use crate::store::Explanation;
 use crate::{announce, card};
 use apod_core::ApodDate;
 use chrono::Utc;
 use poise::CreateReply;
-use poise::serenity_prelude::{Colour, CreateEmbed};
-
-const GREY: Colour = Colour::new(0xA0_97_A1);
-const GREEN: Colour = Colour::new(0xAC_B5_65);
+use poise::serenity_prelude::CreateEmbed;
 
 /// Get each new Astronomy Picture of the Day as a direct message.
 #[poise::command(slash_command)]
@@ -42,8 +40,15 @@ pub async fn dm(
 
         let attachment = card::thumbnail(&state.config, &entry).await;
         let embed = card::embed(&state.config, &entry, user.explanation, attachment.as_ref());
+        let buttons = card::buttons(
+            &state.config,
+            &entry,
+            state.store.favorite_count(entry.date).await?,
+        );
 
-        if let Err(error) = announce::dm(ctx.serenity_context(), user_id, embed, attachment).await {
+        if let Err(error) =
+            announce::dm(ctx.serenity_context(), user_id, embed, attachment, buttons).await
+        {
             if announce::cannot_dm(&error) {
                 ctx.send(
                     CreateReply::default()

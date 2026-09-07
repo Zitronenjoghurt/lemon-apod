@@ -1,9 +1,10 @@
 #![cfg(feature = "data-write")]
 
 use apod_core::apod::{
-    Changed, Filters, Order, PictureFilters, PictureOrder, ResourceFilters, ResourceOrder,
-    SCHEMA_VERSION, Snippet, WordFilters, WordOrder,
+    Changed, CreditOrder, Filters, ObjectOrder, Order, PictureFilters, PictureOrder,
+    ResourceFilters, ResourceOrder, SCHEMA_VERSION, Snippet, WordFilters, WordOrder,
 };
+use apod_core::contributor::Kind;
 use apod_core::db::DbConfig;
 use apod_core::{
     ApodDate, ApodEntry, ApodReader, ApodWriter, Credit, KindFilter, Media, MediaKind, Provenance,
@@ -1792,4 +1793,432 @@ async fn a_search_with_no_terms_is_the_filters_on_their_own() {
         nothing_to_match.total, 0,
         "a query made only of exclusions still matches nothing, and is not everything"
     );
+}
+
+fn credited(date: &str, title: &str, credit_html: &str) -> ApodEntry {
+    let mut entry = entry(date, title, "The sky.");
+    entry.credits = vec![Credit {
+        role: "Image Credit & Copyright".into(),
+        html: credit_html.into(),
+        text: String::new(),
+    }];
+    entry
+}
+
+async fn with_credits(rows: &[(&str, &str, &str)]) -> (ApodWriter, PathBuf) {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+    let entries: Vec<apod_core::Merged> = rows
+        .iter()
+        .map(|(date, title, html)| credited(date, title, html).into())
+        .collect();
+    writer.upsert_all(&entries).await.unwrap();
+    (writer, path)
+}
+
+#[tokio::test]
+async fn one_photographer_spelled_two_ways_is_one_contributor() {
+    let (writer, path) = with_credits(&[
+        (
+            "2024-03-05",
+            "Saturn",
+            r#"<a href="https://gendler.example/">Robert Gendler</a>"#,
+        ),
+        (
+            "2024-03-06",
+            "Jupiter",
+            r#"<a href="https://gendler.example/">Robert Gendler</a>, <a href="https://www.nasa.gov/">NASA</a>"#,
+        ),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let people = reader
+        .contributors(None, Some(Kind::Person), CreditOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(people.len(), 1, "{people:?}");
+    assert_eq!(people[0].id, "robert gendler");
+    assert_eq!(people[0].label, "Robert Gendler");
+    assert_eq!(people[0].entries, 2);
+    assert_eq!(people[0].url.as_deref(), Some("https://gendler.example/"));
+    assert_eq!(people[0].first, "2024-03-05".parse().unwrap());
+    assert_eq!(people[0].last, "2024-03-06".parse().unwrap());
+
+    let bodies = reader
+        .contributors(None, Some(Kind::Group), CreditOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(bodies.len(), 1, "{bodies:?}");
+    assert_eq!(bodies[0].id, "nasa");
+    assert_eq!(bodies[0].entries, 1);
+
+    assert_eq!(reader.contributor_count(None, None).await.unwrap(), 2);
+    assert_eq!(
+        reader
+            .contributor_count(None, Some(Kind::Person))
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(reader.credited_entries().await.unwrap(), 2);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_contributor_answers_with_every_entry_that_credits_them() {
+    let (writer, path) = with_credits(&[
+        ("2024-03-05", "Saturn", "Judy Schmidt"),
+        ("2024-03-06", "Jupiter", "Judy Schmidt"),
+        ("2024-03-07", "Mars", "Somebody Else"),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let credited = reader.credited("judy schmidt", 0, 10).await.unwrap();
+    let dates: Vec<String> = credited
+        .iter()
+        .map(|(entry, _)| entry.date.to_string())
+        .collect();
+    assert_eq!(
+        dates,
+        ["2024-03-06", "2024-03-05"],
+        "newest first, and only theirs"
+    );
+    assert_eq!(credited[0].1, "Image Credit & Copyright");
+
+    let one = reader.contributor("judy schmidt").await.unwrap().unwrap();
+    assert_eq!(one.entries, 2);
+    assert!(reader.contributor("nobody at all").await.unwrap().is_none());
+
+    let on_that_day = reader
+        .credits_for("2024-03-05".parse().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(on_that_day.len(), 1);
+    assert_eq!(
+        on_that_day[0].entries, 2,
+        "an entry's credit carries their whole history, not just this one"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn how_prominently_an_entry_treats_an_object_decides_where_it_ranks() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let central = entry(
+        "2024-03-05",
+        "M31: The Andromeda Galaxy",
+        "M31 is the nearest large spiral. M31 fills this frame, and M31 is closing on us.",
+    );
+    let titled = entry("2024-03-06", "M31 Rising", "A spiral over the treeline.");
+    let aside = entry(
+        "2024-03-07",
+        "A Distant Quasar",
+        "Far beyond M31, this one is remote.",
+    );
+
+    writer
+        .upsert_all(&[central.into(), titled.into(), aside.into()])
+        .await
+        .unwrap();
+    let reader = writer.reader();
+
+    let objects = reader
+        .objects(None, None, ObjectOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    let m31 = objects.iter().find(|one| one.id == "M31").unwrap();
+    assert_eq!(
+        m31.entries, 3,
+        "every entry that names it counts once: {objects:?}"
+    );
+
+    let ranked = reader
+        .showing("M31", 0, 10)
+        .await
+        .unwrap()
+        .iter()
+        .map(|entry| entry.date.to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        ranked,
+        ["2024-03-05", "2024-03-06", "2024-03-07"],
+        "the entry that leads with it, then the one that only titles it, then the passing \
+         comparison. The weights themselves are pinned in core/src/object.rs"
+    );
+}
+
+#[tokio::test]
+async fn a_tag_nothing_else_supports_sinks_to_the_bottom_rather_than_being_hidden() {
+    let path = temp_db();
+    let writer = ApodWriter::open(&path).await.unwrap();
+
+    let mut tagged = entry(
+        "2024-03-05",
+        "The Pulsar Powered Crab",
+        "A neutron star lights the nebula around it.",
+    );
+    tagged.keywords = vec!["asteroid".into(), "M31".into(), "spacecraft".into()];
+
+    let mut confirmed = entry(
+        "2024-03-06",
+        "A Neighbouring Spiral",
+        "The nearest large spiral to our own, M31, seen edge on.",
+    );
+    confirmed.keywords = vec!["M31".into()];
+
+    writer
+        .upsert_all(&[tagged.into(), confirmed.into()])
+        .await
+        .unwrap();
+    let reader = writer.reader();
+
+    let ranked = reader
+        .showing("M31", 0, 10)
+        .await
+        .unwrap()
+        .iter()
+        .map(|entry| entry.date.to_string())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        ranked,
+        ["2024-03-06", "2024-03-05"],
+        "the entry whose words back the tag up leads. The bare tag is kept because it is not \
+         reliably wrong: in the real archive it is sometimes a misattribution and sometimes the \
+         only place a second designation such as NGC 5457 for M101 appears"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn objects_and_credits_are_rebuilt_rather_than_doubled_by_a_reparse() {
+    let (writer, path) = with_credits(&[(
+        "2024-03-05",
+        "M31 in Andromeda",
+        r#"<a href="https://x.example/">Robert Gendler</a>"#,
+    )])
+    .await;
+
+    let again = credited(
+        "2024-03-05",
+        "M31 in Andromeda",
+        r#"<a href="https://x.example/">Robert Gendler</a>"#,
+    );
+    writer.upsert_all(&[again.into()]).await.unwrap();
+
+    let reader = writer.reader();
+    assert_eq!(reader.contributor_count(None, None).await.unwrap(), 1);
+    assert_eq!(
+        reader
+            .contributor("robert gendler")
+            .await
+            .unwrap()
+            .unwrap()
+            .entries,
+        1,
+        "a second pass over one entry must not credit them twice for it"
+    );
+    assert_eq!(
+        reader
+            .objects(None, None, ObjectOrder::Entries, 0, 10)
+            .await
+            .unwrap()[0]
+            .entries,
+        1
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_search_narrows_the_list_of_objects_without_narrowing_their_counts() {
+    let (writer, path) = seeded(&[
+        ("2024-03-05", "M31: The Andromeda Galaxy", "A spiral."),
+        (
+            "2024-03-06",
+            "A Distant Quasar",
+            "Far beyond the Andromeda Galaxy, this one is remote.",
+        ),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let whole = reader.object("M31").await.unwrap().unwrap();
+    assert_eq!(whole.entries, 2, "both entries name it");
+
+    let searched = reader
+        .objects(Some("andromeda"), None, ObjectOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(searched.len(), 1, "{searched:?}");
+    assert_eq!(searched[0].id, "M31");
+    assert_eq!(
+        searched[0].entries, whole.entries,
+        "a row says the same thing as that object's own page. The search picks which objects \
+         appear, never what their counts say"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_search_and_its_total_agree() {
+    let (writer, path) = seeded(&[
+        ("2024-03-05", "M31: The Andromeda Galaxy", "A spiral."),
+        (
+            "2024-03-06",
+            "A Distant Quasar",
+            "Far beyond the Andromeda Galaxy, deep in Andromeda.",
+        ),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let listed = reader
+        .objects(Some("andromeda"), None, ObjectOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    let total = reader.object_count(Some("andromeda"), None).await.unwrap();
+
+    assert_eq!(listed.len() as i64, total, "{listed:?}");
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn by_designation_sorts_every_catalogue_by_its_number() {
+    let (writer, path) =
+        seeded(&[("2024-03-05", "NGC 9, NGC 10 and NGC 100", "Three of them.")]).await;
+
+    let listed = writer
+        .reader()
+        .objects(None, None, ObjectOrder::Designation, 0, 10)
+        .await
+        .unwrap();
+    let ids: Vec<&str> = listed.iter().map(|found| found.id.as_str()).collect();
+    assert_eq!(ids, ["NGC 9", "NGC 10", "NGC 100"]);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn a_designation_with_no_catalogue_number_sorts_by_the_year_in_it() {
+    let (writer, path) = seeded(&[(
+        "2024-03-05",
+        "M31, NGC 1900, SN 1987A and Comet C/2020 F3",
+        "Four of them.",
+    )])
+    .await;
+
+    let listed = writer
+        .reader()
+        .objects_for("2024-03-05".parse().unwrap())
+        .await
+        .unwrap();
+    let ids: Vec<&str> = listed.iter().map(|found| found.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["M31", "NGC 1900", "SN 1987A", "C/2020 F3"],
+        "a supernova sorts as 1987 and a comet as 2020, the way core::object reads them"
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn what_an_entry_is_a_picture_of_is_listed_before_what_it_only_mentions() {
+    let (writer, path) = seeded(&[(
+        "2024-03-05",
+        "M81: A Grand Spiral",
+        "Unlike M31, which is far larger, this one fits the field.",
+    )])
+    .await;
+
+    let listed = writer
+        .reader()
+        .objects_for("2024-03-05".parse().unwrap())
+        .await
+        .unwrap();
+    let ids: Vec<&str> = listed.iter().map(|found| found.id.as_str()).collect();
+    assert_eq!(ids, ["M81", "M31"]);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn an_underscore_typed_into_a_credit_search_is_a_character_rather_than_a_wildcard() {
+    let (writer, path) = with_credits(&[
+        (
+            "2024-03-05",
+            "Saturn",
+            r#"<a href="https://a.example/">Team_A</a>"#,
+        ),
+        (
+            "2024-03-06",
+            "Jupiter",
+            r#"<a href="https://b.example/">TeamXA</a>"#,
+        ),
+    ])
+    .await;
+    let reader = writer.reader();
+
+    let found = reader
+        .contributors(Some("Team_A"), None, CreditOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.len(),
+        1,
+        "the literal row is the only answer: {found:?}"
+    );
+    assert_eq!(found[0].label, "Team_A");
+    assert_eq!(
+        reader
+            .contributor_count(Some("Team_A"), None)
+            .await
+            .unwrap(),
+        1
+    );
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn an_underscore_typed_into_an_object_search_is_a_character_rather_than_a_wildcard() {
+    let (writer, path) = seeded(&[("2024-03-05", "M31: The Andromeda Galaxy", "A spiral.")]).await;
+    let reader = writer.reader();
+
+    let spelled = reader
+        .objects(Some("M31"), None, ObjectOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert_eq!(spelled.len(), 1, "{spelled:?}");
+
+    let wildcarded = reader
+        .objects(Some("M_1"), None, ObjectOrder::Entries, 0, 10)
+        .await
+        .unwrap();
+    assert!(wildcarded.is_empty(), "{wildcarded:?}");
+    assert_eq!(reader.object_count(Some("M_1"), None).await.unwrap(), 0);
+
+    writer.reader().db().close().await;
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

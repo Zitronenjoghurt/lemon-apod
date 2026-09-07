@@ -5,6 +5,7 @@ use crate::media;
 use crate::progress;
 use crate::{reparse, workers};
 use anyhow::Result;
+use apod_core::contributor::Kind;
 use apod_core::{ApodDate, ApodReader, ApodWriter, PARSER_VERSION, quality};
 use std::collections::BTreeMap;
 
@@ -164,6 +165,14 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     );
     println!("  gone            {}", media_counts.missing);
     println!("  failed          {}", media_counts.failed);
+    println!(
+        "  files           {}{}",
+        media_counts.files,
+        match media_counts.stored - media_counts.files {
+            0 => String::new(),
+            shared => format!(", so {shared} URLs resolve to a copy stored for another"),
+        }
+    );
     println!("  bytes           {}", size(media_counts.bytes));
     println!(
         "  next target     {}",
@@ -188,6 +197,22 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
     println!(
         "  encores         {} pictures across {} entries",
         pictures.pictures, pictures.entries
+    );
+
+    let reader = index.reader();
+    let people = reader.contributor_count(None, Some(Kind::Person)).await?;
+    let bodies = reader.contributor_count(None, Some(Kind::Group)).await?;
+    let unsure = reader.contributor_count(None, Some(Kind::Unknown)).await?;
+    println!(
+        "  credits         {} identities across {} entries \
+         ({people} people, {bodies} institutions and missions, {unsure} unsorted)",
+        reader.contributor_count(None, None).await?,
+        reader.credited_entries().await?
+    );
+    println!(
+        "  objects         {} named across {} entries",
+        reader.object_count(None, None).await?,
+        reader.entries_with_objects().await?
     );
     println!("  parser version  {PARSER_VERSION}");
     println!("  stale entries   {stale}");

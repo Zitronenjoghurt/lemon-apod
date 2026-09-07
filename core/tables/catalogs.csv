@@ -1,0 +1,28 @@
+prefix,catalog,format,max
+m,messier,M{},110
+messier,messier,M{},110
+ngc,ngc,NGC {},7840
+ic,ic,IC {},5386
+sh2,sharpless,Sh2-{},313
+sharpless,sharpless,Sh2-{},313
+abell,abell,Abell {},4076
+caldwell,caldwell,Caldwell {},109
+barnard,barnard,Barnard {},370
+arp,arp,Arp {},338
+ldn,ldn,LDN {},1802
+lbn,lbn,LBN {},1250
+vdb,vdb,vdB {},158
+ced,cederblad,Ced {},201
+cederblad,cederblad,Ced {},201
+melotte,melotte,Melotte {},253
+collinder,collinder,Collinder {},471
+trumpler,trumpler,Trumpler {},37
+hickson,hickson,Hickson {},100
+terzan,terzan,Terzan {},12
+palomar,palomar,Palomar {},15
+ugc,ugc,UGC {},12921
+pgc,pgc,PGC {},99999
+rcw,rcw,RCW {},175
+gum,gum,Gum {},84
+simeis,simeis,Simeis {},300
+hh,herbig-haro,HH {},1000

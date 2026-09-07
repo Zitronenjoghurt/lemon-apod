@@ -1,3 +1,4 @@
+use apod_core::ApodDate;
 use apod_core::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, Utc};
 use sqlx::migrate::Migrator;
@@ -289,6 +290,81 @@ impl BotStore {
         )
     }
 
+    pub async fn toggle_favorite(
+        &self,
+        user_id: u64,
+        date: ApodDate,
+        at: DateTime<Utc>,
+    ) -> DbResult<bool> {
+        let removed = sqlx::query("DELETE FROM favorites WHERE user_id = ?1 AND date_id = ?2")
+            .bind(user_id as i64)
+            .bind(date.days())
+            .execute(self.db.writer()?)
+            .await?;
+
+        if removed.rows_affected() > 0 {
+            return Ok(false);
+        }
+
+        sqlx::query("INSERT INTO favorites (user_id, date_id, created_at) VALUES (?1, ?2, ?3)")
+            .bind(user_id as i64)
+            .bind(date.days())
+            .bind(at.timestamp())
+            .execute(self.db.writer()?)
+            .await?;
+
+        Ok(true)
+    }
+
+    pub async fn favorite_count(&self, date: ApodDate) -> DbResult<i64> {
+        Ok(
+            sqlx::query_scalar("SELECT COUNT(*) FROM favorites WHERE date_id = ?1")
+                .bind(date.days())
+                .fetch_one(self.db.reader())
+                .await?,
+        )
+    }
+
+    pub async fn favorites(
+        &self,
+        user_id: u64,
+        offset: usize,
+        limit: usize,
+    ) -> DbResult<Vec<ApodDate>> {
+        let rows: Vec<i64> = sqlx::query_scalar(
+            "SELECT date_id FROM favorites WHERE user_id = ?1
+             ORDER BY date_id DESC LIMIT ?2 OFFSET ?3",
+        )
+        .bind(user_id as i64)
+        .bind(limit as i64)
+        .bind(offset as i64)
+        .fetch_all(self.db.reader())
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|days| ApodDate::from_days(days as i32))
+            .collect())
+    }
+
+    pub async fn favorites_total(&self, user_id: u64) -> DbResult<i64> {
+        Ok(
+            sqlx::query_scalar("SELECT COUNT(*) FROM favorites WHERE user_id = ?1")
+                .bind(user_id as i64)
+                .fetch_one(self.db.reader())
+                .await?,
+        )
+    }
+
+    pub async fn forget_favorites(&self, user_id: u64) -> DbResult<u64> {
+        let gone = sqlx::query("DELETE FROM favorites WHERE user_id = ?1")
+            .bind(user_id as i64)
+            .execute(self.db.writer()?)
+            .await?;
+
+        Ok(gone.rows_affected())
+    }
+
     pub async fn announcing(&self) -> DbResult<i64> {
         Ok(sqlx::query_scalar(
             "SELECT COUNT(*) FROM guilds WHERE enabled = 1 AND channel_id IS NOT NULL",
@@ -525,6 +601,125 @@ mod tests {
         assert_eq!(user.explanation, Explanation::Teaser);
         assert_eq!(user.last_date_id, Some(11_000));
         assert!(store.owed_subscribers(11_000).await.unwrap().is_empty());
+    }
+
+    fn day(year: i32, month: u32, day: u32) -> ApodDate {
+        ApodDate::from_ymd(year, month, day).unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_press_saves_and_a_second_press_takes_it_back() {
+        let store = store().await;
+        let now = Utc::now();
+        let date = day(2026, 9, 1);
+
+        assert_eq!(store.favorite_count(date).await.unwrap(), 0);
+
+        assert!(store.toggle_favorite(5, date, now).await.unwrap());
+        assert_eq!(store.favorite_count(date).await.unwrap(), 1);
+
+        assert!(!store.toggle_favorite(5, date, now).await.unwrap());
+        assert_eq!(store.favorite_count(date).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn the_count_on_a_card_is_everybody_while_the_list_is_only_yours() {
+        let store = store().await;
+        let now = Utc::now();
+        let date = day(2026, 9, 1);
+
+        for user in [5, 6, 7] {
+            store.toggle_favorite(user, date, now).await.unwrap();
+        }
+        store
+            .toggle_favorite(5, day(2026, 8, 30), now)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            store.favorite_count(date).await.unwrap(),
+            3,
+            "the card shows how many people saved it, not whether you did"
+        );
+        assert_eq!(store.favorites_total(5).await.unwrap(), 2);
+        assert_eq!(store.favorites_total(6).await.unwrap(), 1);
+        assert_eq!(store.favorites_total(8).await.unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_list_reads_newest_first_and_pages_without_repeating_or_skipping() {
+        let store = store().await;
+        let now = Utc::now();
+        let saved_out_of_date_order = [
+            day(2026, 9, 1),
+            day(2026, 8, 30),
+            day(1995, 6, 16),
+            day(2001, 1, 1),
+        ];
+
+        for date in saved_out_of_date_order {
+            store.toggle_favorite(5, date, now).await.unwrap();
+        }
+
+        assert_eq!(
+            store.favorites(5, 0, 2).await.unwrap(),
+            vec![day(2026, 9, 1), day(2026, 8, 30)]
+        );
+        assert_eq!(
+            store.favorites(5, 2, 2).await.unwrap(),
+            vec![day(2001, 1, 1), day(1995, 6, 16)]
+        );
+        assert!(store.favorites(5, 4, 2).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn clearing_favorites_actually_removes_them_and_leaves_other_people_alone() {
+        let store = store().await;
+        let now = Utc::now();
+        let date = day(2026, 9, 1);
+
+        store.toggle_favorite(5, date, now).await.unwrap();
+        store
+            .toggle_favorite(5, day(2026, 8, 30), now)
+            .await
+            .unwrap();
+        store.toggle_favorite(6, date, now).await.unwrap();
+
+        assert_eq!(store.forget_favorites(5).await.unwrap(), 2);
+        assert_eq!(store.favorites_total(5).await.unwrap(), 0);
+        assert_eq!(
+            store.favorite_count(date).await.unwrap(),
+            1,
+            "somebody else asking for nothing must not take yours with it"
+        );
+        assert_eq!(
+            store.forget_favorites(5).await.unwrap(),
+            0,
+            "asking twice is not an error"
+        );
+    }
+
+    #[tokio::test]
+    async fn favorites_and_subscriptions_do_not_touch_each_other() {
+        let store = store().await;
+        let now = Utc::now();
+
+        store
+            .toggle_favorite(5, day(2026, 9, 1), now)
+            .await
+            .unwrap();
+        assert_eq!(
+            store.subscriber(5).await.unwrap(),
+            Subscriber::new(5),
+            "pressing a button must not sign anybody up for a daily DM"
+        );
+
+        store.unsubscribe(5, now).await.unwrap();
+        assert_eq!(
+            store.favorites_total(5).await.unwrap(),
+            1,
+            "and turning the DMs off must not throw away what they saved"
+        );
     }
 
     #[test]

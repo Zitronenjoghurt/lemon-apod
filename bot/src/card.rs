@@ -1,14 +1,15 @@
+use crate::colour::NASA_BLUE;
 use crate::config::Config;
 use crate::store::Explanation;
-use apod_core::{ApodEntry, MediaKind, is_decommissioned};
+use apod_core::{ApodDate, ApodEntry, MediaKind, is_decommissioned};
 use poise::serenity_prelude::{
-    Colour, CreateAttachment, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter,
+    ButtonStyle, CreateActionRow, CreateAttachment, CreateButton, CreateEmbed, CreateEmbedAuthor,
+    CreateEmbedFooter,
 };
 
 pub const NAME: &str = "Astronomy Picture of the Day";
 const APOD_HOME: &str = "https://science.nasa.gov/apod/";
 const NASA_ICON: &str = "https://api.nasa.gov/assets/img/favicons/favicon-192.png";
-const NASA_BLUE: Colour = Colour::new(0x0B_3D_91);
 const EMBED_TOTAL: usize = 6000;
 const DESCRIPTION_MAX: usize = 4096;
 const FIELD_VALUE_MAX: usize = 1024;
@@ -17,8 +18,69 @@ const CREDITS_SHOWN: usize = 3;
 const TEASER_CHARS: usize = 320;
 const MARGIN: usize = 96;
 
+const FAVORITE_ID_PREFIX: &str = "apod:favorite:";
+const STAR: char = '⭐';
+
+pub fn favorite_id(date: ApodDate) -> String {
+    format!("{FAVORITE_ID_PREFIX}{date}")
+}
+
+pub fn favorited_date(custom_id: &str) -> Option<ApodDate> {
+    custom_id.strip_prefix(FAVORITE_ID_PREFIX)?.parse().ok()
+}
+
+pub fn buttons(cfg: &Config, entry: &ApodEntry, favorites: i64) -> Vec<CreateActionRow> {
+    let mut row = vec![
+        CreateButton::new(favorite_id(entry.date))
+            .label(favorite_label(favorites))
+            .emoji(STAR)
+            .style(ButtonStyle::Secondary),
+    ];
+
+    let official = entry.official_url();
+    let media = media_link(entry).filter(|(url, _)| Some(*url) != official);
+
+    let links = [
+        media.map(|(url, label)| (url.to_owned(), label)),
+        Some((cfg.entry_url(entry.date), "Open")),
+        official.map(|url| (url.to_owned(), "On APOD")),
+    ];
+
+    for (url, label) in links.into_iter().flatten() {
+        if url.starts_with("http") {
+            row.push(CreateButton::new_link(url).label(label));
+        }
+    }
+
+    vec![CreateActionRow::Buttons(row)]
+}
+
+fn media_link(entry: &ApodEntry) -> Option<(&str, &'static str)> {
+    if renders_here(entry) {
+        return full_size(entry).map(|url| (url, "Full resolution"));
+    }
+
+    let url = entry
+        .media
+        .url
+        .as_deref()
+        .filter(|url| !is_decommissioned(url))?;
+
+    Some((url, offscreen(entry.media.kind).1))
+}
+
+fn favorite_label(favorites: i64) -> String {
+    match favorites {
+        ..=0 => "Favorite".to_owned(),
+        count => format!("Favorite · {count}"),
+    }
+}
+
 pub async fn thumbnail(cfg: &Config, entry: &ApodEntry) -> Option<CreateAttachment> {
-    let path = entry.media.thumb_path.as_deref()?;
+    let Some(path) = entry.media.thumb_path.as_deref() else {
+        tracing::debug!(date = %entry.date, "no thumbnail recorded, the card carries no picture");
+        return None;
+    };
     let file = cfg.thumb_file(path);
 
     let bytes = match tokio::fs::read(&file).await {
@@ -106,41 +168,25 @@ fn description(entry: &ApodEntry, explanation: Explanation, room: usize) -> Opti
 }
 
 fn tail(entry: &ApodEntry) -> String {
-    let mut lines = Vec::new();
-    let mut links = Vec::new();
-
-    if !renders_here(entry) {
-        if let Some(url) = entry.media.url.as_deref() {
-            let (says, opens) = match entry.media.kind {
-                MediaKind::ImageTiff => (
-                    "NASA's copy of this one is a TIFF, which Discord cannot show.",
-                    "Open the original",
-                ),
-                kind if kind.is_video() => ("This entry is a video.", "Watch it"),
-                _ => (
-                    "This entry is interactive rather than a picture.",
-                    "Open it",
-                ),
-            };
-
-            lines.push(match is_decommissioned(url) {
-                true => says.to_owned(),
-                false => format!("{says} [{opens}]({url})."),
-            });
-        }
-    } else if let Some(url) = full_size(entry) {
-        links.push(format!("[Full resolution]({url})"));
+    if renders_here(entry) || entry.media.url.is_none() {
+        return String::new();
     }
 
-    if let Some(official) = entry.official_url() {
-        links.push(format!("[This entry on APOD]({official})"));
-    }
+    offscreen(entry.media.kind).0.to_owned()
+}
 
-    if !links.is_empty() {
-        lines.push(links.join(" · "));
+fn offscreen(kind: MediaKind) -> (&'static str, &'static str) {
+    match kind {
+        MediaKind::ImageTiff => (
+            "This entry is a TIFF which Discord cannot display.",
+            "Open TIFF",
+        ),
+        kind if kind.is_video() => ("This entry is a video.", "Watch it"),
+        _ => (
+            "This entry is interactive rather than a picture.",
+            "Open site",
+        ),
     }
-
-    lines.join("\n")
 }
 
 fn full_size(entry: &ApodEntry) -> Option<&str> {
@@ -256,14 +302,21 @@ mod tests {
     }
 
     #[test]
-    fn the_title_links_to_the_archive_and_the_body_links_to_apods_own_page() {
+    fn the_title_links_to_the_archive_and_apods_own_page_is_a_button() {
         let entry = entry();
         let json = rendered(&embed(&cfg(), &entry, Explanation::Full, None));
 
         assert!(json.contains("https://apod.example/2025-01-31"), "{json}");
         assert!(
-            json.contains("https://science.nasa.gov/image-article/apod/apod-x/"),
-            "{json}"
+            !json.contains("science.nasa.gov/image-article"),
+            "the way to APOD's own page is a button now, not a link buried in prose: {json}"
+        );
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(row[3]["label"], "On APOD");
+        assert_eq!(
+            row[3]["url"],
+            "https://science.nasa.gov/image-article/apod/apod-x/"
         );
     }
 
@@ -295,14 +348,12 @@ mod tests {
 
         let full = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
         let teaser = description(&entry, Explanation::Teaser, EMBED_TOTAL).unwrap();
-        let none = description(&entry, Explanation::None, EMBED_TOTAL).unwrap();
 
         assert!(teaser.chars().count() < full.chars().count(), "{teaser}");
         assert!(teaser.contains('…'), "a cut teaser says it was cut");
-        assert!(!none.contains("word"), "none means none: {none}");
         assert!(
-            none.contains("This entry on APOD"),
-            "but the link out still has to be there: {none}"
+            description(&entry, Explanation::None, EMBED_TOTAL).is_none(),
+            "none means none: every way out of the card is a button now"
         );
     }
 
@@ -355,17 +406,15 @@ mod tests {
         let mut entry = entry();
         entry.media.hd_url = Some("https://assets.science.nasa.gov/big.jpg".into());
 
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(row[1]["label"], "Full resolution");
+        assert_eq!(row[1]["url"], "https://assets.science.nasa.gov/big.jpg");
+
         let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
         assert!(
-            body.contains("[Full resolution](https://assets.science.nasa.gov/big.jpg)"),
-            "the post carries a 480px thumbnail, so the real file has to be one click away: \
-             {body}"
-        );
-
-        let bare = description(&entry, Explanation::None, EMBED_TOTAL).unwrap();
-        assert!(
-            bare.contains("Full resolution"),
-            "dropping the explanation does not drop the picture: {bare}"
+            !body.contains("Full resolution"),
+            "the post carries a 480px thumbnail and the real file is one press away, so the \
+             prose does not say it twice: {body}"
         );
     }
 
@@ -374,10 +423,10 @@ mod tests {
         let entry = entry();
         assert_eq!(entry.media.hd_url, None);
 
-        let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
-        assert!(
-            body.contains("[Full resolution](https://assets.science.nasa.gov/small.jpg)"),
-            "on the modern host the displayed file is the master: {body}"
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(
+            row[1]["url"], "https://assets.science.nasa.gov/small.jpg",
+            "on the modern host the displayed file is the master: {row}"
         );
     }
 
@@ -390,11 +439,15 @@ mod tests {
             Some("https://apod.nasa.gov/apod/image/2501/big.jpg".into()),
         );
 
-        let body = description(&entry, Explanation::Full, EMBED_TOTAL);
-        assert!(
-            !body.unwrap_or_default().contains("Full resolution"),
-            "apod.nasa.gov stopped answering, and a link to nowhere is worse than no link"
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(
+            row.as_array().map(Vec::len),
+            Some(3),
+            "apod.nasa.gov stopped answering, and a button to nowhere is worse than no button: \
+             {row}"
         );
+        assert_eq!(row[1]["label"], "Open");
+        assert_eq!(row[2]["label"], "On APOD");
     }
 
     #[test]
@@ -408,11 +461,14 @@ mod tests {
 
         let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
         assert!(body.contains("is a video"), "{body}");
-        assert!(body.contains("https://www.youtube.com/embed/abc"), "{body}");
         assert!(
-            !body.contains("Full resolution"),
-            "a video has no full size still to offer, and it is already linked once: {body}"
+            !body.contains("youtube.com"),
+            "the sentence says what it is and the button says where it is: {body}"
         );
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(row[1]["label"], "Watch it");
+        assert_eq!(row[1]["url"], "https://www.youtube.com/embed/abc");
     }
 
     #[test]
@@ -426,6 +482,10 @@ mod tests {
 
         let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
         assert!(body.contains("TIFF"), "{body}");
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(row[1]["label"], "Open TIFF");
+        assert_eq!(row[1]["url"], "https://assets.science.nasa.gov/saturn.tif");
     }
 
     #[test]
@@ -443,10 +503,14 @@ mod tests {
             !body.contains("apod.nasa.gov"),
             "the legacy record lands first every morning, and its links are retired: {body}"
         );
-        assert!(
-            body.contains("This entry on APOD"),
-            "the reader still needs somewhere to go: {body}"
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(
+            row.as_array().map(Vec::len),
+            Some(3),
+            "the reader still needs somewhere to go: {row}"
         );
+        assert_eq!(row[2]["label"], "On APOD");
     }
 
     #[test]
@@ -455,10 +519,156 @@ mod tests {
         entry.provenance = Provenance::LegacyOnly;
         entry.source_url = entry.date.source_url();
 
-        let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
+        let row = row(&buttons(&cfg(), &entry, 0));
+        let dead = row.as_array().unwrap().iter().any(|button| {
+            button["url"]
+                .as_str()
+                .unwrap_or("")
+                .contains("apod.nasa.gov")
+        });
+
         assert!(
-            !body.contains("This entry on APOD"),
-            "apod.nasa.gov is decommissioned, so that link would go nowhere: {body}"
+            !dead,
+            "apod.nasa.gov is decommissioned, so that button would go nowhere: {row}"
         );
+    }
+
+    fn row(rows: &[CreateActionRow]) -> serde_json::Value {
+        serde_json::to_value(rows).unwrap()[0]["components"].clone()
+    }
+
+    #[test]
+    fn a_press_carries_the_date_so_the_card_still_works_after_a_restart() {
+        let date: ApodDate = "2025-01-31".parse().unwrap();
+        let id = favorite_id(date);
+
+        assert_eq!(
+            favorited_date(&id),
+            Some(date),
+            "nothing about the press may depend on the command that posted the card"
+        );
+        assert_eq!(favorited_date("1234567890:forward"), None);
+        assert_eq!(favorited_date("apod:favorite:not-a-date"), None);
+        assert_eq!(favorited_date(""), None);
+    }
+
+    #[test]
+    fn the_button_says_what_it_does_and_carries_how_many_have_done_it() {
+        assert_eq!(
+            favorite_label(0),
+            "Favorite",
+            "one message is read by everybody, so a button cannot show each of them their own \
+             state and must name the action instead"
+        );
+        assert_eq!(favorite_label(1), "Favorite · 1");
+        assert_eq!(favorite_label(42), "Favorite · 42");
+    }
+
+    #[test]
+    fn the_row_offers_the_picture_the_archive_and_apods_own_page_beside_the_favorite() {
+        let entry = entry();
+        let row = row(&buttons(&cfg(), &entry, 3));
+
+        assert_eq!(
+            row.as_array().map(Vec::len),
+            Some(4),
+            "four is the worst case, and Discord takes five to a row: {row}"
+        );
+        assert_eq!(row[0]["custom_id"], "apod:favorite:2025-01-31");
+        assert_eq!(row[0]["label"], "Favorite · 3");
+        assert_eq!(row[1]["url"], "https://assets.science.nasa.gov/small.jpg");
+        assert_eq!(row[2]["url"], "https://apod.example/2025-01-31");
+        assert_eq!(
+            row[3]["url"],
+            "https://science.nasa.gov/image-article/apod/apod-x/"
+        );
+    }
+
+    #[test]
+    fn an_interactive_entry_offers_the_thing_itself_rather_than_a_still() {
+        let mut entry = entry();
+        entry.media = Media::new(
+            MediaKind::Embed,
+            Some("https://stefanom.org/spc/game.php".into()),
+            None,
+        );
+
+        let body = description(&entry, Explanation::Full, EMBED_TOTAL).unwrap();
+        assert!(body.contains("interactive rather than a picture"), "{body}");
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(row[1]["label"], "Open site");
+        assert_eq!(row[1]["url"], "https://stefanom.org/spc/game.php");
+    }
+
+    #[test]
+    fn the_media_button_and_the_apod_button_are_never_the_same_press() {
+        let mut entry = entry();
+        let url = entry.source_url.clone();
+        entry.media = Media::new(MediaKind::Embed, Some(url), None);
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(
+            row.as_array().map(Vec::len),
+            Some(3),
+            "two buttons onto one address is one button and a puzzle: {row}"
+        );
+        assert_eq!(row[2]["label"], "On APOD");
+    }
+
+    #[test]
+    fn no_two_buttons_in_a_row_read_as_the_same_control() {
+        let mut entry = entry();
+        entry.media = Media::new(
+            MediaKind::Embed,
+            Some("https://stefanom.org/spc/game.php".into()),
+            None,
+        );
+
+        let row = row(&buttons(&cfg(), &entry, 0));
+        let labels: Vec<String> = row
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|button| button["label"].as_str().unwrap_or_default().to_owned())
+            .collect();
+
+        let mut distinct = labels.clone();
+        distinct.sort();
+
+        assert_eq!(
+            distinct.len(),
+            labels.len(),
+            "two controls a press apart cannot read as the same control: {labels:?}"
+        );
+    }
+
+    #[test]
+    fn a_link_discord_would_refuse_drops_its_button_rather_than_the_whole_card() {
+        let mut entry = entry();
+        entry.provenance = Provenance::LegacyOnly;
+        entry.source_url = entry.date.source_url();
+        entry.media = Media::new(
+            MediaKind::ImageJpg,
+            Some("https://apod.nasa.gov/apod/image/2501/small.jpg".into()),
+            None,
+        );
+
+        let without_apod = row(&buttons(&cfg(), &entry, 0));
+        assert_eq!(
+            without_apod.as_array().map(Vec::len),
+            Some(2),
+            "{without_apod}"
+        );
+
+        let mut cfg = cfg();
+        cfg.public_url = String::new();
+        let only_favorite = row(&buttons(&cfg, &entry, 0));
+        assert_eq!(
+            only_favorite.as_array().map(Vec::len),
+            Some(1),
+            "an unset public URL takes its own button and leaves the favorite: {only_favorite}"
+        );
+        assert_eq!(only_favorite[0]["custom_id"], "apod:favorite:2025-01-31");
     }
 }

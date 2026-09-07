@@ -18,7 +18,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.11.0"
 sqlx = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "net"] }
+tokio = { workspace = true, features = ["fs", "io-util", "net"] }
 tower-http = { version = "0.6.11", features = ["fs", "set-header", "trace"] }
 thiserror = { workspace = true }
 tower_governor = "0.8.0"

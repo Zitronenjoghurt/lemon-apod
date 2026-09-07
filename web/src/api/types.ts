@@ -197,9 +197,17 @@ export interface NotifyConfig {
   sky_topic: string | null
 }
 
+export interface BotNumbers {
+  announcing: number | null
+  subscribers: number | null
+  favorites: number | null
+  favorite_entries: number | null
+}
+
 export interface DiscordConfig {
   invite_url: string | null
   user_install_url: string | null
+  numbers: BotNumbers | null
 }
 
 export interface Status {
@@ -740,3 +748,51 @@ export interface FieldDivergence {
   legacy?: string
   modern?: string
 }
+
+export interface Contributor {
+  id: string
+  label: string
+  kind: 'person' | 'group' | 'unknown'
+  entries: number
+  first: string
+  last: string
+  url?: string
+}
+
+export interface RoleCount {
+  role: string
+  entries: number
+}
+
+export interface CreditedEntry extends ApodSummary {
+  role: string
+}
+
+export interface Credited {
+  contributor: Contributor
+  roles: RoleCount[]
+  items: CreditedEntry[]
+}
+
+export type CreditSort = 'entries' | 'latest' | 'name'
+export type ContributorKind = 'person' | 'group' | 'unknown'
+
+export interface ObjectCount {
+  id: string
+  catalog: string
+  entries: number
+  first: string
+  last: string
+}
+
+export interface CatalogCount {
+  catalog: string
+  objects: number
+}
+
+export interface Showing {
+  object: ObjectCount
+  items: ApodSummary[]
+}
+
+export type ObjectSort = 'entries' | 'latest' | 'designation'

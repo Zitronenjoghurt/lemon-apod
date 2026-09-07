@@ -1,7 +1,6 @@
 <script lang="ts" setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
-import ApodCredit from '@/components/ApodCredit.vue'
 import type { BallotSide } from '@/api/types'
 import { formatDate } from '@/utils/date'
 
@@ -11,16 +10,16 @@ const props = withDefaults(
     hint?: string
     state?: 'plain' | 'picked' | 'passed'
     disabled?: boolean
+    busy?: boolean
   }>(),
-  { hint: '', state: 'plain', disabled: false },
+  { hint: '', state: 'plain', disabled: false, busy: false },
 )
 
-const emit = defineEmits<{ pick: [] }>()
+const emit = defineEmits<{ pick: []; zoom: [] }>()
 
 const loaded = ref(false)
 const failed = ref(false)
-const zoomed = ref(false)
-const fullLoaded = ref(false)
+const picture = useTemplateRef<HTMLImageElement>('picture')
 
 const thumb = computed(() => props.side.media.thumb_url ?? undefined)
 const full = computed(() => props.side.media.hd_url ?? props.side.media.url ?? null)
@@ -36,9 +35,7 @@ watch(thumb, () => {
   failed.value = false
 })
 
-watch(zoomed, (open) => {
-  if (!open) fullLoaded.value = false
-})
+defineExpose({ picture })
 </script>
 
 <template>
@@ -57,6 +54,7 @@ watch(zoomed, (open) => {
       </span>
       <img
         v-show="loaded"
+        ref="picture"
         :alt="side.title"
         :src="thumb"
         decoding="async"
@@ -78,14 +76,16 @@ watch(zoomed, (open) => {
 
         <span class="peek">
           <button
-            v-if="full"
+            v-if="full && loaded"
             v-tooltip.bottom="'See it full size'"
             class="icon"
             type="button"
-            @click="zoomed = true"
+            @click="emit('zoom')"
           >
-            <i aria-hidden="true" class="pi pi-search-plus" />
-            <span class="sr-only">See {{ side.title }} full size</span>
+            <i :class="busy ? 'pi pi-spinner pi-spin' : 'pi pi-search-plus'" aria-hidden="true" />
+            <span class="sr-only">
+              {{ busy ? 'Loading the full picture' : `See ${side.title} full size` }}
+            </span>
           </button>
           <RouterLink v-tooltip.bottom="'Read this entry'" :to="`/${side.date}`" class="icon">
             <i aria-hidden="true" class="pi pi-book" />
@@ -99,38 +99,6 @@ watch(zoomed, (open) => {
       </p>
     </div>
   </div>
-
-  <Dialog
-    v-if="full"
-    v-model:visible="zoomed"
-    :header="side.title"
-    :style="{ width: 'min(96rem, 96vw)' }"
-    dismissable-mask
-    modal
-  >
-    <div class="full-wrap">
-      <ApodCredit :source="side.source_url" lead="This picture is from NASA's" variant="banner" />
-
-      <Skeleton v-if="!fullLoaded" height="60vh" width="100%" />
-      <img
-        v-show="fullLoaded"
-        :alt="side.title"
-        :src="full"
-        class="full"
-        decoding="async"
-        @load="fullLoaded = true"
-      />
-
-      <p v-if="side.credit?.length" class="muted credit">
-        <span v-for="line in side.credit" :key="line">{{ line }}</span>
-      </p>
-
-      <RouterLink :to="`/${side.date}`" class="muted open-entry">
-        Read the whole entry
-        <i aria-hidden="true" class="pi pi-angle-right" />
-      </RouterLink>
-    </div>
-  </Dialog>
 </template>
 
 <style scoped>
@@ -290,45 +258,5 @@ watch(zoomed, (open) => {
 
 .credit span + span::before {
   content: ' · ';
-}
-
-.full-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  align-items: flex-start;
-}
-
-.full-wrap .credit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0);
-  font-size: var(--text-sm);
-  -webkit-line-clamp: none;
-}
-
-.full-wrap .credit span + span::before {
-  content: none;
-}
-
-.full {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 78vh;
-  object-fit: contain;
-  border-radius: calc(var(--radius) / 2);
-}
-
-.open-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  font-size: var(--text-sm);
-  text-decoration: none;
-}
-
-.open-entry:hover {
-  color: var(--accent);
 }
 </style>

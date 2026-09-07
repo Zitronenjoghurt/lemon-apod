@@ -1,15 +1,16 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import IndexRow from '@/components/IndexRow.vue'
+import IndexTabs from '@/components/IndexTabs.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
 import type { HostCount, ResourceSort, SortOrder } from '@/api/types'
-import { useAsync } from '@/composables/useAsync'
+import { useIndexListing } from '@/composables/useIndexListing'
 import { useNarrow } from '@/composables/useNarrow'
 import { year as yearOf } from '@/utils/date'
 
 const PAGE_SIZE = 30
-const DEBOUNCE_MS = 250
 
 const SORTS: { label: string; value: `${ResourceSort}:${SortOrder}` }[] = [
   { label: 'Most referenced', value: 'refs:desc' },
@@ -22,13 +23,11 @@ const SORTS: { label: string; value: `${ResourceSort}:${SortOrder}` }[] = [
 ]
 
 const route = useRoute()
-const router = useRouter()
 const { pageLinks } = useNarrow()
 
 const query = ref(String(route.query.q ?? ''))
 const host = ref<string | null>((route.query.host as string) ?? null)
 const sort = ref<`${ResourceSort}:${SortOrder}`>('refs:desc')
-const page = ref(Number.parseInt(String(route.query.page ?? '1'), 10) || 1)
 
 const hosts = ref<HostCount[]>([])
 
@@ -37,45 +36,28 @@ const {
   error,
   loading,
   run,
-} = useAsync((signal) => {
-  const [by, order] = sort.value.split(':') as [ResourceSort, SortOrder]
-  return api.resources(
-    {
-      q: query.value || undefined,
-      host: host.value || undefined,
-      sort: by,
-      order,
-      offset: (page.value - 1) * PAGE_SIZE,
-      limit: PAGE_SIZE,
-    },
-    signal,
-  )
-})
-
-let debounce: ReturnType<typeof setTimeout> | undefined
-
-function search(resetPage: boolean) {
-  if (resetPage) page.value = 1
-
-  clearTimeout(debounce)
-  debounce = setTimeout(() => {
-    void router.replace({
-      name: 'resources',
-      query: {
+  first,
+  search,
+  onPage,
+} = useIndexListing({
+  routeName: 'resources',
+  pageSize: PAGE_SIZE,
+  query: () => ({ q: query.value || undefined, host: host.value || undefined }),
+  fetch: (offset, signal) => {
+    const [by, order] = sort.value.split(':') as [ResourceSort, SortOrder]
+    return api.resources(
+      {
         q: query.value || undefined,
         host: host.value || undefined,
-        page: page.value === 1 ? undefined : String(page.value),
+        sort: by,
+        order,
+        offset,
+        limit: PAGE_SIZE,
       },
-    })
-    void run()
-  }, DEBOUNCE_MS)
-}
-
-function onPage(event: { page: number }) {
-  page.value = event.page + 1
-  search(false)
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
+      signal,
+    )
+  },
+})
 
 onMounted(() => {
   void run()
@@ -119,9 +101,9 @@ function span(first?: string, last?: string): string {
 
 <template>
   <div class="stack">
-    <header class="stack head">
-      <h1>Resources</h1>
-    </header>
+    <h1>Resources</h1>
+
+    <IndexTabs />
 
     <div class="row controls">
       <IconField class="search">
@@ -164,7 +146,6 @@ function span(first?: string, last?: string): string {
     <p v-if="listing" aria-live="polite" class="muted count">
       {{ listing.total.toLocaleString() }}
       {{ listing.total === 1 ? 'resource' : 'resources' }}
-      <template v-if="host">on {{ host }}</template>
     </p>
 
     <div v-if="loading && !listing" class="stack lines">
@@ -172,37 +153,40 @@ function span(first?: string, last?: string): string {
     </div>
 
     <p v-else-if="listing && !listing.items.length" class="muted empty">
-      Nothing in the catalogue matches that.
+      No resource matches that.
     </p>
 
     <ul v-else-if="listing" class="stack results">
-      <li v-for="resource in listing.items" :key="resource.id" class="card item">
-        <div class="body">
-          <RouterLink :to="`/resources/${resource.id}`" class="name">
-            {{ nameOf(resource) }}
-          </RouterLink>
+      <IndexRow
+        v-for="resource in listing.items"
+        :key="resource.id"
+        :name="nameOf(resource)"
+        :to="`/resources/${resource.id}`"
+      >
+        <template #note>
           <a :href="resource.url" class="muted address" rel="noopener nofollow" target="_blank">
             {{ resource.key }}
           </a>
-        </div>
-
-        <div class="meta">
-          <span class="muted tabular years">{{ span(resource.first, resource.last) }}</span>
+        </template>
+        <template #meta>
+          <span v-if="span(resource.first, resource.last)" class="muted years">
+            {{ span(resource.first, resource.last) }}
+          </span>
           <span
             :title="`${resource.refs} references across ${resource.entries} entries`"
-            class="tabular refs"
+            class="refs"
           >
             {{ resource.refs.toLocaleString() }}
             <span class="muted unit">{{ resource.refs === 1 ? 'reference' : 'references' }}</span>
           </span>
-        </div>
-      </li>
+        </template>
+      </IndexRow>
     </ul>
 
     <Paginator
-      :page-link-size="pageLinks"
       v-if="listing && listing.total > PAGE_SIZE"
-      :first="(page - 1) * PAGE_SIZE"
+      :first="first()"
+      :page-link-size="pageLinks"
       :rows="PAGE_SIZE"
       :total-records="listing.total"
       @page="onPage"
@@ -213,10 +197,6 @@ function span(first?: string, last?: string): string {
 <style scoped>
 h1 {
   font-size: var(--text-xl);
-}
-
-.head {
-  gap: var(--space-2);
 }
 
 .controls {
@@ -243,7 +223,7 @@ h1 {
 }
 
 .sort {
-  min-width: 11rem;
+  min-width: 12rem;
 }
 
 .count {
@@ -258,33 +238,6 @@ h1 {
   gap: var(--space-2);
 }
 
-.item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-}
-
-.body {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.name {
-  font-weight: 600;
-  text-decoration: none;
-  color: inherit;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.name:hover {
-  color: var(--accent);
-}
-
 .address {
   font-size: var(--text-sm);
   overflow: hidden;
@@ -295,17 +248,6 @@ h1 {
 
 .address:hover {
   text-decoration: underline;
-}
-
-.meta {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  text-align: right;
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
 }
 
 .years {
@@ -338,13 +280,13 @@ h1 {
 }
 
 @media (max-width: 30rem) {
-  .item {
-    padding: var(--space-2) var(--space-3);
-    gap: var(--space-3);
-  }
-
   .unit {
     display: none;
+  }
+
+  .host,
+  .sort {
+    width: 100%;
   }
 }
 </style>

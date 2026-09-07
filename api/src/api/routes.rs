@@ -1,11 +1,13 @@
 use crate::state::ServerState;
 use axum::Router;
 
+mod credits;
 mod entries;
 mod entry;
 pub mod games;
 pub mod gaps;
 mod migration;
+mod objects;
 mod on_this_day;
 mod pictures;
 mod random;
@@ -21,6 +23,8 @@ pub fn build_routes() -> Router<ServerState> {
     Router::new()
         .nest("/entry", entry::router())
         .nest("/entries", entries::router())
+        .nest("/credits", credits::router())
+        .nest("/objects", objects::router())
         .nest("/gaps", gaps::router())
         .nest("/migration", migration::router())
         .nest("/search", search::router())

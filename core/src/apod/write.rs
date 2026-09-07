@@ -6,7 +6,7 @@ use crate::db::{Db, DbConfig};
 use crate::entry::ApodEntry;
 use crate::media::{Media, Thumb};
 use crate::merge::Merged;
-use crate::{resource, text};
+use crate::{contributor, object, resource, text};
 use sqlx::migrate::Migrator;
 use sqlx::{AssertSqlSafe, Row, Sqlite, Transaction};
 use std::collections::HashMap;
@@ -375,6 +375,49 @@ async fn write_derived(tx: &mut Transaction<'_, Sqlite>, entry: &ApodEntry) -> A
         .bind(date_id)
         .execute(&mut **tx)
         .await?;
+    sqlx::query("DELETE FROM entry_credits WHERE date_id = ?1")
+        .bind(date_id)
+        .execute(&mut **tx)
+        .await?;
+    sqlx::query("DELETE FROM entry_objects WHERE date_id = ?1")
+        .bind(date_id)
+        .execute(&mut **tx)
+        .await?;
+
+    for mention in contributor::mentions(entry) {
+        sqlx::query(
+            "INSERT INTO entry_credits (date_id, contributor, name, role, url, kind)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        )
+        .bind(date_id)
+        .bind(&mention.id)
+        .bind(&mention.name)
+        .bind(&mention.role)
+        .bind(mention.url.as_deref())
+        .bind(mention.kind.as_str())
+        .execute(&mut **tx)
+        .await?;
+    }
+
+    for object in object::named(entry) {
+        sqlx::query(
+            "INSERT INTO entry_objects
+               (date_id, object, name, catalog,
+                in_title, in_keywords, in_explanation, explanation_hits, score)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        )
+        .bind(date_id)
+        .bind(&object.id)
+        .bind(&object.name)
+        .bind(&object.catalog)
+        .bind(object.basis.in_title)
+        .bind(object.basis.in_keywords)
+        .bind(object.basis.in_explanation)
+        .bind(object.basis.explanation_hits)
+        .bind(object.basis.score())
+        .execute(&mut **tx)
+        .await?;
+    }
 
     let counts = text::word_counts(&entry.explanation_text);
     for chunk in counts.iter().collect::<Vec<_>>().chunks(ROW_BATCH) {

@@ -1,5 +1,6 @@
 mod api;
 mod archive;
+mod bot;
 mod client_ip;
 mod config;
 mod meta;

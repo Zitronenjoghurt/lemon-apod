@@ -4,7 +4,11 @@ import { APOD_URL } from '@/utils/links'
 
 defineOptions({ name: 'DiscordView' })
 
-const { botInvite, botUserInstall, loaded } = useStatus()
+const { botInvite, botNumbers, botUserInstall, loaded } = useStatus()
+
+function count(value: number | null): string {
+  return value === null ? '0' : value.toLocaleString()
+}
 
 const commands = [
   { name: '/apod today', hint: "Today's Astronomy Picture of the Day." },
@@ -12,6 +16,14 @@ const commands = [
   {
     name: '/apod random',
     hint: 'A random Astronomy Picture of the Day.',
+  },
+  {
+    name: '/apod on-this-day',
+    hint: 'Every Astronomy Picture of the Day that ran on one calendar day, across every year.',
+  },
+  {
+    name: '/apod favorites',
+    hint: 'The entries you have favorited, saved with the star button on any entry.',
   },
   {
     name: '/apod search',
@@ -89,6 +101,24 @@ const setup = [
       </div>
 
       <p v-else class="muted note">No bot is configured on this deployment.</p>
+    </section>
+
+    <section v-if="loaded && botNumbers" class="tiles">
+      <div v-if="botNumbers.announcing !== null" class="card tile">
+        <span class="muted name">Active servers</span>
+        <strong class="value">{{ count(botNumbers.announcing) }}</strong>
+        <span class="muted foot">servers receiving daily posts</span>
+      </div>
+      <div v-if="botNumbers.subscribers !== null" class="card tile">
+        <span class="muted name">Active DMs</span>
+        <strong class="value">{{ count(botNumbers.subscribers) }}</strong>
+        <span class="muted foot">users receiving daily posts</span>
+      </div>
+      <div v-if="botNumbers.favorites !== null" class="card tile">
+        <span class="muted name">Favorites saved</span>
+        <strong class="value">{{ count(botNumbers.favorites) }}</strong>
+        <span class="muted foot">across {{ count(botNumbers.favorite_entries) }} entries</span>
+      </div>
     </section>
 
     <section class="card panel">
@@ -186,6 +216,36 @@ h1 {
 
 .pitch {
   gap: var(--space-2);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+}
+
+.tile {
+  padding: var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0);
+}
+
+.tile .name {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.tile .value {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.tile .foot {
+  font-size: var(--text-sm);
 }
 
 .steps,

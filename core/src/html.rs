@@ -70,6 +70,40 @@ pub fn escape(raw: &str) -> String {
     out
 }
 
+pub fn unescape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut rest = raw;
+
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+
+        let named = [
+            ("&amp;", '&'),
+            ("&lt;", '<'),
+            ("&gt;", '>'),
+            ("&#39;", '\''),
+            ("&quot;", '"'),
+        ]
+        .into_iter()
+        .find(|(entity, _)| rest.starts_with(entity));
+
+        match named {
+            Some((entity, c)) => {
+                out.push(c);
+                rest = &rest[entity.len()..];
+            }
+            None => {
+                out.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+
+    out.push_str(rest);
+    out
+}
+
 pub fn collapse(raw: &str) -> String {
     raw.split_whitespace().collect::<Vec<_>>().join(" ")
 }

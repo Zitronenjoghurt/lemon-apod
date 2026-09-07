@@ -1,11 +1,14 @@
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ApodCredit from '@/components/ApodCredit.vue'
+import MediaLightbox from '@/components/MediaLightbox.vue'
+import type { Slide } from '@/components/MediaLightbox.vue'
 import RatingHelp from '@/components/rating/RatingHelp.vue'
 import RatingPicture from '@/components/rating/RatingPicture.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import type { RatingCategory, RatingOutcome } from '@/api/types'
+import type { BallotSide, RatingCategory, RatingOutcome } from '@/api/types'
+import { measure } from '@/utils/image'
 import {
   CATEGORIES,
   CATEGORY_ICONS,
@@ -30,6 +33,70 @@ const ask = computed(() => CATEGORIES[ballot.value?.category ?? category.value])
 const other = computed(() => CATEGORIES[otherCategory(category.value)])
 const picked = ref<RatingOutcome | null>(null)
 const helpOpen = ref(false)
+
+type Seat = 'left' | 'right'
+
+const zoomAt = ref<number | null>(null)
+const slides = ref<Slide[]>([])
+const measuring = ref<Seat | null>(null)
+
+const leftCard = useTemplateRef<InstanceType<typeof RatingPicture>>('leftCard')
+const rightCard = useTemplateRef<InstanceType<typeof RatingPicture>>('rightCard')
+
+function slideFor(
+  side: BallotSide,
+  size: { width: number; height: number },
+  from: () => HTMLImageElement | null,
+): Slide | null {
+  const file = side.media.url
+  if (!file || !size.width) return null
+
+  const big = side.media.hd_url
+  return {
+    src: file,
+    width: size.width,
+    height: size.height,
+    alt: side.title,
+    hd: big && big !== file ? big : undefined,
+    thumb: side.media.thumb_url ?? undefined,
+    entry: `/${side.date}`,
+    source: side.source_url,
+    credit: side.credit,
+    from,
+  }
+}
+
+async function zoom(seat: Seat): Promise<void> {
+  const pair = ballot.value
+  if (!pair || measuring.value !== null) return
+
+  measuring.value = seat
+  const [leftSize, rightSize] = await Promise.all([
+    measure(pair.left.media.url ?? ''),
+    measure(pair.right.media.url ?? ''),
+  ])
+  measuring.value = null
+  if (ballot.value !== pair) return
+
+  const built = [
+    {
+      seat: 'left' as const,
+      slide: slideFor(pair.left, leftSize, () => leftCard.value?.picture ?? null),
+    },
+    {
+      seat: 'right' as const,
+      slide: slideFor(pair.right, rightSize, () => rightCard.value?.picture ?? null),
+    },
+  ].flatMap((one) => (one.slide ? [{ seat: one.seat, slide: one.slide }] : []))
+
+  if (!built.length) return
+
+  const at = built.findIndex((one) => one.seat === seat)
+  slides.value = built.map((one) => one.slide)
+  zoomAt.value = at === -1 ? 0 : at
+}
+
+watch(ballot, () => (zoomAt.value = null))
 
 let flash: ReturnType<typeof setTimeout> | undefined
 
@@ -160,20 +227,28 @@ onMounted(() => void open(true))
       <template v-else-if="ballot">
         <div class="pair">
           <RatingPicture
+            ref="leftCard"
+            :busy="measuring === 'left'"
             :disabled="sending"
             :side="ballot.left"
             :state="picked === 'left' ? 'picked' : picked ? 'passed' : 'plain'"
             hint="← Left"
             @pick="choose('left')"
+            @zoom="zoom('left')"
           />
           <RatingPicture
+            ref="rightCard"
+            :busy="measuring === 'right'"
             :disabled="sending"
             :side="ballot.right"
             :state="picked === 'right' ? 'picked' : picked ? 'passed' : 'plain'"
             hint="Right →"
             @pick="choose('right')"
+            @zoom="zoom('right')"
           />
         </div>
+
+        <MediaLightbox :at="zoomAt" :slides="slides" @close="zoomAt = null" />
 
         <div class="row controls">
           <Button

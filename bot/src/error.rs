@@ -1,14 +1,13 @@
 use crate::Context;
+use crate::colour::RED;
 use crate::state::BotState;
 use apod_core::ApodDate;
-use poise::serenity_prelude::{Colour, CreateEmbed};
+use poise::serenity_prelude::CreateEmbed;
 use poise::{CreateReply, FrameworkError};
 use std::time::Duration;
 use tracing::{debug, error, warn};
 
 pub type BotResult<T> = Result<T, BotError>;
-
-const RED: Colour = Colour::new(0xB8_5C_54);
 
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {
@@ -24,6 +23,8 @@ pub enum BotError {
     NoEntry(ApodDate),
     #[error("'{0}' is not a date. Write it as YYYY-MM-DD, any day from 1995-06-16 onwards.")]
     NotADate(String),
+    #[error("'{0}' is not a calendar day. Write it as MM-DD, for example 06-16.")]
+    NotADay(String),
     #[error("No matches found.")]
     NothingFound,
     #[error("{0}")]
@@ -37,6 +38,7 @@ impl BotError {
             | Self::NoChannel
             | Self::NoEntry(_)
             | Self::NotADate(_)
+            | Self::NotADay(_)
             | Self::NothingFound => true,
             Self::Apod(_) | Self::Db(_) | Self::Serenity(_) => false,
         }

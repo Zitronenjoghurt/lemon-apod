@@ -1,15 +1,18 @@
 use crate::error::BotError;
 use crate::state::BotState;
 use anyhow::{Context as _, Result};
-use poise::serenity_prelude::{ClientBuilder, GatewayIntents, UserId};
+use poise::serenity_prelude as serenity;
+use serenity::{ClientBuilder, GatewayIntents, Interaction, UserId};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 mod announce;
 mod card;
+mod colour;
 mod commands;
 mod config;
 mod error;
+mod press;
 mod preview;
 mod shutdown;
 mod state;
@@ -47,6 +50,7 @@ async fn main() -> Result<()> {
                 ..Default::default()
             },
             on_error: |error| Box::pin(error::handler(error)),
+            event_handler: |ctx, event, _framework, state| Box::pin(handle(ctx, event, state)),
             ..Default::default()
         })
         .setup(move |ctx, ready, framework| {
@@ -87,6 +91,33 @@ async fn main() -> Result<()> {
 
     closing.close().await;
     info!("stopped");
+    Ok(())
+}
+
+async fn handle(
+    ctx: &serenity::Context,
+    event: &serenity::FullEvent,
+    state: &BotState,
+) -> Result<(), BotError> {
+    let serenity::FullEvent::InteractionCreate {
+        interaction: Interaction::Component(press),
+    } = event
+    else {
+        return Ok(());
+    };
+
+    if card::favorited_date(&press.data.custom_id).is_none() {
+        return Ok(());
+    }
+
+    if let Err(error) = press::favorite(ctx, state, press).await {
+        tracing::warn!(
+            user = press.user.id.get(),
+            id = %press.data.custom_id,
+            "a favorite press went nowhere: {error:#}"
+        );
+    }
+
     Ok(())
 }
 

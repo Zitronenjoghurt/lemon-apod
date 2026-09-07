@@ -7,7 +7,9 @@ use apod_core::ApodEntry;
 use poise::{Command, CreateReply};
 
 mod dm;
+mod favorites;
 mod lookup;
+mod on_this_day;
 mod owner;
 mod search;
 mod settings;
@@ -24,6 +26,8 @@ pub fn all() -> Vec<Command<BotState, BotError>> {
         "lookup::today",
         "lookup::date",
         "lookup::random",
+        "on_this_day::on_this_day",
+        "favorites::favorites",
         "search::search",
         "dm::dm",
         "settings::settings",
@@ -38,8 +42,11 @@ pub async fn show(ctx: Context<'_>, entry: &ApodEntry) -> BotResult<()> {
     let state = ctx.data();
     let attachment = card::thumbnail(&state.config, entry).await;
     let embed = card::embed(&state.config, entry, Explanation::Full, attachment.as_ref());
+    let favorites = state.store.favorite_count(entry.date).await?;
 
-    let mut reply = CreateReply::default().embed(embed);
+    let mut reply = CreateReply::default()
+        .embed(embed)
+        .components(card::buttons(&state.config, entry, favorites));
     if let Some(attachment) = attachment {
         reply = reply.attachment(attachment);
     }
@@ -82,7 +89,15 @@ mod tests {
         assert_eq!(
             names,
             [
-                "announce", "date", "dm", "random", "search", "settings", "today"
+                "announce",
+                "date",
+                "dm",
+                "favorites",
+                "on-this-day",
+                "random",
+                "search",
+                "settings",
+                "today"
             ],
             "a subcommand that is written but never listed in the parent is invisible in Discord"
         );
@@ -148,7 +163,16 @@ mod tests {
             "settings changes one server's channel, so a DM has nothing for it to act on"
         );
 
-        for name in ["today", "date", "random", "search", "dm", "announce"] {
+        for name in [
+            "today",
+            "date",
+            "random",
+            "on-this-day",
+            "favorites",
+            "search",
+            "dm",
+            "announce",
+        ] {
             assert!(
                 !find(&apod.subcommands, name).guild_only,
                 "'{name}' has something to do wherever it is run, so it must not be turned away"
@@ -168,7 +192,15 @@ mod tests {
         let tree = tree();
         let apod = find(&tree, "apod");
 
-        for name in ["today", "date", "random", "search", "dm"] {
+        for name in [
+            "today",
+            "date",
+            "random",
+            "on-this-day",
+            "favorites",
+            "search",
+            "dm",
+        ] {
             let command = find(&apod.subcommands, name);
             assert_eq!(command.required_permissions, Permissions::empty(), "{name}");
             assert!(!command.owners_only, "{name}");

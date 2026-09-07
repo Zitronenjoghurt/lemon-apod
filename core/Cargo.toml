@@ -24,6 +24,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
+unicode-normalization = { workspace = true }
 url = "2.5.8"
 
 [dev-dependencies]

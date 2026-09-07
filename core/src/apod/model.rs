@@ -360,3 +360,52 @@ pub enum ClozePiece {
     Shown { s: String },
     Hidden { h: String, n: usize },
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Contributor {
+    pub id: String,
+    pub label: String,
+    pub kind: String,
+    pub entries: i64,
+    pub first: ApodDate,
+    pub last: ApodDate,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CreditOrder {
+    #[default]
+    Entries,
+    Latest,
+    Name,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ObjectCount {
+    pub id: String,
+    pub catalog: String,
+    pub entries: i64,
+    pub first: ApodDate,
+    pub last: ApodDate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CatalogCount {
+    pub catalog: String,
+    pub objects: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RoleCount {
+    pub role: String,
+    pub entries: i64,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ObjectOrder {
+    #[default]
+    Entries,
+    Latest,
+    Designation,
+}

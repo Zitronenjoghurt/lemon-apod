@@ -1,4 +1,5 @@
 use crate::Context;
+use crate::colour::{GREEN, GREY};
 use crate::error::{BotError, BotResult};
 use crate::store::{Explanation, Guild};
 use crate::{announce, card};
@@ -6,10 +7,7 @@ use apod_core::ApodDate;
 use chrono::Utc;
 use poise::CreateReply;
 use poise::serenity_prelude as serenity;
-use serenity::{Colour, CreateEmbed};
-
-const GREY: Colour = Colour::new(0xA0_97_A1);
-const GREEN: Colour = Colour::new(0xAC_B5_65);
+use serenity::CreateEmbed;
 
 /// Daily announcement settings.
 #[poise::command(
@@ -95,7 +93,13 @@ pub async fn announce(ctx: Context<'_>) -> BotResult<()> {
         attachment.as_ref(),
     );
 
-    announce::post(ctx.serenity_context(), &guild, embed, attachment).await?;
+    let buttons = card::buttons(
+        &state.config,
+        &entry,
+        state.store.favorite_count(entry.date).await?,
+    );
+
+    announce::post(ctx.serenity_context(), &guild, embed, attachment, buttons).await?;
 
     let first = state
         .store
@@ -132,8 +136,15 @@ async fn to_dm(ctx: Context<'_>, entry: &apod_core::ApodEntry) -> BotResult<()> 
 
     let attachment = card::thumbnail(&state.config, entry).await;
     let embed = card::embed(&state.config, entry, user.explanation, attachment.as_ref());
+    let buttons = card::buttons(
+        &state.config,
+        entry,
+        state.store.favorite_count(entry.date).await?,
+    );
 
-    if let Err(error) = announce::dm(ctx.serenity_context(), user_id, embed, attachment).await {
+    if let Err(error) =
+        announce::dm(ctx.serenity_context(), user_id, embed, attachment, buttons).await
+    {
         if announce::cannot_dm(&error) {
             ctx.send(
                 CreateReply::default()

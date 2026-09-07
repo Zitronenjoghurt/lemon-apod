@@ -86,10 +86,28 @@ const router = createRouter({
       meta: { title: 'Vote on a pair' },
     },
     {
+      path: '/indexes',
+      name: 'indexes',
+      component: () => import('@/views/IndexesView.vue'),
+      meta: { title: 'Indexes' },
+    },
+    {
       path: '/resources',
       name: 'resources',
       component: () => import('@/views/ResourcesView.vue'),
       meta: { title: 'Resources' },
+    },
+    {
+      path: '/credits',
+      name: 'credits',
+      component: () => import('@/views/CreditsView.vue'),
+      meta: { title: 'Credits' },
+    },
+    {
+      path: '/objects',
+      name: 'objects',
+      component: () => import('@/views/ObjectsView.vue'),
+      meta: { title: 'Objects' },
     },
     {
       path: '/pictures',
@@ -131,6 +149,16 @@ const router = createRouter({
       path: '/resources/:id(\\d+)',
       name: 'resource',
       component: () => import('@/views/ResourceView.vue'),
+    },
+    {
+      path: '/credits/:id',
+      name: 'credit',
+      component: () => import('@/views/CreditView.vue'),
+    },
+    {
+      path: '/objects/:id',
+      name: 'object',
+      component: () => import('@/views/ObjectView.vue'),
     },
     {
       path: `/pictures/:date(${DATE})`,

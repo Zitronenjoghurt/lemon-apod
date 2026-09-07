@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted } from 'vue'
 
 const OWNS_ARROWS = '.p-select, .p-selectbutton, .p-paginator, .p-datepicker, [role="listbox"]'
-const OVERLAY = '.p-select-overlay, .p-dialog-mask, .p-drawer-mask, .p-popover'
+const OVERLAY = '.p-select-overlay, .p-dialog-mask, .p-drawer-mask, .p-popover, .pswp'
 
 export interface ArrowHandlers {
   left?: () => void

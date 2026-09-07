@@ -1,4 +1,5 @@
 use crate::archive::Archive;
+use crate::bot::Bot;
 use crate::config::Config;
 use crate::meta::Shell;
 use crate::rating::Rating;
@@ -19,6 +20,7 @@ pub struct ServerState {
     pub config: Arc<Config>,
     pub store: ApodReader,
     pub archive: Archive,
+    pub bot: Bot,
     pub sky: Sky,
     pub rating: Option<Arc<Rating>>,
     pub shell: Arc<Shell>,
@@ -53,6 +55,7 @@ impl ServerState {
         Ok(Self {
             rating,
             archive: Archive::new(config.archive_db.clone()),
+            bot: Bot::new(config.bot_db.clone()),
             shell: Arc::new(Shell::load(&config)?),
             sky: Sky::new(
                 config.sky_db.clone(),

@@ -5,7 +5,7 @@ BOT = APOD_DATA_DIR=$(DATA) cargo run -q -p apod-discord-bot --
 COMPOSE = docker compose -f docker/compose.yaml
 
 .PHONY: help check test fmt lint api web dev bot preview backfill backfill-modern refresh-modern status quality reparse \
-        media thumbs \
+        media media-dedup thumbs \
         pictures sky notify rating rating-import rating-export legacy-export legacy-import \
         docker seed up down logs ps shell
 
@@ -60,6 +60,9 @@ reparse: ## Rebuild the index from the HTML on disk
 
 media: ## Fetch the original pictures into ./data/media. N=<n> to stop early. This hits NASA
 	$(ARCHIVER) media $(if $(N),--limit $(N))
+
+media-dedup: ## Keep one copy of every picture a date holds twice. DRY=1 lists it instead
+	$(ARCHIVER) media-dedup $(if $(DRY),--dry-run)
 
 thumbs: ## Generate any missing thumbnails
 	$(ARCHIVER) thumbs

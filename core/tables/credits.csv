@@ -1,0 +1,165 @@
+name,id,kind
+nasa,nasa,group
+esa,esa,group
+eso,eso,group
+jpl,jpl,group
+stsci,stsci,group
+aura,aura,group
+nsf,nsf,group
+twan,twan,group
+hst,hst,group
+jwst,jwst,group
+csa,csa,group
+gsfc,gsfc,group
+noao,noao,group
+nrao,nrao,group
+noirlab,noirlab,group
+usgs,usgs,group
+noaa,noaa,group
+ligo,ligo,group
+sdo,sdo,group
+soho,soho,group
+cxc,cxc,group
+msss,msss,group
+ssi,ssi,group
+lpi,lpi,group
+asu,asu,group
+jaxa,jaxa,group
+isro,isro,group
+roscosmos,roscosmos,group
+cnes,cnes,group
+apod,apod,group
+esa hubble,esa hubble,group
+hubble heritage,hubble heritage,group
+nas a,nasa,
+nasa gsfc,nasa,
+jet propulsion laboratory,jpl,
+jpl caltech,jpl,
+space telescope science institute,stsci,
+space telescope scientific institute,stsci,
+european southern observatory,eso,
+european space agency,esa,
+the world at night,twan,
+national science foundation,nsf,
+hubble space telescope,hst,
+hubble heritage team,hubble heritage,
+the hubble heritage team,hubble heritage,
+p horalek,petr horalek,
+nasa jpl caltech,jpl,
+nasas jpl,jpl,
+jpl caltach,jpl,
+nasa jpl,jpl,
+jpl nasa,jpl,
+st sci,stsci,
+nasa stsci,stsci,
+stsci aura,stsci,
+national optical astronomy observatory,noao,
+space science institute,ssi,
+space science inst,ssi,
+malin space science systems,msss,
+cxo,cxc,
+chandra,cxc,
+chandra observatory,cxc,
+chandra x ray,cxc,
+nasa cxc,cxc,
+cxc sao,cxc,
+chandra x ray observatory,cxc,
+ciclops,cassini imaging team,
+esa hubble space telescope,esa hubble,
+esa hubble collaboration,esa hubble,
+hubble collaboration,esa hubble,
+stsci esa,esa hubble,
+nasa goddard,gsfc,
+goddard space flight center,gsfc,
+nasa esa,nasa,
+a gomez,arturo gomez,
+a hajian,arsen r hajian,
+a mellinger,axel mellinger,
+a pagan,alyssa pagan,
+a steere,andy steere,
+a wilson,andrew s wilson,
+b j mochejska,barbara j mochejska,
+b powell,brian p powell,
+b yen,bob yen,
+c mihos,chris mihos,
+c trujillo,chad trujillo,
+d de martin,davide de martin,
+d duriscoe,dan duriscoe,
+d hunter,diedre hunter,
+d jewitt,david jewitt,
+d malin,david malin,
+d mcdavid,david mcdavid,
+d peach,damian peach,
+d vanderhoff,dewey vanderhoff,
+d verschatse,daniel verschatse,
+d wang,daniel wang,
+h bond,howard bond,
+h schweiker,heidi schweiker,
+j b kaler,james b kaler,
+j bally,john bally,
+j c cuillandre,jean charles cuillandre,
+j cami,jan cami,
+j curtis,jan curtis,
+j de winter,julien de winter,
+j english,jayanne english,
+j gallagher,jay gallagher,
+j h kastner,joel kastner,
+j harvey,jack harvey,
+j hughes,john hughes,
+j l dauvergne,jean luc dauvergne,
+j schnittman,jeremy schnittman,
+j sivo,joseph m sivo,
+j ware,jason ware,
+k beecroft,katelyn beecroft,
+k cook,kem cook,
+l comolli,lorenzo comolli,
+m brown,michael brown,
+m druckmuller,miloslav druckmuller,
+m fulle,marco fulle,
+m h ozsarac,mehmet hakan ozsarac,
+m horn,michael horn,
+m russo,matt russo,
+m zamani,mahdi zamani,
+o staiger,olivier staiger,
+p tuthill,peter tuthill,
+p vantuyne,patrick vantuyne,
+r bouwens,rychard bouwens,
+r colombari,roberto colombari,
+r croman,russell croman,
+r eder,robert eder,
+r gendler,robert gendler,
+r j nemiroff,robert nemiroff,
+r scott,rick scott,
+r wittich,reinhold wittich,
+s barnes,stephen barnes,
+s mazlin,steve mazlin,
+s winfrey,sarah winfrey,
+t a rector,travis rector,
+t credner,till credner,
+w keel,william keel,
+y beletsky,yuri beletsky,
+mer,mars exploration rover mission,
+hubble,hubble,group
+hubble legacy archive,hubble legacy archive,group
+caltech,caltech,group
+swri,swri,group
+cornell,cornell,group
+voyager,voyager,group
+hirise,hirise,group
+cfa,cfa,group
+carnegie,carnegie,group
+wikipedia,wikipedia,group
+apollo,apollo,group
+apollo 11,apollo 11,group
+apollo 17,apollo 17,group
+vlt,vlt,group
+8 2 meter vlt,vlt,group
+8 2 meter vlt antu,vlt,group
+rosetta,rosetta,group
+juno,juno,group
+mariner 10,mariner 10,group
+stereo,stereo,group
+goddard,goddard,group
+princeton,princeton,group
+umass,umass,group
+skyview,skyview,group

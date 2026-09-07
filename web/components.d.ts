@@ -38,6 +38,8 @@ declare module 'vue' {
     GapDetail: typeof import('./src/components/GapDetail.vue')['default']
     HintPopover: typeof import('./src/components/HintPopover.vue')['default']
     IconField: typeof import('primevue/iconfield')['default']
+    IndexRow: typeof import('./src/components/IndexRow.vue')['default']
+    IndexTabs: typeof import('./src/components/IndexTabs.vue')['default']
     InputIcon: typeof import('primevue/inputicon')['default']
     InputText: typeof import('primevue/inputtext')['default']
     KpGauge: typeof import('./src/components/KpGauge.vue')['default']

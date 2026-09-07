@@ -37,7 +37,14 @@ onUnmounted(() => document.removeEventListener('click', intercept, true))
 const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
 const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
 
-type NavLink = { to: string; label: string; icon: string; exact?: boolean; away?: boolean }
+type NavLink = {
+  to: string
+  label: string
+  icon: string
+  exact?: boolean
+  away?: boolean
+  covers?: string[]
+}
 
 const groups = computed<{ name: string | null; links: NavLink[] }[]>(() => [
   {
@@ -61,8 +68,12 @@ const groups = computed<{ name: string | null; links: NavLink[] }[]>(() => [
     name: 'Dive deeper',
     links: [
       { to: '/search', label: 'Search', icon: 'pi pi-search' },
-      { to: '/pictures', label: 'Encores', icon: 'pi pi-replay' },
-      { to: '/resources', label: 'Resources', icon: 'pi pi-link' },
+      {
+        to: '/indexes',
+        label: 'Indexes',
+        icon: 'pi pi-list',
+        covers: ['/objects', '/credits', '/pictures', '/resources'],
+      },
       { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
       { to: '/modernization', label: 'Modernization', icon: 'pi pi-arrow-right-arrow-left' },
       { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
@@ -81,7 +92,9 @@ const groups = computed<{ name: string | null; links: NavLink[] }[]>(() => [
 function isActive(link: NavLink): boolean {
   if (link.away) return false
   if (link.exact) return route.path === link.to
-  return route.path === link.to || route.path.startsWith(`${link.to}/`)
+
+  const paths = [link.to, ...(link.covers ?? [])]
+  return paths.some((path) => route.path === path || route.path.startsWith(`${path}/`))
 }
 
 const version = __APP_VERSION__

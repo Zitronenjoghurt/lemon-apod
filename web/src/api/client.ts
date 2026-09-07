@@ -5,7 +5,12 @@ import type {
   Ballot,
   Board,
   Cast,
+  CatalogCount,
+  Contributor,
+  ContributorKind,
   Coverage,
+  Credited,
+  CreditSort,
   FieldDivergence,
   Forgotten,
   GamePicture,
@@ -17,6 +22,8 @@ import type {
   MatchAnswer,
   MatchRound,
   Migration,
+  ObjectCount,
+  ObjectSort,
   OrderPair,
   Page,
   Picture,
@@ -31,6 +38,7 @@ import type {
   ResourceSort,
   Reveal,
   SearchResults,
+  Showing,
   Sky,
   SortOrder,
   Stats,
@@ -238,6 +246,27 @@ export interface ResourceOptions {
   limit?: number
 }
 
+export interface CreditOptions {
+  q?: string
+  kind?: ContributorKind
+  sort?: CreditSort
+  offset?: number
+  limit?: number
+}
+
+export interface ObjectOptions {
+  q?: string
+  catalog?: string
+  sort?: ObjectSort
+  offset?: number
+  limit?: number
+}
+
+export interface ShowingOptions {
+  offset?: number
+  limit?: number
+}
+
 export interface PictureOptions {
   q?: string
   min_appearances?: number
@@ -306,6 +335,21 @@ export const api = {
 
   resource: (id: number, offset = 0, limit = 30, signal?: AbortSignal) =>
     request<ResourceRefs>(`/api/resources/${id}${query({ offset, limit })}`, signal),
+
+  credits: (options: CreditOptions = {}, signal?: AbortSignal) =>
+    request<Listing<Contributor>>(`/api/credits${query({ ...options })}`, signal),
+
+  credit: (id: string, offset = 0, limit = 24, signal?: AbortSignal) =>
+    request<Credited>(`/api/credits/${encodeURIComponent(id)}${query({ offset, limit })}`, signal),
+
+  objects: (options: ObjectOptions = {}, signal?: AbortSignal) =>
+    request<Listing<ObjectCount>>(`/api/objects${query({ ...options })}`, signal),
+
+  objectCatalogs: (signal?: AbortSignal) =>
+    request<CatalogCount[]>('/api/objects/catalogs', signal),
+
+  object: (id: string, options: ShowingOptions = {}, signal?: AbortSignal) =>
+    request<Showing>(`/api/objects/${encodeURIComponent(id)}${query({ ...options })}`, signal),
 
   pictures: (options: PictureOptions = {}, signal?: AbortSignal) =>
     request<Listing<Picture>>(`/api/pictures${query({ ...options })}`, signal),

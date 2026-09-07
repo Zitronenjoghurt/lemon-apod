@@ -1,5 +1,9 @@
 use crate::api::error::{ApiError, ApiResult};
-use apod_core::{ApodDate, Filters, KindFilter, Order, PictureOrder, ResourceOrder, WordOrder};
+use apod_core::contributor::Kind;
+use apod_core::{
+    ApodDate, CreditOrder, Filters, KindFilter, ObjectOrder, Order, PictureOrder, ResourceOrder,
+    WordOrder,
+};
 use std::str::FromStr;
 
 pub fn date(raw: &str) -> ApiResult<ApodDate> {
@@ -45,6 +49,33 @@ pub fn sort_by_date(raw: Option<&str>) -> ApiResult<bool> {
         None | Some("relevance") => Ok(false),
         Some("date") => Ok(true),
         Some(other) => Err(ApiError::bad_request(format!("unknown sort '{other}'"))),
+    }
+}
+
+pub fn contributor_kind(raw: Option<&str>) -> ApiResult<Option<Kind>> {
+    match raw {
+        None => Ok(None),
+        Some("person") => Ok(Some(Kind::Person)),
+        Some("group") => Ok(Some(Kind::Group)),
+        Some("unknown") => Ok(Some(Kind::Unknown)),
+        Some(other) => Err(ApiError::bad_request(format!("unknown kind '{other}'"))),
+    }
+}
+
+pub fn credit_order(raw: Option<&str>) -> ApiResult<CreditOrder> {
+    parsed(raw, CreditOrder::default(), "sort")
+}
+
+pub fn object_order(raw: Option<&str>) -> ApiResult<ObjectOrder> {
+    parsed(raw, ObjectOrder::default(), "sort")
+}
+
+fn parsed<T: FromStr + Default>(raw: Option<&str>, fallback: T, what: &str) -> ApiResult<T> {
+    match raw {
+        None => Ok(fallback),
+        Some(raw) => {
+            T::from_str(raw).map_err(|_| ApiError::bad_request(format!("unknown {what} '{raw}'")))
+        }
     }
 }
 
@@ -125,6 +156,10 @@ mod tests {
         assert!(month_day("nonsense").is_err());
         assert!(resource_order(Some("popularity")).is_err());
         assert!(word_order(Some("length")).is_err());
+        assert!(picture_order(Some("prettiest")).is_err());
+        assert!(contributor_kind(Some("robot")).is_err());
+        assert!(credit_order(Some("loudest")).is_err());
+        assert!(object_order(Some("brightest")).is_err());
     }
 
     #[test]
@@ -144,6 +179,17 @@ mod tests {
         assert_eq!(order(Some("asc")).unwrap(), Order::Asc);
         assert!(!sort_by_date(None).unwrap());
         assert_eq!(month_day("03-05").unwrap(), (3, 5));
+        assert_eq!(picture_order(None).unwrap(), PictureOrder::Appearances);
+        assert_eq!(picture_order(Some("span")).unwrap(), PictureOrder::Span);
+        assert_eq!(contributor_kind(None).unwrap(), None);
+        assert_eq!(contributor_kind(Some("group")).unwrap(), Some(Kind::Group));
+        assert_eq!(credit_order(None).unwrap(), CreditOrder::Entries);
+        assert_eq!(credit_order(Some("name")).unwrap(), CreditOrder::Name);
+        assert_eq!(object_order(None).unwrap(), ObjectOrder::Entries);
+        assert_eq!(
+            object_order(Some("designation")).unwrap(),
+            ObjectOrder::Designation
+        );
     }
 
     #[test]

@@ -52,6 +52,12 @@ pub async fn run(config: Config) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&json)?);
     }
 
+    println!("\n=== buttons (favorites shown at 0) ===");
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&card::buttons(&config, &entry, 0))?
+    );
+
     apod.db().close().await;
     Ok(())
 }
