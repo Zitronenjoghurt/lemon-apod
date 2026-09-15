@@ -189,7 +189,7 @@ function toggle(id: string): void {
           <div v-if="raised.length" class="stack in-force">
             <h2 class="muted">In force now</h2>
             <p v-for="alert in raised" :key="alert.id" class="raised">
-              <i :class="['pi', NOTICE_ICONS[alert.notice]]" aria-hidden="true" />
+              <AppIcon :name="NOTICE_ICONS[alert.notice]" />
               <span>
                 <strong>{{ NOTICE_LABELS[alert.notice] }}:</strong> {{ alert.headline }}
                 <span v-if="alert.scale" class="muted scale">{{ alert.scale }}</span>
@@ -200,7 +200,7 @@ function toggle(id: string): void {
             </p>
           </div>
           <p v-else class="muted quiet">
-            <i aria-hidden="true" class="pi pi-check-circle" />
+            <AppIcon name="check-circle" />
             NOAA has no alert or warning running.
           </p>
 
@@ -416,7 +416,7 @@ function toggle(id: string): void {
         <ul class="notices">
           <li v-for="alert in shown" :key="alert.id" :class="{ live: inForce(alert) }">
             <button :aria-expanded="opened === alert.id" type="button" @click="toggle(alert.id)">
-              <i :class="['pi', NOTICE_ICONS[alert.notice]]" aria-hidden="true" />
+              <AppIcon :name="NOTICE_ICONS[alert.notice]" />
               <span class="what">
                 <span class="line">
                   <strong>{{ NOTICE_LABELS[alert.notice] }}</strong>
@@ -428,7 +428,7 @@ function toggle(id: string): void {
                 </span>
               </span>
               <i
-                :class="['pi', opened === alert.id ? 'pi-chevron-up' : 'pi-chevron-down']"
+                :name="opened === alert.id ? 'chevron-up' : 'chevron-down'"
                 aria-hidden="true"
                 class="chevron"
               />

@@ -30,8 +30,8 @@ interface Item {
 }
 
 const MODES: { label: string; value: Mode; icon: string }[] = [
-  { label: 'Day by day', value: 'days', icon: 'pi pi-calendar' },
-  { label: 'Random', value: 'random', icon: 'pi pi-sync' },
+  { label: 'Day by day', value: 'days', icon: 'calendar' },
+  { label: 'Random', value: 'random', icon: 'random' },
 ]
 
 const PAGE_SIZE = 20
@@ -314,13 +314,9 @@ const endNote = computed(() => {
 
     <div v-if="stalled && !loading" class="more">
       <p class="muted">Nothing the filter keeps in the last few pages.</p>
-      <Button
-        icon="pi pi-chevron-down"
-        label="Keep looking"
-        outlined
-        severity="secondary"
-        @click="fill"
-      />
+      <Button label="Keep looking" outlined severity="secondary" @click="fill">
+        <template #icon><AppIcon name="chevron-down" /></template>
+      </Button>
     </div>
 
     <p v-if="done && !loading" class="muted end">{{ endNote }}</p>
@@ -333,11 +329,12 @@ const endNote = computed(() => {
         v-tooltip.left="'Back to top'"
         aria-label="Back to top"
         class="to-top"
-        icon="pi pi-arrow-up"
         rounded
         severity="secondary"
         @click="toTop"
-      />
+      >
+        <template #icon><AppIcon name="arrow-up" /></template>
+      </Button>
     </Transition>
   </div>
 </template>

@@ -48,16 +48,16 @@ const target = computed(() =>
       />
       <div v-else :class="{ gone: lost }" class="fallback">
         <template v-if="lost">
-          <i aria-hidden="true" class="pi pi-ban" />
+          <AppIcon name="image-lost" />
           <span class="what">Media lost</span>
         </template>
-        <i v-else aria-hidden="true" class="pi pi-image" />
+        <AppIcon v-else name="image" />
       </div>
       <span v-if="isVideo(entry.media.kind)" aria-label="Video" class="badge">
-        <i aria-hidden="true" class="pi pi-play" />
+        <AppIcon name="play" />
       </span>
       <span v-if="entry.picture" class="badge encore" title="APOD came back to this picture">
-        <i aria-hidden="true" class="pi pi-replay" />
+        <AppIcon name="replay" />
         <span class="sr-only">APOD came back to this picture</span>
       </span>
     </div>

@@ -15,13 +15,13 @@ const base = computed(() => notify.value?.base_url ?? '')
 
 const feeds = [
   {
-    icon: 'pi pi-wifi',
+    icon: 'wifi',
     label: 'Atom',
     href: '/atom.xml',
     hint: 'The newer of the two formats. Pick this one if your reader supports it.',
   },
   {
-    icon: 'pi pi-share-alt',
+    icon: 'share',
     label: 'RSS',
     href: '/feed.xml',
     hint: 'RSS 2.0, for readers that do not support Atom.',
@@ -36,7 +36,7 @@ const topics = computed(() => {
     {
       key: 'apod',
       topic: config.apod_topic,
-      icon: 'pi pi-sparkles',
+      icon: 'sparkles',
       label: 'Picture of the day',
       hint: 'One message a day when a new picture goes up, with the thumbnail attached.',
       cadence: 'About once a day',
@@ -44,7 +44,7 @@ const topics = computed(() => {
     {
       key: 'aurora',
       topic: config.aurora_topic,
-      icon: 'pi pi-bolt',
+      icon: 'bolt',
       label: 'Aurora alerts',
       hint: "Geomagnetic storms through NOAA's G-scale alerts",
       cadence: 'Rare, depending on solar activity',
@@ -52,7 +52,7 @@ const topics = computed(() => {
     {
       key: 'space-weather',
       topic: config.space_weather_topic,
-      icon: 'pi pi-sun',
+      icon: 'sun',
       label: 'Other space weather',
       hint: 'Everything else NOAA issues: proton events, radio blackouts, electron flux.',
       cadence: 'Occasional',
@@ -60,7 +60,7 @@ const topics = computed(() => {
     {
       key: 'sky',
       topic: config.sky_topic,
-      icon: 'pi pi-star',
+      icon: 'star',
       label: 'Sky events',
       hint: 'Meteor shower peaks, eclipses and supermoons, a day or so ahead.',
       cadence: 'A handful a year',
@@ -103,7 +103,7 @@ function appLink(topic: string): string {
       <ul class="items">
         <li v-for="feed in feeds" :key="feed.href">
           <a :href="feed.href">
-            <i :class="feed.icon" aria-hidden="true" />
+            <AppIcon :name="feed.icon" />
             <span class="text">
               <span class="value">{{ feed.label }}</span>
               <span class="muted label">{{ feed.hint }}</span>
@@ -134,14 +134,16 @@ function appLink(topic: string): string {
 
         <ul class="topics">
           <li v-for="entry in topics" :key="entry.key">
-            <i :class="entry.icon" aria-hidden="true" />
+            <AppIcon :name="entry.icon" />
             <span class="text">
               <span class="value">{{ entry.label }}</span>
               <span class="muted label">{{ entry.hint }}</span>
             </span>
             <span class="foot">
               <a v-if="isAndroid" :href="appLink(entry.topic)" class="plain">
-                <Button icon="pi pi-mobile" label="Open in app" size="small" />
+                <Button label="Open in app" size="small">
+                  <template #icon><AppIcon name="mobile" /></template>
+                </Button>
               </a>
               <code class="url">{{ topicUrl(entry.topic) }}</code>
               <span class="muted cadence">{{ entry.cadence }}</span>
@@ -239,12 +241,11 @@ h1 {
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.items i,
-.topics i {
+.items .icon,
+.topics .icon {
   font-size: var(--text-md);
   color: var(--accent);
   width: 1.3rem;
-  text-align: center;
   flex: none;
 }
 
@@ -297,7 +298,7 @@ h1 {
   background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
-.topics i {
+.topics .icon {
   grid-column: 1;
   grid-row: 1;
   line-height: 1.5;

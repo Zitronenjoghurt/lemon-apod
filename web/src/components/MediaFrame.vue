@@ -165,7 +165,7 @@ const frameStyle = computed(() => ({
           </span>
         </div>
       </div>
-      <span aria-hidden="true" class="magnify"><i class="pi pi-search-plus" /></span>
+      <span aria-hidden="true" class="magnify"><AppIcon name="zoom" /></span>
     </button>
 
     <template v-else-if="undisplayable">
@@ -201,13 +201,13 @@ const frameStyle = computed(() => ({
       />
       <button v-else class="frame facade" type="button" @click="playing = true">
         <img v-if="media.thumb_url" :alt="title" :src="media.thumb_url" loading="lazy" />
-        <span aria-hidden="true" class="play"><i class="pi pi-play" /></span>
+        <span aria-hidden="true" class="play"><AppIcon name="play" /></span>
         <span class="sr-only">Play video</span>
       </button>
     </template>
 
     <div v-else-if="lost" class="frame placeholder-card gone">
-      <i aria-hidden="true" class="pi pi-ban" />
+      <AppIcon name="image-lost" />
       <span>Media lost</span>
       <small>
         The media this entry referenced became unreachable before this archive was able to preserve
@@ -222,7 +222,7 @@ const frameStyle = computed(() => ({
       rel="noopener"
       target="_blank"
     >
-      <i aria-hidden="true" class="pi pi-external-link" />
+      <AppIcon name="external" />
       <span>{{ placeholderLabel }}</span>
     </a>
 
@@ -476,28 +476,25 @@ video.frame,
 
 .facade .play {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
   display: grid;
   place-items: center;
-}
-
-.facade .play i {
-  font-size: var(--text-title);
-  color: #fff;
-  background: rgb(0 0 0 / 0.55);
-  backdrop-filter: blur(4px);
-  border-radius: 50%;
   width: 4rem;
   height: 4rem;
-  display: grid;
-  place-items: center;
+  border-radius: 50%;
   padding-left: var(--space-1);
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: var(--text-title);
   transition:
     transform 0.2s ease,
     background 0.2s ease;
 }
 
-.facade:hover .play i {
+.facade:hover .play {
   transform: scale(1.08);
   background: rgb(0 0 0 / 0.75);
 }
@@ -531,7 +528,7 @@ video.frame,
   );
 }
 
-.placeholder-card.gone i {
+.placeholder-card.gone .icon {
   color: hsl(var(--tone-warn));
 }
 
@@ -542,7 +539,7 @@ video.frame,
   text-wrap: pretty;
 }
 
-.placeholder-card i {
+.placeholder-card .icon {
   font-size: var(--text-title);
 }
 

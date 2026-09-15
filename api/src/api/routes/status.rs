@@ -4,7 +4,7 @@ use crate::bot::BotNumbers;
 use crate::config::{Contact, Discord, Notify};
 use crate::schedule::Schedule;
 use crate::state::ServerState;
-use apod_core::ApodSummary;
+use apod_core::{ApodSummary, Pause};
 use axum::Router;
 use axum::extract::State;
 use axum::response::Response;
@@ -16,6 +16,8 @@ struct Status {
     latest: Option<ApodSummary>,
     entries: i64,
     publish: Schedule,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pause: Option<Pause>,
     rating: Rating,
     contact: Contact,
     notify: Notify,
@@ -62,6 +64,7 @@ async fn get_status(State(state): State<ServerState>) -> ApiResult<Response> {
         latest: state.store.latest().await?.map(|entry| entry.to_summary()),
         entries: state.store.count().await?,
         publish: Schedule::now(&state.config.publish),
+        pause: state.config.pause.clone(),
         rating: rating(&state).await?,
         contact: state.config.contact.clone(),
         notify: state.config.notify.clone(),

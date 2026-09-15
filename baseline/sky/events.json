@@ -1,0 +1,212 @@
+[
+  {
+    "id": "conjunction",
+    "kind": "conjunction",
+    "title": "Conjunctions",
+    "include": [
+      "%conjunction%",
+      "%jupiter and mars%",
+      "%jupiter and mercury%",
+      "%jupiter and neptune%",
+      "%jupiter and saturn%",
+      "%jupiter and uranus%",
+      "%jupiter and venus%",
+      "%jupiter, mars%",
+      "%jupiter, mercury%",
+      "%jupiter, neptune%",
+      "%jupiter, saturn%",
+      "%jupiter, uranus%",
+      "%jupiter, venus%",
+      "%mars and jupiter%",
+      "%mars and mercury%",
+      "%mars and neptune%",
+      "%mars and saturn%",
+      "%mars and uranus%",
+      "%mars and venus%",
+      "%mars, jupiter%",
+      "%mars, mercury%",
+      "%mars, neptune%",
+      "%mars, saturn%",
+      "%mars, uranus%",
+      "%mars, venus%",
+      "%mercury and jupiter%",
+      "%mercury and mars%",
+      "%mercury and neptune%",
+      "%mercury and saturn%",
+      "%mercury and uranus%",
+      "%mercury and venus%",
+      "%mercury, jupiter%",
+      "%mercury, mars%",
+      "%mercury, neptune%",
+      "%mercury, saturn%",
+      "%mercury, uranus%",
+      "%mercury, venus%",
+      "%neptune and jupiter%",
+      "%neptune and mars%",
+      "%neptune and mercury%",
+      "%neptune and saturn%",
+      "%neptune and uranus%",
+      "%neptune and venus%",
+      "%neptune, jupiter%",
+      "%neptune, mars%",
+      "%neptune, mercury%",
+      "%neptune, saturn%",
+      "%neptune, uranus%",
+      "%neptune, venus%",
+      "%saturn and jupiter%",
+      "%saturn and mars%",
+      "%saturn and mercury%",
+      "%saturn and neptune%",
+      "%saturn and uranus%",
+      "%saturn and venus%",
+      "%saturn, jupiter%",
+      "%saturn, mars%",
+      "%saturn, mercury%",
+      "%saturn, neptune%",
+      "%saturn, uranus%",
+      "%saturn, venus%",
+      "%uranus and jupiter%",
+      "%uranus and mars%",
+      "%uranus and mercury%",
+      "%uranus and neptune%",
+      "%uranus and saturn%",
+      "%uranus and venus%",
+      "%uranus, jupiter%",
+      "%uranus, mars%",
+      "%uranus, mercury%",
+      "%uranus, neptune%",
+      "%uranus, saturn%",
+      "%uranus, venus%",
+      "%venus and jupiter%",
+      "%venus and mars%",
+      "%venus and mercury%",
+      "%venus and neptune%",
+      "%venus and saturn%",
+      "%venus and uranus%",
+      "%venus, jupiter%",
+      "%venus, mars%",
+      "%venus, mercury%",
+      "%venus, neptune%",
+      "%venus, saturn%",
+      "%venus, uranus%"
+    ],
+    "exclude": [
+      "%comet%",
+      "%nebula%",
+      "%crescents%",
+      "%analemma%"
+    ]
+  },
+  {
+    "id": "solar-eclipse",
+    "kind": "eclipse",
+    "title": "Solar eclipses",
+    "include": [
+      "%solar eclipse%",
+      "%annular eclipse%",
+      "%eclipse of the sun%",
+      "%total eclipse%"
+    ],
+    "exclude": [
+      "%lunar%",
+      "%moon%"
+    ]
+  },
+  {
+    "id": "lunar-eclipse",
+    "kind": "eclipse",
+    "title": "Lunar eclipses",
+    "include": [
+      "%lunar eclipse%",
+      "%eclipsed moon%",
+      "%eclipse of the moon%",
+      "%blood moon%"
+    ],
+    "exclude": [
+      "%solar%",
+      "%sun%"
+    ]
+  },
+  {
+    "id": "supermoon",
+    "kind": "moon",
+    "title": "Moon specials",
+    "include": [
+      "%supermoon%",
+      "%super moon%",
+      "%moon at perigee%",
+      "%perigee%",
+      "%micromoon%",
+      "%micro moon%"
+    ],
+    "exclude": [
+      "%spacecraft%",
+      "%orbit of%"
+    ]
+  },
+  {
+    "id": "solstice",
+    "kind": "season",
+    "title": "Solstices",
+    "include": [
+      "%solstice%"
+    ],
+    "exclude": []
+  },
+  {
+    "id": "equinox",
+    "kind": "season",
+    "title": "Equinoxes",
+    "include": [
+      "%equinox%"
+    ],
+    "exclude": []
+  },
+  {
+    "id": "planets",
+    "kind": "planet",
+    "title": "Planets",
+    "include": [
+      "%planets%",
+      "%opposition%",
+      "%retrograde%",
+      "%evening star%",
+      "%morning star%",
+      "%planet parade%"
+    ],
+    "exclude": [
+      "%exoplanet%",
+      "%star system%",
+      "%forming%",
+      "%other star%",
+      "%around a%",
+      "%orbiting%"
+    ]
+  },
+  {
+    "id": "meteors",
+    "kind": "shower",
+    "title": "Meteors",
+    "include": [
+      "%meteor shower%",
+      "%meteors%",
+      "%fireball%",
+      "%perseid%",
+      "%leonid%",
+      "%geminid%",
+      "%orionid%",
+      "%quadrantid%",
+      "%lyrid%",
+      "%aquariid%",
+      "%aquarid%",
+      "%taurid%",
+      "%draconid%",
+      "%ursid%",
+      "%capricornid%"
+    ],
+    "exclude": [
+      "%meteorite%",
+      "%meteorolog%"
+    ]
+  }
+]

@@ -150,6 +150,7 @@ async function choose(outcome: RatingOutcome): Promise<void> {
 useArrowKeys({
   left: () => void choose('left'),
   right: () => void choose('right'),
+  up: () => void choose('tie'),
   down: () => void choose('tie'),
   space: () => void choose('tie'),
 })
@@ -168,7 +169,7 @@ onMounted(() => void open(true))
   <div class="stack vote">
     <header class="row bar">
       <RouterLink class="back" to="/rating">
-        <i aria-hidden="true" class="pi pi-angle-left" />
+        <AppIcon name="chevron-left" />
         <h1>Best APOD Voting</h1>
       </RouterLink>
 
@@ -178,10 +179,14 @@ onMounted(() => void open(true))
         type="button"
         @click="swap"
       >
-        <i :class="CATEGORY_ICONS[category]" aria-hidden="true" />
+        <AppIcon :name="CATEGORY_ICONS[category]" />
         {{ CATEGORIES[category].short }}
-        <i aria-hidden="true" class="pi pi-sort-alt swap" />
+        <AppIcon name="swap" class="swap" />
       </button>
+
+      <p class="muted keys"><kbd>&larr;</kbd><kbd>&rarr;</kbd> pick <kbd>space</kbd> draw</p>
+
+      <span v-if="cast" class="tally"> {{ cast }} vote{{ cast === 1 ? '' : 's' }} </span>
 
       <button
         v-tooltip.bottom="'How this works'"
@@ -189,7 +194,7 @@ onMounted(() => void open(true))
         type="button"
         @click="helpOpen = true"
       >
-        <i aria-hidden="true" class="pi pi-question-circle" />
+        <AppIcon name="question" />
         <span class="sr-only">How this works</span>
       </button>
     </header>
@@ -199,17 +204,12 @@ onMounted(() => void open(true))
     <ApodCredit class="credit" lead="Both pictures are from NASA's" variant="banner" />
 
     <section v-if="spent" class="stack budget">
-      <i aria-hidden="true" class="pi pi-hourglass" />
+      <AppIcon name="hourglass" />
       <h2>{{ over ? 'Ready to vote' : 'Reached your voting limit' }}</h2>
       <p>{{ cap }} {{ opensAgain }}</p>
-      <Button
-        v-if="over"
-        :loading="loading"
-        icon="pi pi-refresh"
-        label="Carry on voting"
-        size="small"
-        @click="open()"
-      />
+      <Button v-if="over" :loading="loading" label="Carry on voting" size="small" @click="open()">
+        <template #icon><AppIcon name="refresh" /></template>
+      </Button>
       <RouterLink class="board" to="/rating">See the results</RouterLink>
     </section>
 
@@ -232,39 +232,33 @@ onMounted(() => void open(true))
             :disabled="sending"
             :side="ballot.left"
             :state="picked === 'left' ? 'picked' : picked ? 'passed' : 'plain'"
-            hint="← Left"
             @pick="choose('left')"
             @zoom="zoom('left')"
           />
+
+          <button
+            v-tooltip.top="'Neither, or both equally'"
+            :disabled="sending"
+            class="draw"
+            type="button"
+            @click="choose('tie')"
+          >
+            <AppIcon name="equals" />
+            <span class="word">It's a draw</span>
+          </button>
+
           <RatingPicture
             ref="rightCard"
             :busy="measuring === 'right'"
             :disabled="sending"
             :side="ballot.right"
             :state="picked === 'right' ? 'picked' : picked ? 'passed' : 'plain'"
-            hint="Right →"
             @pick="choose('right')"
             @zoom="zoom('right')"
           />
         </div>
 
         <MediaLightbox :at="zoomAt" :slides="slides" @close="zoomAt = null" />
-
-        <div class="row controls">
-          <Button
-            :disabled="sending"
-            icon="pi pi-equals"
-            label="I can't decide"
-            outlined
-            severity="secondary"
-            size="small"
-            @click="choose('tie')"
-          />
-          <p class="muted keys"><kbd>←</kbd> <kbd>→</kbd> to pick, <kbd>space</kbd> for a tie</p>
-          <p v-if="cast" class="muted tally">
-            {{ cast }} vote{{ cast === 1 ? '' : 's' }} this visit
-          </p>
-        </div>
       </template>
     </template>
 
@@ -366,7 +360,7 @@ h1 {
   text-align: center;
 }
 
-.budget > i {
+.budget > .icon {
   font-size: var(--text-xl);
   color: var(--accent);
 }
@@ -394,44 +388,94 @@ h1 {
 }
 
 .pair {
-  --cap: 26vh;
+  --cap: 30vh;
   display: grid;
-  gap: var(--gap);
+  gap: var(--space-2);
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   align-items: start;
+  justify-items: center;
 }
 
 @media (min-width: 42rem) {
   .pair {
-    --cap: 46vh;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --cap: 52vh;
+    gap: var(--space-3);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-rows: auto;
+    align-items: center;
   }
 }
 
-.controls {
-  gap: var(--space-4);
+.draw {
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
-.keys {
-  margin: 0;
-  font-size: var(--text-xs);
+.draw:hover:not(:disabled),
+.draw:focus-visible {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.draw:disabled {
+  cursor: default;
+}
+
+@media (min-width: 42rem) {
+  .draw {
+    flex-direction: column;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    padding: var(--space-2) 0;
+    border-radius: var(--radius-pill);
+    gap: var(--space-0);
+  }
+
+  .draw .word {
+    display: none;
+  }
 }
 
 .tally {
-  margin: 0;
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.keys {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--text-2xs);
+  white-space: nowrap;
 }
 
 kbd {
   font: inherit;
-  font-size: var(--text-xs);
+  min-width: 1.2rem;
+  padding: 0 var(--space-1);
   border: 1px solid var(--border);
   border-bottom-width: 2px;
   border-radius: var(--radius-sm);
-  padding: 0 var(--space-1);
+  text-align: center;
 }
 
 @media (max-width: 42rem) {

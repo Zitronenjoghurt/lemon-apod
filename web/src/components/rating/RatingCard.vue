@@ -27,7 +27,7 @@ const filling = computed(() => board.value?.provisional ?? true)
   <section v-if="!dismissed && board" class="card rating-card">
     <div class="body">
       <p class="muted kicker">
-        <i aria-hidden="true" class="pi pi-images" />
+        <AppIcon name="vote" />
         Vote for your favorite APOD
       </p>
       <h2>Which picture do users think is the best?</h2>
@@ -43,17 +43,20 @@ const filling = computed(() => board.value?.provisional ?? true)
 
       <div class="row actions">
         <RouterLink v-slot="{ navigate }" custom to="/rating/vote">
-          <Button icon="pi pi-images" label="Get voting!" size="small" @click="navigate" />
+          <Button label="Get voting!" size="small" @click="navigate">
+            <template #icon><AppIcon name="vote" /></template>
+          </Button>
         </RouterLink>
         <RouterLink v-slot="{ navigate }" custom to="/rating">
           <Button
-            icon="pi pi-list"
             label="See the results"
             outlined
             severity="secondary"
             size="small"
             @click="navigate"
-          />
+          >
+            <template #icon><AppIcon name="list" /></template>
+          </Button>
         </RouterLink>
       </div>
     </div>
@@ -61,12 +64,13 @@ const filling = computed(() => board.value?.provisional ?? true)
     <Button
       aria-label="Dismiss this card"
       class="close"
-      icon="pi pi-times"
       rounded
       severity="secondary"
       text
       @click="dismiss"
-    />
+    >
+      <template #icon><AppIcon name="times" /></template>
+    </Button>
   </section>
 </template>
 
@@ -97,7 +101,7 @@ const filling = computed(() => board.value?.provisional ?? true)
   letter-spacing: 0.07em;
 }
 
-.kicker i {
+.kicker .icon {
   color: var(--accent);
 }
 

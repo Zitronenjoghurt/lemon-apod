@@ -30,7 +30,7 @@ function confirmClear() {
   confirm.require({
     header: 'Clear all favorites?',
     message: `This removes all ${count.value} saved entries from this browser. There is no undo.`,
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Clear all', severity: 'danger' },
     accept: () => {
@@ -96,13 +96,14 @@ watch(favorites, load, { immediate: true })
       <h1>Favorites</h1>
       <Button
         v-if="count"
-        icon="pi pi-trash"
         label="Clear all"
         outlined
         severity="danger"
         size="small"
         @click="confirmClear"
-      />
+      >
+        <template #icon><AppIcon name="trash" /></template>
+      </Button>
     </header>
 
     <p class="muted note">
@@ -111,7 +112,7 @@ watch(favorites, load, { immediate: true })
     </p>
 
     <p v-if="!count" class="muted empty">
-      Nothing saved yet. Open an entry and press <i aria-hidden="true" class="pi pi-star" /> Save.
+      Nothing saved yet. Open an entry and press <AppIcon name="star" /> Save.
       <br />
       <RouterLink to="/">Start from the latest entry</RouterLink>
     </p>

@@ -195,6 +195,72 @@ impl ApodReader {
         rows.iter().map(|row| self.summary(row)).collect()
     }
 
+    pub async fn titles_like(
+        &self,
+        include: &[String],
+        exclude: &[String],
+        limit: usize,
+    ) -> ApodResult<Vec<ApodSummary>> {
+        if include.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let wanted = include
+            .iter()
+            .map(|_| "lower(title) LIKE ?")
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let unwanted = exclude
+            .iter()
+            .map(|_| " AND lower(title) NOT LIKE ?")
+            .collect::<String>();
+
+        let mut query = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {SUMMARY_COLUMNS} FROM entries
+             WHERE ({wanted}){unwanted} AND thumb_path IS NOT NULL
+             ORDER BY date_id DESC LIMIT ?"
+        )));
+
+        for pattern in include.iter().chain(exclude) {
+            query = query.bind(pattern);
+        }
+
+        let rows = query.bind(limit as i64).fetch_all(self.db.reader()).await?;
+
+        rows.iter().map(|row| self.summary(row)).collect()
+    }
+
+    pub async fn count_titles_like(
+        &self,
+        include: &[String],
+        exclude: &[String],
+    ) -> ApodResult<i64> {
+        if include.is_empty() {
+            return Ok(0);
+        }
+
+        let wanted = include
+            .iter()
+            .map(|_| "lower(title) LIKE ?")
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        let unwanted = exclude
+            .iter()
+            .map(|_| " AND lower(title) NOT LIKE ?")
+            .collect::<String>();
+
+        let mut query = sqlx::query_scalar(AssertSqlSafe(format!(
+            "SELECT COUNT(*) FROM entries
+             WHERE ({wanted}){unwanted} AND thumb_path IS NOT NULL"
+        )));
+
+        for pattern in include.iter().chain(exclude) {
+            query = query.bind(pattern);
+        }
+
+        Ok(query.fetch_one(self.db.reader()).await?)
+    }
+
     pub async fn search(
         &self,
         query: &str,

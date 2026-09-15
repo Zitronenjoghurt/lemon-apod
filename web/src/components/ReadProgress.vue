@@ -39,7 +39,7 @@ const complete = computed(() => Boolean(props.total) && props.read >= (props.tot
 
     <span v-else class="muted note">
       <template v-if="complete">
-        <i aria-hidden="true" class="pi pi-check" />
+        <AppIcon name="check" />
         All {{ total.toLocaleString() }} read in {{ label }}
       </template>
       <template v-else>
@@ -89,7 +89,7 @@ const complete = computed(() => Boolean(props.total) && props.read >= (props.tot
   white-space: nowrap;
 }
 
-.note i {
+.note .icon {
   font-size: 0.75em;
 }
 

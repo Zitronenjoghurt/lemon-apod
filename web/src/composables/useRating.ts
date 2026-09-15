@@ -19,8 +19,8 @@ export const CATEGORIES: Record<RatingCategory, { name: string; short: string; a
 }
 
 export const CATEGORY_ICONS: Record<RatingCategory, string> = {
-  beautiful: 'pi pi-heart',
-  fascinating: 'pi pi-sparkles',
+  beautiful: 'heart',
+  fascinating: 'sparkles',
 }
 
 export const ORDER: RatingCategory[] = ['beautiful', 'fascinating']

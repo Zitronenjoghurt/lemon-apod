@@ -20,12 +20,19 @@ COPY api api
 COPY bot bot
 COPY baseline baseline
 
+FROM rust AS build-services
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked \
+    cargo build --release --locked -p apod-archiver -p apod-api \
     && mkdir -p /out \
-    && cp target/release/apod-archiver target/release/apod-api \
-          target/release/apod-discord-bot /out/
+    && cp target/release/apod-archiver target/release/apod-api /out/
+
+FROM rust AS build-bot
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p apod-discord-bot \
+    && mkdir -p /out \
+    && cp target/release/apod-discord-bot /out/
 
 FROM debian:trixie-slim AS prep
 RUN useradd --system --uid 10001 --no-create-home --home-dir /nonexistent apod \
@@ -40,18 +47,18 @@ ENV APOD_DATA_DIR=/data
 WORKDIR /app
 
 FROM runtime AS archiver
-COPY --from=rust /out/apod-archiver /usr/local/bin/apod-archiver
+COPY --from=build-services /out/apod-archiver /usr/local/bin/apod-archiver
 COPY baseline /app/baseline
 ENTRYPOINT ["apod-archiver"]
 CMD ["run"]
 
 FROM runtime AS api
-COPY --from=rust /out/apod-api /usr/local/bin/apod-api
+COPY --from=build-services /out/apod-api /usr/local/bin/apod-api
 COPY --from=web /web/dist /app/static
 ENV APOD_STATIC_DIR=/app/static
 EXPOSE 51995
 ENTRYPOINT ["apod-api"]
 
 FROM runtime AS discord-bot
-COPY --from=rust /out/apod-discord-bot /usr/local/bin/apod-discord-bot
+COPY --from=build-bot /out/apod-discord-bot /usr/local/bin/apod-discord-bot
 ENTRYPOINT ["apod-discord-bot"]

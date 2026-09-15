@@ -86,13 +86,11 @@ function kindOf(value: string): string {
 
 <template>
   <div class="stack">
-    <h1>Credits</h1>
-
     <IndexTabs />
 
     <div class="row controls">
       <IconField class="search">
-        <InputIcon class="pi pi-search" />
+        <InputIcon><AppIcon name="search" /></InputIcon>
         <InputText
           v-model="query"
           aria-label="Search credits"
@@ -202,7 +200,7 @@ h1 {
 }
 
 .count {
-  margin: 0;
+  margin: calc(var(--space-2) - var(--gap)) 0 0;
   font-size: var(--text-sm);
 }
 

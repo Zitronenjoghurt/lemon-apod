@@ -67,6 +67,16 @@ const FIXED: &[Fixed] = &[
         description: "Solar activity and its influence on Earth, as measured and forecast by NOAA's Space Weather Prediction Center.",
     },
     Fixed {
+        path: "/sky",
+        title: "The sky",
+        description: "All the important facts about our current sky, including moon phases, planet visibility and celestial events.",
+    },
+    Fixed {
+        path: "/launches",
+        title: "Rocket launches",
+        description: "Every recent and upcoming rocket launch with in-depth information.",
+    },
+    Fixed {
         path: "/pictures",
         title: "Encores",
         description: "The NASA Astronomy Picture of the Day that have been published more than once, and what changed between their appearances",
@@ -137,6 +147,7 @@ pub enum Target {
     Entry(ApodDate),
     Picture(ApodDate),
     Resource(i64),
+    Sky(ApodDate),
     Fixed,
 }
 
@@ -194,6 +205,20 @@ impl Shell {
             Some(meta) => self.render(&meta, path),
             None => self.default_page(),
         }
+    }
+
+    pub fn sky_page(&self, date: ApodDate) -> String {
+        let meta = Meta {
+            title: format!("The sky on {date} \u{b7} {SITE}"),
+            description: format!(
+                "The moon, the planets and what was coming up in the sky on {date}, worked out \
+                 from orbital mechanics."
+            ),
+            image: None,
+            article: false,
+        };
+
+        self.render(&meta, &format!("/sky/{date}"))
     }
 
     pub fn gap_page(&self, date: ApodDate) -> String {
@@ -437,6 +462,10 @@ pub fn target(path: &str) -> Target {
 
     if let Some(date) = path.strip_prefix("/pictures/").and_then(as_date) {
         return Target::Picture(date);
+    }
+
+    if let Some(date) = path.strip_prefix("/sky/").and_then(as_date) {
+        return Target::Sky(date);
     }
 
     if let Some(id) = path

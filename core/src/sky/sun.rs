@@ -1,6 +1,10 @@
-use super::time::{DAYS_PER_CENTURY, J2000, cos_deg, dynamical_to_utc, to_julian};
+use super::time::{
+    DAYS_PER_CENTURY, J2000, centuries_at, cos_deg, dynamical_to_utc, lowest_between, offset_days,
+};
 use chrono::{DateTime, Datelike, Utc};
 use serde::Serialize;
+
+const APSIS_SEARCH_DAYS: f64 = 380.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -185,8 +189,67 @@ fn correct(mean_jde: f64) -> f64 {
     mean_jde + (0.000_01 * sum) / lambda
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Apsis {
+    Perihelion,
+    Aphelion,
+}
+
+impl Apsis {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Perihelion => "Earth closest to the sun",
+            Self::Aphelion => "Earth furthest from the sun",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ApsisEvent {
+    pub apsis: Apsis,
+    pub label: &'static str,
+    pub at: DateTime<Utc>,
+    pub distance_au: f64,
+}
+
+pub fn next_apsides(at: DateTime<Utc>) -> Vec<ApsisEvent> {
+    let mut found: Vec<ApsisEvent> = [Apsis::Perihelion, Apsis::Aphelion]
+        .into_iter()
+        .filter_map(|apsis| next_apsis(at, apsis))
+        .collect();
+
+    found.sort_by_key(|event| event.at);
+    found
+}
+
+fn next_apsis(at: DateTime<Utc>, apsis: Apsis) -> Option<ApsisEvent> {
+    let sign = match apsis {
+        Apsis::Perihelion => 1.0,
+        Apsis::Aphelion => -1.0,
+    };
+    let reach = |day: f64| sign * super::planets::earth_distance_au(offset_days(at, day));
+
+    let mut day = 0.0;
+    while day < APSIS_SEARCH_DAYS {
+        let (before, here, after) = (reach(day), reach(day + 5.0), reach(day + 10.0));
+        if here < before && here < after {
+            let closest = offset_days(at, lowest_between(reach, day, day + 10.0));
+            return Some(ApsisEvent {
+                apsis,
+                label: apsis.label(),
+                at: closest,
+                distance_au: super::planets::earth_distance_au(closest),
+            });
+        }
+        day += 5.0;
+    }
+
+    None
+}
+
 pub fn apparent_longitude(at: DateTime<Utc>) -> f64 {
-    let t = (to_julian(at) - J2000) / DAYS_PER_CENTURY;
+    let t = centuries_at(at);
 
     let mean_longitude = 280.466_46 + 36_000.769_83 * t + 0.000_303_2 * t.powi(2);
     let anomaly = 357.529_11 + 35_999.050_29 * t - 0.000_153_7 * t.powi(2);
@@ -303,5 +366,29 @@ mod tests {
         let found = turning_point(2026, Turning::MarchEquinox);
         assert_eq!(found.day(), 20);
         assert_eq!(found.hour(), 14);
+    }
+
+    #[test]
+    fn earth_reaches_perihelion_in_early_january_and_aphelion_in_early_july() {
+        let at = "2026-09-07T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let found = next_apsides(at);
+
+        let perihelion = found
+            .iter()
+            .find(|event| event.apsis == Apsis::Perihelion)
+            .unwrap();
+        let aphelion = found
+            .iter()
+            .find(|event| event.apsis == Apsis::Aphelion)
+            .unwrap();
+
+        assert_eq!(perihelion.at.month(), 1, "got {}", perihelion.at);
+        assert!(perihelion.at.day() <= 7, "got {}", perihelion.at);
+        assert_eq!(aphelion.at.month(), 7, "got {}", aphelion.at);
+        assert!(aphelion.at.day() <= 8, "got {}", aphelion.at);
+
+        assert!((perihelion.distance_au - 0.983_3).abs() < 0.001);
+        assert!((aphelion.distance_au - 1.016_7).abs() < 0.001);
+        assert!(found.iter().all(|event| event.at > at));
     }
 }

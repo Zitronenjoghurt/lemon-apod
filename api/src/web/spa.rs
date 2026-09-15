@@ -23,6 +23,7 @@ pub async fn spa(State(state): State<ServerState>, uri: Uri) -> Response {
             Some(found) => state.shell.resource_page(path, &found.resource),
             None => state.shell.page(path),
         },
+        Target::Sky(date) => state.shell.sky_page(date),
         Target::Fixed => state.shell.page(path),
     };
 

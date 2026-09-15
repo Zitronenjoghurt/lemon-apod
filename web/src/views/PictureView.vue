@@ -44,7 +44,7 @@ watch([picture, notFound], ([found, missing]) => {
 <template>
   <div class="stack">
     <RouterLink class="muted back" to="/pictures">
-      <i aria-hidden="true" class="pi pi-arrow-left" /> All encores
+      <AppIcon name="arrow-left" /> All encores
     </RouterLink>
 
     <div v-if="notFound" class="card notice">
@@ -54,7 +54,9 @@ watch([picture, notFound], ([found, missing]) => {
         are regrouped whenever thumbnails change, so a link here can go stale.
       </p>
       <RouterLink class="plain" to="/pictures">
-        <Button icon="pi pi-arrow-left" label="Back to the encores" outlined tabindex="-1" />
+        <Button label="Back to the encores" outlined tabindex="-1">
+          <template #icon><AppIcon name="arrow-left" /></template>
+        </Button>
       </RouterLink>
     </div>
 
@@ -79,10 +81,10 @@ watch([picture, notFound], ([found, missing]) => {
             />
             <div v-else :class="{ gone: lost }" class="fallback">
               <template v-if="lost">
-                <i aria-hidden="true" class="pi pi-ban" />
+                <AppIcon name="image-lost" />
                 <span class="what">Media lost</span>
               </template>
-              <i v-else aria-hidden="true" class="pi pi-image" />
+              <AppIcon v-else name="image" />
             </div>
           </RouterLink>
 

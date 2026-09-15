@@ -77,7 +77,7 @@ watch(source, () => {
     <div :class="['game-picture', state, { framed: frame }]">
       <Skeleton v-if="!loaded && !failed" class="fill" height="100%" width="100%" />
       <p v-if="failed" class="muted gone">
-        <i aria-hidden="true" class="pi pi-image" />
+        <AppIcon name="image" />
         This picture could not be loaded.
       </p>
       <img
@@ -96,7 +96,7 @@ watch(source, () => {
       />
 
       <button v-if="zoomable && loaded" class="zoom" type="button" @click="zoomed = true">
-        <i aria-hidden="true" class="pi pi-search-plus" />
+        <AppIcon name="zoom" />
         <span class="zoom-label">Full size</span>
       </button>
     </div>

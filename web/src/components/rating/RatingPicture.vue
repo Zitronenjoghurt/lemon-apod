@@ -2,17 +2,26 @@
 import { computed, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { BallotSide } from '@/api/types'
-import { formatDate } from '@/utils/date'
+
+const STAMP = new Intl.DateTimeFormat(undefined, {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+})
+
+function stamp(date: string): string {
+  const at = new Date(`${date}T00:00:00Z`)
+  return Number.isNaN(at.getTime()) ? date : STAMP.format(at)
+}
 
 const props = withDefaults(
   defineProps<{
     side: BallotSide
-    hint?: string
     state?: 'plain' | 'picked' | 'passed'
     disabled?: boolean
     busy?: boolean
   }>(),
-  { hint: '', state: 'plain', disabled: false, busy: false },
+  { state: 'plain', disabled: false, busy: false },
 )
 
 const emit = defineEmits<{ pick: []; zoom: [] }>()
@@ -49,7 +58,7 @@ defineExpose({ picture })
     >
       <Skeleton v-if="!loaded && !failed" class="fill" height="100%" width="100%" />
       <span v-if="failed" class="muted gone">
-        <i aria-hidden="true" class="pi pi-image" />
+        <AppIcon name="image-lost" />
         This picture could not be loaded.
       </span>
       <img
@@ -62,40 +71,37 @@ defineExpose({ picture })
         @error="failed = true"
         @load="loaded = true"
       />
-
-      <span v-if="hint" class="key">{{ hint }}</span>
     </button>
 
-    <div class="under">
-      <p class="muted line">
-        <time :datetime="side.date">{{ formatDate(side.date) }}</time>
-        <span v-if="reruns > 1" class="tag">
-          <i aria-hidden="true" class="pi pi-replay" />
-          {{ reruns }}&times;
-        </span>
-
-        <span class="peek">
-          <button
-            v-if="full && loaded"
-            v-tooltip.bottom="'See it full size'"
-            class="icon"
-            type="button"
-            @click="emit('zoom')"
-          >
-            <i :class="busy ? 'pi pi-spinner pi-spin' : 'pi pi-search-plus'" aria-hidden="true" />
-            <span class="sr-only">
-              {{ busy ? 'Loading the full picture' : `See ${side.title} full size` }}
-            </span>
-          </button>
-          <RouterLink v-tooltip.bottom="'Read this entry'" :to="`/${side.date}`" class="icon">
-            <i aria-hidden="true" class="pi pi-book" />
-            <span class="sr-only">Read the entry for {{ side.title }}</span>
-          </RouterLink>
-        </span>
+    <div v-if="loaded" class="under">
+      <p v-if="side.credit?.length" class="credit">
+        <span v-for="line in side.credit" :key="line">{{ line }}</span>
       </p>
 
-      <p v-if="side.credit?.length" class="muted credit">
-        <span v-for="line in side.credit" :key="line">{{ line }}</span>
+      <p class="line">
+        <time :datetime="side.date">{{ stamp(side.date) }}</time>
+        <span v-if="reruns > 1" class="tag">
+          <AppIcon name="replay" />
+          {{ reruns }}&times;
+        </span>
+        <span class="spacer" />
+        <button
+          v-if="full"
+          v-tooltip.top="'See it full size'"
+          class="icon"
+          type="button"
+          @click="emit('zoom')"
+        >
+          <AppIcon v-if="busy" name="spinner" spin />
+          <AppIcon v-else name="zoom" />
+          <span class="sr-only">
+            {{ busy ? 'Loading the full picture' : `See ${side.title} full size` }}
+          </span>
+        </button>
+        <RouterLink v-tooltip.top="'Read this entry'" :to="`/${side.date}`" class="icon">
+          <AppIcon name="book" />
+          <span class="sr-only">Read the entry for {{ side.title }}</span>
+        </RouterLink>
       </p>
     </div>
   </div>
@@ -103,9 +109,7 @@ defineExpose({ picture })
 
 <style scoped>
 .rating-picture {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  position: relative;
   min-width: 0;
   max-width: calc(var(--cap, 200vh) * var(--ratio));
   margin-inline: auto;
@@ -129,11 +133,19 @@ defineExpose({ picture })
     box-shadow 0.12s ease;
 }
 
-.shot:hover:not(:disabled),
-.shot:focus-visible {
+.shot:hover:not(:disabled) {
   transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.shot:focus-visible {
+  outline: none;
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0.5rem 1.5rem color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .shot:disabled {
@@ -164,22 +176,6 @@ defineExpose({ picture })
   text-align: center;
 }
 
-.key {
-  position: absolute;
-  top: 0.5rem;
-  left: 0.5rem;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-0) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: rgb(8 10 20 / 0.72);
-  backdrop-filter: blur(6px);
-  color: #fff;
-  font-size: var(--text-xs);
-  letter-spacing: 0.04em;
-}
-
 .picked .shot {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent);
@@ -190,10 +186,22 @@ defineExpose({ picture })
 }
 
 .under {
+  position: absolute;
+  inset: auto 0 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-0);
-  min-width: 0;
+  padding: var(--space-5) var(--space-3) var(--space-2);
+  border-radius: 0 0 var(--radius) var(--radius);
+  background: linear-gradient(to top, rgb(8 10 20 / 0.82), rgb(8 10 20 / 0));
+  color: #fff;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.under :is(button, a) {
+  pointer-events: auto;
 }
 
 .line {
@@ -201,28 +209,43 @@ defineExpose({ picture })
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  font-size: var(--text-sm);
+  flex-wrap: nowrap;
+}
+
+.line time {
+  white-space: nowrap;
+}
+
+.spacer {
+  margin-left: auto;
+}
+
+.credit {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--text-2xs);
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+.credit span + span::before {
+  content: ' · ';
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: var(--text-xs);
-  border: 1px solid var(--border);
+  font-size: var(--text-2xs);
+  border: 1px solid rgb(255 255 255 / 0.35);
   border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1);
 }
 
-.tag i {
+.tag .icon {
   font-size: 0.7em;
-}
-
-.peek {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-0);
-  margin-left: auto;
 }
 
 .icon {
@@ -233,7 +256,7 @@ defineExpose({ picture })
   border: 0;
   border-radius: 0.4rem;
   background: none;
-  color: var(--text-muted);
+  color: rgb(255 255 255 / 0.85);
   font: inherit;
   cursor: pointer;
   text-decoration: none;
@@ -241,22 +264,7 @@ defineExpose({ picture })
 
 .icon:hover,
 .icon:focus-visible {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.credit {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  margin: 0;
-  font-size: var(--text-xs);
-  line-height: 1.35;
-  text-wrap: pretty;
-}
-
-.credit span + span::before {
-  content: ' · ';
+  color: #fff;
+  background: rgb(255 255 255 / 0.18);
 }
 </style>

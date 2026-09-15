@@ -29,19 +29,20 @@ const played = computed(() => resultFor(dailyDay.value))
     <template v-if="!mode">
       <header class="stack head">
         <RouterLink class="back muted" to="/games">
-          <i aria-hidden="true" class="pi pi-angle-left" />
+          <AppIcon name="chevron-left" />
           All games
         </RouterLink>
         <div class="row title-row">
           <h1>{{ title }}</h1>
           <Button
-            icon="pi pi-question-circle"
             label="How to play"
             severity="secondary"
             size="small"
             text
             @click="howOpen = true"
-          />
+          >
+            <template #icon><AppIcon name="question" /></template>
+          </Button>
         </div>
         <p class="muted blurb">{{ blurb }}</p>
       </header>
@@ -49,10 +50,10 @@ const played = computed(() => resultFor(dailyDay.value))
       <div class="choices">
         <button class="card choice" type="button" @click="emit('update:mode', 'daily')">
           <span class="row choice-head">
-            <i aria-hidden="true" class="pi pi-calendar" />
+            <AppIcon name="calendar" />
             <strong>Today's game</strong>
             <span v-if="stats.streak" class="badge">
-              <i aria-hidden="true" class="pi pi-bolt" />
+              <AppIcon name="bolt" />
               {{ stats.streak }} day{{ stats.streak === 1 ? '' : 's' }} streak
             </span>
           </span>
@@ -60,21 +61,21 @@ const played = computed(() => resultFor(dailyDay.value))
             Everybody will share the same daily game, just like Wordle >:)
           </span>
           <span :class="['state', played ? 'done' : 'open']">
-            <i :class="['pi', played ? 'pi-check-circle' : 'pi-play']" aria-hidden="true" />
+            <AppIcon :name="played ? 'check-circle' : 'play'" />
             {{ played ? `Played: ${played.label}` : 'Not played yet' }}
           </span>
         </button>
 
         <button class="card choice" type="button" @click="emit('update:mode', 'free')">
           <span class="row choice-head">
-            <i aria-hidden="true" class="pi pi-sync" />
+            <AppIcon name="random" />
             <strong>Free play</strong>
           </span>
           <span class="muted line">
             Play as many random games as you like without touching your daily streak.
           </span>
           <span class="state open">
-            <i aria-hidden="true" class="pi pi-play" />
+            <AppIcon name="play" />
             Always open
           </span>
         </button>
@@ -86,18 +87,18 @@ const played = computed(() => resultFor(dailyDay.value))
     <template v-else>
       <header class="row bar">
         <RouterLink :to="home" class="back">
-          <i aria-hidden="true" class="pi pi-angle-left" />
+          <AppIcon name="chevron-left" />
           <h1>{{ title }}</h1>
         </RouterLink>
 
         <span class="chip">
-          <i :class="['pi', mode === 'daily' ? 'pi-calendar' : 'pi-sync']" aria-hidden="true" />
+          <AppIcon :name="mode === 'daily' ? 'calendar' : 'random'" />
           <template v-if="mode === 'daily'">{{ day ? `Daily ${day}` : 'Daily' }}</template>
           <template v-else>Free play</template>
         </span>
 
         <button v-tooltip.bottom="'How to play'" class="help" type="button" @click="howOpen = true">
-          <i aria-hidden="true" class="pi pi-question-circle" />
+          <AppIcon name="question" />
           <span class="sr-only">How to play</span>
         </button>
       </header>
@@ -189,7 +190,7 @@ h1 {
   font-size: var(--text-md);
 }
 
-.choice-head > i {
+.choice-head > .icon {
   color: var(--accent);
 }
 
@@ -206,7 +207,7 @@ h1 {
   font-size: var(--text-sm);
 }
 
-.state i {
+.state .icon {
   font-size: 0.8em;
 }
 
@@ -269,7 +270,7 @@ h1 {
   white-space: nowrap;
 }
 
-.chip i {
+.chip .icon {
   font-size: 0.85em;
 }
 

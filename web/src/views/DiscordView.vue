@@ -45,22 +45,22 @@ const commands = [
 
 const setup = [
   {
-    icon: 'pi pi-plus-circle',
+    icon: 'plus-circle',
     title: 'Add the bot to your server',
     body: 'You need the Manage Server permission to add and manage the bot.',
   },
   {
-    icon: 'pi pi-cog',
+    icon: 'cog',
     title: 'Point it at a channel',
     body: 'Run /apod settings, set announce to true and specify a channel. You can also add a message or adjust the explanation length.',
   },
   {
-    icon: 'pi pi-send',
+    icon: 'launch',
     title: 'Force post or wait',
     body: "Run /apod announce to force-post today's entry in the configured channel immediately. Otherwise it will arrive every day once it becomes available.",
   },
   {
-    icon: 'pi pi-envelope',
+    icon: 'envelope',
     title: 'Or get it in your DMs',
     body: 'Use the lookup commands or run /apod dm subscribe:true and each new entry arrives as a direct message. Discord only lets the bot message you if you share a server with it and your privacy settings allow it. The first announcement is sent right away as a test.',
   },
@@ -87,7 +87,9 @@ const setup = [
 
       <div v-else-if="botInvite || botUserInstall" class="buttons">
         <a v-if="botInvite" :href="botInvite" class="plain" rel="noopener" target="_blank">
-          <Button icon="pi pi-discord" label="Add to a server" size="large" />
+          <Button label="Add to a server" size="large">
+            <template #icon><AppIcon name="discord" /></template>
+          </Button>
         </a>
         <a
           v-if="botUserInstall"
@@ -96,7 +98,9 @@ const setup = [
           rel="noopener"
           target="_blank"
         >
-          <Button icon="pi pi-user" label="Add to your DMs" size="large" />
+          <Button label="Add to your DMs" size="large">
+            <template #icon><AppIcon name="user" /></template>
+          </Button>
         </a>
       </div>
 
@@ -125,7 +129,7 @@ const setup = [
       <h2 class="muted">Setup</h2>
       <ol class="steps">
         <li v-for="step in setup" :key="step.title">
-          <i :class="step.icon" aria-hidden="true" />
+          <AppIcon :name="step.icon" />
           <span class="text">
             <span class="value">{{ step.title }}</span>
             <span class="muted label">{{ step.body }}</span>
@@ -264,7 +268,7 @@ h1 {
   align-items: flex-start;
 }
 
-.steps i {
+.steps .icon {
   margin-top: var(--space-0);
   color: var(--text-muted);
 }

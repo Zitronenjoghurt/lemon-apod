@@ -2,27 +2,54 @@
 import { computed, onUnmounted, ref } from 'vue'
 import KpGauge from './KpGauge.vue'
 import MoonDial from './MoonDial.vue'
-import type { Launch, SkyEventKind } from '@/api/types'
+import RangeTrack from './RangeTrack.vue'
+import type { Launch } from '@/api/types'
+import { useLaunches } from '@/composables/useLaunches'
 import { useSky } from '@/composables/useSky'
+import {
+  clockOf,
+  countdown as away,
+  isImminent,
+  launchMark,
+  statusTone,
+  timeOf,
+} from '@/utils/launches'
+import { EVENT_ICONS } from '@/utils/sky'
 import { BAND_NAMES, BANDS, inForce, kpReading, levelName, NOTICE_LABELS } from '@/utils/weather'
 import { RouterLink } from 'vue-router'
 
 const { sky, failed, visiblePlanets } = useSky()
+const { data: launchFeed } = useLaunches()
 
-const DAY_MS = 86_400_000
+const LAUNCHES_BEHIND = 3
+const LAUNCHES_AHEAD = 10
 
-const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
-const TIME = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
+const launches = computed(() => {
+  const ahead = launchFeed.value?.upcoming ?? []
+  const gone = launchFeed.value?.flown ?? []
 
-const ICONS: Record<SkyEventKind, string> = {
-  moon: 'pi pi-circle-fill',
-  season: 'pi pi-sun',
-  shower: 'pi pi-sparkles',
-  eclipse: 'pi pi-circle',
-  planet: 'pi pi-globe',
+  const soon = [...ahead, ...gone]
+    .filter(imminent)
+    .sort((one, other) => Date.parse(one.net) - Date.parse(other.net))
+  const behind = gone
+    .filter((launch) => !imminent(launch))
+    .slice(0, LAUNCHES_BEHIND)
+    .reverse()
+  const rest = ahead.filter((launch) => !imminent(launch)).slice(0, LAUNCHES_AHEAD)
+
+  return [...soon, ...behind, ...rest]
+})
+
+function imminent(launch: Launch): boolean {
+  return isImminent(launch, clockNow.value)
 }
 
-const FIRM = new Set(['SEC', 'MIN', 'HR', 'Second', 'Minute', 'Hour'])
+function lost(launch: Launch): boolean {
+  return statusTone(launch.status) === 'bad'
+}
+
+const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
+
 const TICK_MS = 30_000
 
 const clockNow = ref(Date.now())
@@ -41,39 +68,18 @@ function when(iso: string): string {
   return Number.isNaN(at.getTime()) ? iso : DATE.format(at)
 }
 
-function clock(iso: string): string {
-  const at = new Date(iso)
-  return Number.isNaN(at.getTime()) ? '' : TIME.format(at)
-}
-
 function passed(iso: string): boolean {
   const at = new Date(iso).getTime()
   return !Number.isNaN(at) && at < clockNow.value
 }
 
 function countdown(iso: string): string {
-  const at = new Date(iso).getTime()
-  if (Number.isNaN(at)) return ''
-
-  const ms = at - clockNow.value
-  const away = Math.abs(ms)
-  const ago = ms < 0
-
-  if (away < 60_000) return 'right now'
-  if (away < 3_600_000) return step(Math.round(away / 60_000), 'min', ago)
-  if (away < DAY_MS) return step(Math.round(away / 3_600_000), 'h', ago)
-
-  const days = Math.round(away / DAY_MS)
-  if (days === 1) return ago ? 'yesterday' : 'tomorrow'
-  if (days < 45) return step(days, 'days', ago)
-
-  const months = Math.round(days / 30.44)
-  return step(months, months === 1 ? 'month' : 'months', ago)
+  return away(iso, clockNow.value)
 }
 
-function step(count: number, unit: string, ago: boolean): string {
-  return ago ? `${count} ${unit} ago` : `in ${count} ${unit}`
-}
+const EVENTS_SHOWN = 10
+
+const events = computed(() => (sky.value?.events ?? []).slice(0, EVENTS_SHOWN))
 
 const moon = computed(() => sky.value?.moon ?? null)
 
@@ -89,15 +95,6 @@ const nextQuarters = computed(() =>
 function thousands(km: number): string {
   return Math.round(km).toLocaleString()
 }
-
-const orbit = computed(() => {
-  const now = moon.value
-  if (!now) return 0
-
-  const span = now.apogee_km - now.perigee_km
-  if (span <= 0) return 0
-  return Math.min(100, Math.max(0, ((now.distance_km - now.perigee_km) / span) * 100))
-})
 
 const report = computed(() => sky.value?.weather ?? null)
 
@@ -120,7 +117,7 @@ const levels = computed(() => {
 const observed = computed(() => {
   const at = report.value?.observed_at
   if (!at) return ''
-  return Number.isNaN(new Date(at).getTime()) ? '' : clock(at)
+  return timeOf(at)
 })
 
 function magnitude(value: number): string {
@@ -132,7 +129,12 @@ function magnitude(value: number): string {
   <template v-if="sky && moon">
     <div class="panels">
       <section class="card panel moon-panel">
-        <h2 class="muted">The moon today</h2>
+        <h2 class="muted">
+          <RouterLink class="open" to="/sky">
+            The moon today
+            <AppIcon name="chevron-right" />
+          </RouterLink>
+        </h2>
 
         <div class="row moon-row">
           <MoonDial :illumination="moon.illumination" :label="moon.label" :waxing="moon.waxing" />
@@ -146,32 +148,22 @@ function magnitude(value: number): string {
             <p class="muted lit">
               {{ thousands(moon.distance_km) }} km away,
               <span class="drift">
-                <i
-                  :class="['pi', moon.closing ? 'pi-arrow-down-left' : 'pi-arrow-up-right']"
-                  aria-hidden="true"
-                />
+                <AppIcon :name="moon.closing ? 'arrow-down-left' : 'arrow-up-right'" />
                 {{ moon.closing ? 'coming closer' : 'moving away' }}
               </span>
             </p>
           </div>
         </div>
 
-        <div class="gauge orbit">
-          <div class="track">
-            <div :style="{ width: `${orbit}%` }" class="fill" />
-            <span :style="{ left: `${orbit}%` }" class="pin" />
-          </div>
-          <p class="muted ends">
-            <span>
-              <strong>{{ thousands(moon.perigee_km) }} km</strong>
-              at its closest
-            </span>
-            <span class="far">
-              <strong>{{ thousands(moon.apogee_km) }} km</strong>
-              at its farthest
-            </span>
-          </p>
-        </div>
+        <RangeTrack
+          :max="moon.apogee_km"
+          :max-label="`${thousands(moon.apogee_km)} km`"
+          max-note="at its farthest"
+          :min="moon.perigee_km"
+          :min-label="`${thousands(moon.perigee_km)} km`"
+          min-note="at its closest"
+          :value="moon.distance_km"
+        />
 
         <dl class="facts">
           <div v-for="quarter in nextQuarters" :key="quarter.quarter">
@@ -184,7 +176,12 @@ function magnitude(value: number): string {
       </section>
 
       <section class="card panel">
-        <h2 class="muted">Visible planets</h2>
+        <h2 class="muted">
+          <RouterLink class="open" to="/sky">
+            Visible planets
+            <AppIcon name="chevron-right" />
+          </RouterLink>
+        </h2>
 
         <ul v-if="visiblePlanets.length" class="planets">
           <li
@@ -200,15 +197,15 @@ function magnitude(value: number): string {
         </ul>
 
         <p v-else class="muted note">All five currently appear too close to the sun.</p>
-
-        <p class="muted note foot">
-          Worked out from where each planet stands relative to the sun. Whether one of them clears
-          your own horizon, and how high it gets, depends on your location.
-        </p>
       </section>
 
       <section v-if="report" :class="{ stormy }" class="card panel">
-        <h2 class="muted">Space weather</h2>
+        <h2 class="muted">
+          <RouterLink class="open" to="/space-weather">
+            Space weather
+            <AppIcon name="chevron-right" />
+          </RouterLink>
+        </h2>
 
         <KpGauge :kp="report.kp" :stamp="observed" />
 
@@ -221,35 +218,35 @@ function magnitude(value: number): string {
         </ul>
 
         <p v-if="raised" class="raised">
-          <i aria-hidden="true" class="pi pi-exclamation-triangle" />
+          <AppIcon name="exclamation-triangle" />
           <span>
             <strong>{{ NOTICE_LABELS[raised.notice] }}:</strong>
             {{ raised.headline }}
           </span>
         </p>
         <p v-else class="muted note">{{ activity?.note }}</p>
-
-        <RouterLink class="more" to="/space-weather">
-          Space weather in detail
-          <i aria-hidden="true" class="pi pi-angle-right" />
-        </RouterLink>
       </section>
     </div>
 
     <div class="columns">
-      <section v-if="sky.events.length" class="card list">
-        <h2 class="muted">Events in the sky</h2>
+      <section v-if="events.length" class="card list">
+        <h2 class="muted">
+          <RouterLink class="open" to="/sky">
+            Events in the sky
+            <AppIcon name="chevron-right" />
+          </RouterLink>
+        </h2>
 
         <ol class="events">
           <li
-            v-for="event in sky.events"
+            v-for="event in events"
             :key="`${event.kind}-${event.at}`"
             :class="[event.kind, { gone: passed(event.at) }]"
           >
-            <i :class="ICONS[event.kind]" aria-hidden="true" />
+            <AppIcon :name="EVENT_ICONS[event.kind]" />
             <time :datetime="event.at" class="at">
               <span class="day">{{ when(event.at) }}</span>
-              <span class="muted hour">{{ clock(event.at) }}</span>
+              <span class="muted hour">{{ event.time_label ?? timeOf(event.at) }}</span>
             </time>
             <span class="what">
               <span class="title">{{ event.title }}</span>
@@ -258,44 +255,33 @@ function magnitude(value: number): string {
             <span class="muted away">{{ countdown(event.at) }}</span>
           </li>
         </ol>
-
-        <p class="muted note">
-          Calculated based on predictive models. If you notice any inaccuracies please
-          <RouterLink to="/contact">contact me</RouterLink>
-          .
-        </p>
       </section>
 
-      <section v-if="sky.launches.length" class="card list">
-        <h2 class="muted">Rocket launches</h2>
+      <section v-if="launches.length" class="card list">
+        <h2 class="muted">
+          <RouterLink class="open" to="/launches">
+            Rocket launches
+            <AppIcon name="chevron-right" />
+          </RouterLink>
+        </h2>
 
         <ol class="events">
           <li
-            v-for="launch in sky.launches"
+            v-for="launch in launches"
             :key="launch.id"
-            :class="{ gone: passed(launch.net) }"
+            :class="{ gone: passed(launch.net) && !imminent(launch), soon: imminent(launch) }"
             class="launch"
           >
-            <i :class="passed(launch.net) ? 'pi pi-check' : 'pi pi-send'" aria-hidden="true" />
+            <AppIcon :class="{ lost: lost(launch) }" :name="launchMark(launch, clockNow)" />
             <time :datetime="launch.net" class="at">
               <span class="day">{{ when(launch.net) }}</span>
-              <span class="muted hour">{{
-                launch.precision && FIRM.has(launch.precision) ? clock(launch.net) : 'time to come'
-              }}</span>
+              <span class="muted hour">{{ clockOf(launch) }}</span>
             </time>
             <span class="what">
-              <a
-                v-if="launch.info_url"
-                :href="launch.info_url"
-                class="title link"
-                data-ours
-                rel="noopener"
-                target="_blank"
-              >
+              <RouterLink :to="`/launches/${launch.id}`" class="title link">
                 {{ launch.name }}
-                <i aria-hidden="true" class="pi pi-external-link" />
-              </a>
-              <span v-else class="title">{{ launch.name }}</span>
+                <AppIcon name="chevron-right" />
+              </RouterLink>
 
               <span v-if="launchDetail(launch)" class="muted detail">{{
                 launchDetail(launch)
@@ -304,14 +290,6 @@ function magnitude(value: number): string {
             <span class="muted away">{{ countdown(launch.net) }}</span>
           </li>
         </ol>
-
-        <p class="muted note">
-          Data from
-          <a data-ours href="https://thespacedevs.com" rel="noopener" target="_blank"
-            >The Space Devs</a
-          >. This information could potentially be outdated since launch windows can reschedule
-          without warning.
-        </p>
       </section>
     </div>
   </template>
@@ -347,6 +325,28 @@ h2 {
   font-weight: 600;
 }
 
+.open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.open .icon {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.open:hover,
+.open:focus-visible {
+  color: var(--accent);
+}
+
+.open:hover .icon {
+  transform: translateX(2px);
+}
+
 .moon-row {
   gap: var(--space-4);
   flex-wrap: nowrap;
@@ -375,7 +375,7 @@ h2 {
   white-space: nowrap;
 }
 
-.drift i {
+.drift .icon {
   font-size: 0.75em;
   margin-right: var(--space-0);
   color: var(--accent);
@@ -441,11 +441,6 @@ h2 {
   white-space: nowrap;
 }
 
-.foot {
-  margin-top: auto;
-  font-size: var(--text-xs);
-}
-
 .mag {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
@@ -455,70 +450,6 @@ h2 {
 
 .stormy {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-}
-
-.gauge {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.track {
-  position: relative;
-  height: 0.5rem;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--text) 10%, transparent);
-  overflow: hidden;
-}
-
-.fill {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  transition: width 0.3s ease;
-}
-
-.orbit .track {
-  overflow: visible;
-}
-
-.orbit .fill {
-  border-radius: 999px 0 0 999px;
-}
-
-.pin {
-  position: absolute;
-  top: 50%;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-left: -0.25rem;
-  transform: translateY(-50%);
-  border-radius: var(--radius-pill);
-  background: var(--bg-elevated);
-  border: 2px solid var(--accent);
-}
-
-.ends {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin: 0;
-  font-size: var(--text-xs);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-
-.ends span {
-  display: flex;
-  flex-direction: column;
-}
-
-.ends strong {
-  font-weight: 600;
-}
-
-.far {
-  text-align: right;
 }
 
 .scope {
@@ -573,23 +504,9 @@ h2 {
   text-wrap: pretty;
 }
 
-.raised i {
+.raised .icon {
   color: var(--accent);
   font-size: 0.9em;
-}
-
-.more {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin-top: auto;
-  font-size: var(--text-sm);
-  text-decoration: none;
-  width: fit-content;
-}
-
-.more:hover {
-  text-decoration: underline;
 }
 
 .columns {
@@ -620,12 +537,11 @@ h2 {
   flex-direction: column;
   max-height: 28rem;
   overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 .events li {
   display: grid;
-  grid-template-columns: 1.4rem 5.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.6rem 5.5rem minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--space-3);
   padding: var(--space-2) 0;
@@ -636,7 +552,16 @@ h2 {
   border-top: none;
 }
 
-.events li.gone {
+.events li.soon {
+  border-left: 2px solid var(--accent);
+  padding-left: var(--space-2);
+}
+
+.soon .icon {
+  color: var(--accent);
+}
+
+.gone {
   opacity: 0.62;
 }
 
@@ -653,15 +578,19 @@ h2 {
   font-style: italic;
 }
 
-.events i {
+.events .icon {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   justify-self: center;
 }
 
-.events li.eclipse i,
-.events li.shower i {
+.events li.eclipse .icon,
+.events li.shower .icon {
   color: var(--accent);
+}
+
+.events .icon.lost {
+  color: var(--bad);
 }
 
 .at {
@@ -704,14 +633,14 @@ a.title:focus-visible {
   color: var(--accent);
 }
 
-a.title i {
-  font-size: 0.62em;
+a.title .icon {
+  font-size: 0.8em;
   opacity: 0.55;
-  vertical-align: 0.15em;
+  vertical-align: 0.05em;
   margin-left: var(--space-0);
 }
 
-a.title:hover i {
+a.title:hover .icon {
   opacity: 1;
 }
 
@@ -733,7 +662,7 @@ a.title:hover i {
     align-items: start;
   }
 
-  .events i {
+  .events .icon {
     grid-column: 1;
     grid-row: 1 / span 2;
     padding-top: var(--space-1);

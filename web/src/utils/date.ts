@@ -42,6 +42,26 @@ export function formatMonth(date: string): string {
 
 export const FIRST_ENTRY = '1995-06-16'
 
+const BIRTHDAY = FIRST_ENTRY.slice(5)
+
+export function apodAgeParts(date: string): { years: number; days: number } {
+  const years = apodAge(date)
+  const last = `${Number(FIRST_ENTRY.slice(0, 4)) + years}-${BIRTHDAY}`
+  return { years, days: daysBetween(last, date) }
+}
+
+export function birthdayAge(date: string): number | null {
+  if (date.slice(5) !== BIRTHDAY) return null
+
+  const age = Number(date.slice(0, 4)) - Number(FIRST_ENTRY.slice(0, 4))
+  return age > 0 ? age : null
+}
+
+export function apodAge(date: string): number {
+  const years = Number(date.slice(0, 4)) - Number(FIRST_ENTRY.slice(0, 4))
+  return date.slice(5) >= BIRTHDAY ? years : years - 1
+}
+
 export function daysBetween(from: string, to: string): number {
   const one = parse(from)
   const other = parse(to)
@@ -79,6 +99,17 @@ function shift(date: string, days: number): string | null {
 function parse(date: string): Date | null {
   const parsed = new Date(`${date}T00:00:00Z`)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+export function localDay(at: Date): string {
+  const month = String(at.getMonth() + 1).padStart(2, '0')
+  const day = String(at.getDate()).padStart(2, '0')
+  return `${at.getFullYear()}-${month}-${day}`
+}
+
+export function localMidnight(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(year!, month! - 1, day!)
 }
 
 export function isoDate(text: string): string | null {

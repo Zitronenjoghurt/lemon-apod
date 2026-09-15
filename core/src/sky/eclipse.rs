@@ -67,6 +67,27 @@ pub fn upcoming(at: DateTime<Utc>) -> Vec<EclipseEvent> {
     found
 }
 
+pub fn upcoming_until(from: DateTime<Utc>, horizon: DateTime<Utc>) -> Vec<EclipseEvent> {
+    let mut found = Vec::new();
+
+    for solar in [true, false] {
+        let mut walk = from;
+        while let Some(event) = match solar {
+            true => next_solar(walk),
+            false => next_lunar(walk),
+        } {
+            if event.at > horizon {
+                break;
+            }
+            walk = event.at + TimeDelta::hours(1);
+            found.push(event);
+        }
+    }
+
+    found.sort_by_key(|event| event.at);
+    found
+}
+
 pub fn next_solar(at: DateTime<Utc>) -> Option<EclipseEvent> {
     next_of(at, Quarter::New)
 }

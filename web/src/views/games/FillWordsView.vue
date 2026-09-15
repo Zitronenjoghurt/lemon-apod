@@ -273,7 +273,7 @@ function giveUp(): void {
   confirm.require({
     header: 'Give up on this one?',
     message: 'Every word will be revealed and the game is lost. There is no going back.',
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Keep going', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Give up', severity: 'danger' },
     accept: () => {
@@ -473,17 +473,20 @@ watch(
             placeholder="Try a word"
             spellcheck="false"
           />
-          <Button :loading="checking" icon="pi pi-arrow-right" label="Guess" type="submit" />
+          <Button :loading="checking" label="Guess" type="submit">
+            <template #icon><AppIcon name="arrow-right" /></template>
+          </Button>
           <Button
             aria-label="Give up"
             class="give-up"
-            icon="pi pi-flag"
             label="Give up"
             severity="secondary"
             text
             type="button"
             @click="giveUp"
-          />
+          >
+            <template #icon><AppIcon name="flag" /></template>
+          </Button>
         </form>
 
         <!-- Always here, empty or not: a line that appears and disappears under the field would
@@ -498,7 +501,7 @@ watch(
             :key="guess.word"
             :class="guess.hits ? 'hit' : 'miss'"
           >
-            <i :class="['pi', guess.hits ? 'pi-check' : 'pi-times']" aria-hidden="true" />
+            <AppIcon :name="guess.hits ? 'check' : 'times'" />
             {{ guess.word }}
             <span v-if="guess.hits > 1" class="count">{{ guess.hits }}</span>
           </li>
@@ -832,7 +835,7 @@ watch(
   padding: var(--space-0) var(--space-2);
 }
 
-.tried li i {
+.tried li .icon {
   font-size: 0.7em;
 }
 

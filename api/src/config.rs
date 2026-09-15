@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use apod_core::Pause;
 use chrono::TimeDelta;
 use chrono_tz::Tz;
 use std::fmt;
@@ -23,6 +24,7 @@ pub struct Config {
     pub public_url: String,
 
     pub publish: Publish,
+    pub pause: Option<Pause>,
 
     pub list_default_limit: usize,
     pub list_max_limit: usize,
@@ -42,11 +44,14 @@ pub struct Config {
     pub cache_timeline_secs: u64,
     pub cache_status_secs: u64,
     pub cache_sky_secs: u64,
+    pub cache_launches_secs: u64,
     pub cache_feed_secs: u64,
 
     pub feed_limit: usize,
 
     pub sky_launch_limit: i64,
+    pub sky_past_launch_limit: i64,
+    pub sky_launch_history_days: i64,
 
     pub rating: Rating,
     pub contact: Contact,
@@ -329,6 +334,7 @@ impl Config {
                 hour: env_or("APOD_PUBLISH_HOUR", 0)?,
                 minute: env_or("APOD_PUBLISH_MINUTE", 0)?,
             },
+            pause: pause()?,
 
             list_default_limit: env_or("APOD_LIST_DEFAULT_LIMIT", 30)?,
             list_max_limit: env_or("APOD_LIST_MAX_LIMIT", 100)?,
@@ -347,11 +353,14 @@ impl Config {
             cache_timeline_secs: env_or("APOD_CACHE_TIMELINE_SECS", 3_600)?,
             cache_status_secs: env_or("APOD_CACHE_STATUS_SECS", 60)?,
             cache_sky_secs: env_or("APOD_CACHE_SKY_SECS", 600)?,
+            cache_launches_secs: env_or("APOD_CACHE_LAUNCHES_SECS", 60)?,
             cache_feed_secs: env_or("APOD_CACHE_FEED_SECS", 3_600)?,
 
             feed_limit: env_or("APOD_FEED_LIMIT", 25)?,
 
-            sky_launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 10)?,
+            sky_launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 40)?,
+            sky_past_launch_limit: env_or("APOD_SKY_PAST_LAUNCH_LIMIT", 20)?,
+            sky_launch_history_days: env_or("APOD_SKY_LAUNCH_HISTORY_DAYS", 30)?,
 
             rating: Rating::from_env()?,
 
@@ -369,8 +378,32 @@ impl Config {
     fn validated(self) -> Result<Self> {
         self.publish.validate()?;
         self.rating.validate()?;
+        anyhow::ensure!(
+            self.pause.as_ref().is_none_or(Pause::well_formed),
+            "APOD_PAUSE_END must not be earlier than APOD_PAUSE_START"
+        );
         Ok(self)
     }
+}
+
+fn pause() -> Result<Option<Pause>> {
+    let Some(raw) = optional("APOD_PAUSE_START") else {
+        return Ok(None);
+    };
+
+    let start = raw
+        .parse()
+        .with_context(|| format!("APOD_PAUSE_START='{raw}' could not be parsed"))?;
+
+    let end = match optional("APOD_PAUSE_END") {
+        Some(raw) => Some(
+            raw.parse()
+                .with_context(|| format!("APOD_PAUSE_END='{raw}' could not be parsed"))?,
+        ),
+        None => None,
+    };
+
+    Ok(Some(Pause::new(start, end, optional("APOD_PAUSE_REASON"))))
 }
 
 fn optional(key: &str) -> Option<String> {

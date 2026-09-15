@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodBirthday from '@/components/ApodBirthday.vue'
 import ApodCredit from '@/components/ApodCredit.vue'
 import RatingCard from '@/components/rating/RatingCard.vue'
 import ReadProgress from '@/components/ReadProgress.vue'
@@ -13,12 +14,12 @@ import { useCoverage } from '@/composables/useCoverage'
 import { useRead } from '@/composables/useRead'
 import { useStatus } from '@/composables/useStatus'
 import { apodPageUrl } from '@/utils/apodLinks'
-import { formatDate } from '@/utils/date'
+import { apodAgeParts, formatDate } from '@/utils/date'
 
 const TICK_MS = 1_000
 const POLL_MS = 30_000
 
-const { latest, entries, publish, refresh } = useStatus()
+const { latest, entries, publish, pause, pauseRunning, refresh } = useStatus()
 const { countIn, isRead } = useRead()
 const coverage = useCoverage()
 
@@ -69,6 +70,8 @@ const caughtUp = computed(() =>
 )
 
 const headline = computed(() => {
+  if (pauseRunning.value) return 'The last picture published'
+
   switch (standing.value) {
     case 'behind':
       return featured.value ? "Today's picture" : "Nothing archived for 'your today' yet"
@@ -124,6 +127,11 @@ const clockLabel = computed(() => {
   if (hour === 0 && minute === 0) return `midnight ${abbreviation}`
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${abbreviation}`
 })
+
+const age = computed(() => apodAgeParts(publish.value?.today ?? localToday.value))
+
+const pauseSince = computed(() => (pause.value ? formatDate(pause.value.start) : ''))
+const pauseUntil = computed(() => (pause.value?.end ? formatDate(pause.value.end) : ''))
 
 const archiveRead = computed(() => countIn())
 const archiveTotal = computed(() => coverage.total.value || entries.value)
@@ -182,6 +190,19 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
   <div class="stack status">
     <WelcomeNote />
 
+    <section v-if="pauseRunning && pause" class="paused">
+      <AppIcon name="exclamation-triangle" />
+      <div class="body">
+        <h2>APOD is on hiatus!</h2>
+        <p>
+          There have not been any new posts since {{ pauseSince
+          }}<template v-if="pauseUntil"> but it is expected back on {{ pauseUntil }}</template
+          >.
+        </p>
+        <p v-if="pause.reason" class="reason">Reason: {{ pause.reason }}</p>
+      </div>
+    </section>
+
     <RetryNotice v-if="error" :busy="loading" :message="error" @retry="reload" />
 
     <div v-else-if="!publish || (!featured && standing !== 'behind')" class="stack">
@@ -201,10 +222,10 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             width="480"
           />
           <div v-else class="fallback">
-            <i aria-hidden="true" class="pi pi-image" />
+            <AppIcon name="image" />
           </div>
           <span v-if="isVideo(featured.media.kind)" aria-label="Video" class="badge">
-            <i aria-hidden="true" class="pi pi-play" />
+            <AppIcon name="play" />
           </span>
         </RouterLink>
 
@@ -220,8 +241,9 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             </h2>
             <p class="muted date">
               <time :datetime="featured.date">{{ formatDate(featured.date) }}</time>
+              <ApodBirthday :date="featured.date" />
               <span v-if="isRead(featured.date)" class="tag-read">
-                <i aria-hidden="true" class="pi pi-check" /> Read
+                <AppIcon name="check" /> Read
               </span>
             </p>
 
@@ -238,47 +260,51 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
 
             <div class="row actions">
               <RouterLink v-slot="{ navigate }" :to="`/${featured.date}`" custom>
-                <Button icon="pi pi-book" label="Read it" @click="navigate" />
+                <Button label="Read it" @click="navigate">
+                  <template #icon><AppIcon name="book" /></template>
+                </Button>
               </RouterLink>
               <RouterLink v-slot="{ navigate }" custom to="/random">
-                <Button
-                  icon="pi pi-sync"
-                  label="Read a random entry"
-                  outlined
-                  severity="secondary"
-                  @click="navigate"
-                />
+                <Button label="Read a random entry" outlined severity="secondary" @click="navigate">
+                  <template #icon><AppIcon name="random" /></template>
+                </Button>
               </RouterLink>
             </div>
           </template>
 
           <p v-else class="muted empty">
-            The archiver has not archived the entry for {{ formatDate(localToday) }} yet.
+            <template v-if="pauseRunning">
+              APOD published nothing for {{ formatDate(localToday) }}.
+            </template>
+            <template v-else>
+              The archiver has not archived the entry for {{ formatDate(localToday) }} yet.
+            </template>
           </p>
         </div>
       </section>
 
-      <section v-if="alreadyUp" class="card ahead">
-        <i aria-hidden="true" class="pi pi-forward" />
+      <section v-if="alreadyUp && !pauseRunning" class="card ahead">
+        <AppIcon name="forward" />
         <p>
           Tomorrow's picture has already been released. It is past {{ clockLabel }}, where APOD
           publishes, even though it is still {{ formatDate(localToday) }} where you are.
         </p>
         <RouterLink v-slot="{ navigate }" :to="`/${alreadyUp.date}`" custom>
           <Button
-            icon="pi pi-arrow-right"
             icon-pos="right"
             label="See it"
             outlined
             severity="secondary"
             size="small"
             @click="navigate"
-          />
+          >
+            <template #icon><AppIcon name="arrow-right" /></template>
+          </Button>
         </RouterLink>
       </section>
 
       <div class="panels">
-        <section class="card panel">
+        <section v-if="!pauseRunning" class="card panel">
           <h2 class="muted">Next picture most likely in</h2>
 
           <p v-if="eta" class="countdown">
@@ -304,7 +330,7 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             </div>
           </dl>
 
-          <p v-if="standing === 'level' && !caughtUp" class="muted note">
+          <p v-if="standing === 'level' && !caughtUp && !pauseRunning" class="muted note">
             The entry for {{ formatDate(publish.today) }} has not been archived yet.
           </p>
         </section>
@@ -326,6 +352,27 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             the settings.
           </p>
         </section>
+
+        <section class="card panel">
+          <h2 class="muted">Astronomy Picture of the Day is</h2>
+
+          <p class="countdown">
+            <span class="part">
+              <span class="figure">{{ age.years }}</span>
+              <span class="unit muted">years</span>
+            </span>
+            <span class="part">
+              <span class="figure">{{ age.days }}</span>
+              <span class="unit muted">days old</span>
+            </span>
+          </p>
+
+          <p class="muted note">
+            APOD started on
+            <RouterLink to="/1995-06-16">16 June 1995</RouterLink>
+            and has run almost every day since then.
+          </p>
+        </section>
       </div>
 
       <RatingCard />
@@ -338,6 +385,49 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
 <style scoped>
 .status {
   gap: var(--space-5);
+}
+
+.paused {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  line-height: 1.45;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid hsl(var(--tone-raised) / 0.55);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: hsl(var(--tone-raised) / 0.12);
+}
+
+.paused > .icon {
+  color: hsl(var(--tone-raised));
+  font-size: var(--text-md);
+  line-height: inherit;
+}
+
+.paused .body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.paused h2 {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: inherit;
+  text-wrap: balance;
+}
+
+.paused p {
+  margin: 0;
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.paused .reason {
+  color: var(--text-muted);
 }
 
 h1 {
@@ -455,7 +545,7 @@ h1 {
   padding: 0 var(--space-2);
 }
 
-.tag-read i {
+.tag-read .icon {
   font-size: 0.7em;
 }
 
@@ -497,7 +587,7 @@ h1 {
   flex-wrap: wrap;
 }
 
-.ahead i {
+.ahead .icon {
   color: var(--accent);
   flex: none;
 }

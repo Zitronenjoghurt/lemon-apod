@@ -927,7 +927,8 @@ mod tests {
                     today,
                     Source::Modern,
                     Duration::from_secs(3600),
-                    i64::MAX / 2
+                    i64::MAX / 2,
+                    None
                 )
                 .await
                 .unwrap(),

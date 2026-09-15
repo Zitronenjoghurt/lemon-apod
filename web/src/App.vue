@@ -34,7 +34,7 @@ railQuery.addEventListener('change', (event) => (rail.value = event.matches))
 onMounted(() => document.addEventListener('click', intercept, true))
 onUnmounted(() => document.removeEventListener('click', intercept, true))
 
-const themeIcon = { dark: 'pi-moon', light: 'pi-sun' }
+const themeIcon = { dark: 'moon', light: 'sun' }
 const themeLabel = { auto: 'Auto', dark: 'Dark', light: 'Light' }
 
 type NavLink = {
@@ -50,41 +50,43 @@ const groups = computed<{ name: string | null; links: NavLink[] }[]>(() => [
   {
     name: null,
     links: [
-      { to: '/', label: 'Home', icon: 'pi pi-home', exact: true },
-      { to: '/rating', label: 'Best APOD Voting', icon: 'pi pi-images' },
-      { to: APOD_URL, label: 'APOD Website', icon: 'pi pi-external-link', away: true },
+      { to: '/', label: 'Home', icon: 'home', exact: true },
+      { to: '/rating', label: 'Best APOD Voting', icon: 'vote' },
+      { to: APOD_URL, label: 'APOD Website', icon: 'external', away: true },
     ],
   },
   {
     name: 'Read',
     links: [
-      { to: '/feed', label: 'Feed', icon: 'pi pi-bars' },
-      { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
-      { to: '/random', label: 'Random', icon: 'pi pi-sync' },
-      { to: '/favorites', label: 'Favorites', icon: 'pi pi-star' },
+      { to: '/feed', label: 'Feed', icon: 'feed' },
+      { to: '/archive', label: 'Archive', icon: 'calendar' },
+      { to: '/random', label: 'Random', icon: 'random' },
+      { to: '/favorites', label: 'Favorites', icon: 'star' },
     ],
   },
   {
     name: 'Dive deeper',
     links: [
-      { to: '/search', label: 'Search', icon: 'pi pi-search' },
+      { to: '/search', label: 'Search', icon: 'search' },
       {
         to: '/indexes',
         label: 'Indexes',
-        icon: 'pi pi-list',
+        icon: 'list',
         covers: ['/objects', '/credits', '/pictures', '/resources'],
       },
-      { to: '/stats', label: 'Stats', icon: 'pi pi-chart-bar' },
-      { to: '/modernization', label: 'Modernization', icon: 'pi pi-arrow-right-arrow-left' },
-      { to: '/games', label: 'Games', icon: 'pi pi-play-circle' },
+      { to: '/stats', label: 'Stats', icon: 'chart-bar' },
+      { to: '/modernization', label: 'Modernization', icon: 'compare' },
+      { to: '/games', label: 'Games', icon: 'games' },
     ],
   },
   {
     name: 'Stay up to date',
     links: [
-      { to: '/space-weather', label: 'Space weather', icon: 'pi pi-bolt' },
-      ...(botInvite.value ? [{ to: '/discord', label: 'Discord bot', icon: 'pi pi-discord' }] : []),
-      { to: '/notifications', label: 'Notifications', icon: 'pi pi-bell' },
+      { to: '/sky', label: 'Skywatching', icon: 'telescope', covers: ['/sky'] },
+      { to: '/launches', label: 'Rocket launches', icon: 'launch' },
+      { to: '/space-weather', label: 'Space weather', icon: 'bolt' },
+      ...(botInvite.value ? [{ to: '/discord', label: 'Discord bot', icon: 'discord' }] : []),
+      { to: '/notifications', label: 'Notifications', icon: 'bell' },
     ],
   },
 ])
@@ -135,7 +137,7 @@ router.afterEach(() => (menuOpen.value = false))
           text
           @click="cycle"
         >
-          <i v-if="theme !== 'auto'" :class="`pi ${themeIcon[theme]}`" aria-hidden="true" />
+          <AppIcon v-if="theme !== 'auto'" :name="themeIcon[theme]" />
           <svg v-else aria-hidden="true" class="auto-mark" viewBox="0 0 16 16">
             <circle cx="8" cy="8" fill="none" r="6.4" stroke="currentColor" stroke-width="1.5" />
             <path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor" />
@@ -144,21 +146,23 @@ router.afterEach(() => (menuOpen.value = false))
         <Button
           v-tooltip.bottom="{ value: 'Settings', class: 'tip-tight' }"
           aria-label="Settings"
-          icon="pi pi-cog"
           rounded
           severity="secondary"
           text
           @click="settingsOpen = true"
-        />
+        >
+          <template #icon><AppIcon name="cog" /></template>
+        </Button>
         <Button
           aria-label="Open menu"
           class="narrow-only"
-          icon="pi pi-bars"
           rounded
           severity="secondary"
           text
           @click="menuOpen = true"
-        />
+        >
+          <template #icon><AppIcon name="menu" /></template>
+        </Button>
       </div>
     </div>
   </header>
@@ -169,7 +173,7 @@ router.afterEach(() => (menuOpen.value = false))
         <p v-if="group.name" class="group">{{ group.name }}</p>
         <template v-for="link in group.links" :key="link.to">
           <a v-if="link.away" :href="link.to" class="nav-link" rel="noopener" target="_blank">
-            <i :class="link.icon" aria-hidden="true" />
+            <AppIcon :name="link.icon" />
             <span class="label">{{ link.label }}</span>
           </a>
           <RouterLink
@@ -180,7 +184,7 @@ router.afterEach(() => (menuOpen.value = false))
             class="nav-link"
             exact-active-class=""
           >
-            <i :class="link.icon" aria-hidden="true" />
+            <AppIcon :name="link.icon" />
             <span class="label">{{ link.label }}</span>
             <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
           </RouterLink>
@@ -191,7 +195,7 @@ router.afterEach(() => (menuOpen.value = false))
 
   <Transition name="fade">
     <div v-if="throttled" class="throttle" role="status">
-      <i aria-hidden="true" class="pi pi-clock" /> Slowing down for a moment…
+      <AppIcon name="clock" /> Slowing down for a moment…
     </div>
   </Transition>
 
@@ -209,7 +213,7 @@ router.afterEach(() => (menuOpen.value = false))
               rel="noopener"
               target="_blank"
             >
-              <i :class="link.icon" aria-hidden="true" />
+              <AppIcon :name="link.icon" />
               <span class="label">{{ link.label }}</span>
             </a>
             <RouterLink
@@ -221,7 +225,7 @@ router.afterEach(() => (menuOpen.value = false))
               class="nav-link"
               exact-active-class=""
             >
-              <i :class="link.icon" aria-hidden="true" />
+              <AppIcon :name="link.icon" />
               <span class="label">{{ link.label }}</span>
               <span v-if="link.to === '/favorites' && count" class="count">{{ count }}</span>
             </RouterLink>
@@ -246,15 +250,13 @@ router.afterEach(() => (menuOpen.value = false))
 
         <div class="container stack foot">
           <nav aria-label="Elsewhere" class="row foot-links">
-            <RouterLink to="/contact"
-              ><i aria-hidden="true" class="pi pi-envelope" />Contact
-            </RouterLink>
+            <RouterLink to="/contact"><AppIcon name="envelope" />Contact </RouterLink>
             <a :href="REPO_URL" data-ours rel="noopener" target="_blank">
-              <i aria-hidden="true" class="pi pi-github" />
+              <AppIcon name="github" />
               Source
             </a>
             <a :href="MASTODON_URL" data-ours rel="me noopener" target="_blank">
-              <i aria-hidden="true" class="pi pi-at" />
+              <AppIcon name="at" />
               Mastodon
             </a>
           </nav>
@@ -500,9 +502,8 @@ router.afterEach(() => (menuOpen.value = false))
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
-.nav-link i {
+.nav-link .icon {
   width: 1.25rem;
-  text-align: center;
 }
 
 .nav-link .count {
@@ -572,7 +573,7 @@ router.afterEach(() => (menuOpen.value = false))
   color: var(--text);
 }
 
-.foot-links i {
+.foot-links .icon {
   font-size: 0.85em;
 }
 

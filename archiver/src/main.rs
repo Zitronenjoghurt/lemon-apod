@@ -351,6 +351,7 @@ async fn backfill(cfg: Config, limit: Option<usize>) -> Result<()> {
                 Source::Legacy,
                 cfg.retry_backoff_max,
                 chrono::Utc::now().timestamp(),
+                cfg.pause.as_ref(),
             )
             .await?
         {
@@ -414,6 +415,7 @@ async fn backfill_modern(cfg: Config, limit: Option<usize>, refresh: bool) -> Re
                     Source::Modern,
                     cfg.retry_backoff_max,
                     chrono::Utc::now().timestamp(),
+                    cfg.pause.as_ref(),
                 )
                 .await?
             {

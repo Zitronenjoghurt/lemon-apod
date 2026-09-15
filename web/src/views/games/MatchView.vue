@@ -362,7 +362,7 @@ watch(
           Worth <strong>{{ Math.round(worth * 100) }}%</strong>
         </span>
         <span v-else class="worth settled-worth">
-          <i aria-hidden="true" class="pi pi-star" />
+          <AppIcon name="star" />
           +{{
             (results[results.length - 1]?.right
               ? Math.round(PER_ROUND * results[results.length - 1].worth)
@@ -376,10 +376,7 @@ watch(
         <div class="text">
           <p v-if="settled" class="ask">
             <strong :class="settled.right ? 'right' : 'wrong'">
-              <i
-                :class="['pi', settled.right ? 'pi-check-circle' : 'pi-times-circle']"
-                aria-hidden="true"
-              />
+              <AppIcon :name="settled.right ? 'check-circle' : 'times-circle'" />
               {{ settled.right ? 'This is the one' : 'Not this one' }}
             </strong>
           </p>
@@ -398,13 +395,14 @@ watch(
           <div v-if="!settled" class="row uncover">
             <Button
               :disabled="allOut"
-              icon="pi pi-eye"
               label="Next sentence"
               outlined
               severity="secondary"
               size="small"
               @click="reveal"
-            />
+            >
+              <template #icon><AppIcon name="eye" /></template>
+            </Button>
             <span class="muted read">
               {{
                 allOut
@@ -418,10 +416,11 @@ watch(
             <GameReveal :reveal="settled.answer" />
             <Button
               :label="at < rounds.length ? 'Next explanation' : 'Finish the game'"
-              icon="pi pi-arrow-right"
               icon-pos="right"
               @click="settled = undefined"
-            />
+            >
+              <template #icon><AppIcon name="arrow-right" /></template>
+            </Button>
           </div>
         </div>
 
@@ -515,7 +514,7 @@ watch(
   color: var(--text);
 }
 
-.worth i {
+.worth .icon {
   font-size: 0.8em;
   color: var(--accent);
 }

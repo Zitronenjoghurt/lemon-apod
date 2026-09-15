@@ -262,7 +262,7 @@ const onlyExclusions = computed(
   <div class="stack">
     <div class="row search-bar">
       <IconField class="search-field">
-        <InputIcon class="pi pi-search" />
+        <InputIcon><AppIcon name="search" /></InputIcon>
         <InputText
           v-model="query"
           aria-label="Search entries"
@@ -281,22 +281,24 @@ const onlyExclusions = computed(
         :outlined="!panelOpen"
         badge-severity="contrast"
         class="filters-button"
-        icon="pi pi-sliders-h"
         label="Filters"
         severity="secondary"
         size="large"
         @click="panelOpen = !panelOpen"
-      />
+      >
+        <template #icon><AppIcon name="settings" /></template>
+      </Button>
 
       <Button
         aria-label="Search syntax"
-        icon="pi pi-question-circle"
         rounded
         severity="secondary"
         size="large"
         text
         @click="help?.toggle($event)"
-      />
+      >
+        <template #icon><AppIcon name="question" /></template>
+      </Button>
     </div>
 
     <div v-if="panelOpen" class="card panel">
@@ -405,7 +407,7 @@ const onlyExclusions = computed(
       <li v-for="chip in narrowed" :key="chip.key">
         <button :aria-label="`Remove filter: ${chip.label}`" type="button" @click="drop(chip)">
           {{ chip.label }}
-          <i aria-hidden="true" class="pi pi-times" />
+          <AppIcon name="times" />
         </button>
       </li>
     </ul>
@@ -555,7 +557,7 @@ const onlyExclusions = computed(
   border-color: var(--accent);
 }
 
-.chips i {
+.chips .icon {
   font-size: 0.7em;
   opacity: 0.8;
 }

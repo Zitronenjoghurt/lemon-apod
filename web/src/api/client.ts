@@ -18,6 +18,8 @@ import type {
   HostCount,
   KindFilter,
   KnownWord,
+  Launch,
+  Launches,
   Listing,
   MatchAnswer,
   MatchRound,
@@ -40,6 +42,9 @@ import type {
   SearchResults,
   Showing,
   Sky,
+  SkyOnDate,
+  SkyStrip,
+  SkyStripEntries,
   SortOrder,
   Stats,
   Status,
@@ -314,6 +319,12 @@ export const api = {
   status: (signal?: AbortSignal) => request<Status>('/api/status', signal),
 
   sky: (signal?: AbortSignal) => request<Sky>('/api/sky', signal),
+  skyOn: (date: string, signal?: AbortSignal) => request<SkyOnDate>(`/api/sky/at/${date}`, signal),
+  skyStrips: (signal?: AbortSignal) => request<SkyStrip[]>('/api/sky/events', signal),
+  skyStrip: (id: string, signal?: AbortSignal) =>
+    request<SkyStripEntries>(`/api/sky/events/${id}`, signal),
+  launches: (signal?: AbortSignal) => request<Launches>('/api/sky/launches', signal),
+  launch: (id: string, signal?: AbortSignal) => request<Launch>(`/api/sky/launches/${id}`, signal),
 
   weather: (signal?: AbortSignal) => request<WeatherReport>('/api/sky/weather', signal),
 

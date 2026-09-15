@@ -1,5 +1,8 @@
-use super::time::{J2000, angle_difference, cos_deg, normalize_degrees, sin_deg, to_julian};
-use chrono::{DateTime, TimeDelta, Utc};
+use super::time::{
+    angle_difference, centuries_at, cos_deg, lowest_between, normalize_degrees, offset_days,
+    sin_deg,
+};
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 const ALL_NIGHT_DEGREES: f64 = 120.0;
@@ -11,6 +14,9 @@ const KEPLER_ITERATIONS: usize = 12;
 const KEPLER_TOLERANCE: f64 = 1e-9;
 
 const SEARCH_DAYS: i64 = 820;
+
+const CONJUNCTION_DEGREES: f64 = 5.0;
+const CONJUNCTION_MIN_ELONGATION: f64 = 15.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -176,6 +182,15 @@ impl Visibility {
             Self::Lost => "Too close to the sun",
         }
     }
+
+    pub const fn part_of_night(self) -> &'static str {
+        match self {
+            Self::Evening => "Evening",
+            Self::Morning => "Morning",
+            Self::AllNight => "All night",
+            Self::Lost => "Daytime",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -194,6 +209,14 @@ impl Milestone {
             Self::GreatestWesternElongation => "at greatest western elongation",
         }
     }
+
+    pub const fn short(self) -> &'static str {
+        match self {
+            Self::Opposition => "Opposition",
+            Self::GreatestEasternElongation => "Eastern elongation",
+            Self::GreatestWesternElongation => "Western elongation",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -202,6 +225,7 @@ pub struct PlanetEvent {
     pub name: &'static str,
     pub milestone: Milestone,
     pub label: &'static str,
+    pub short: &'static str,
     pub at: DateTime<Utc>,
     pub elongation: f64,
 }
@@ -217,6 +241,17 @@ pub struct PlanetNow {
     pub magnitude: f64,
     pub distance_au: f64,
     pub next_milestone: Option<PlanetEvent>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Conjunction {
+    pub planets: [Planet; 2],
+    pub names: [&'static str; 2],
+    pub at: DateTime<Utc>,
+    pub separation: f64,
+    pub elongation: f64,
+    pub visibility: Visibility,
+    pub visibility_label: &'static str,
 }
 
 pub fn now(at: DateTime<Utc>) -> Vec<PlanetNow> {
@@ -271,7 +306,7 @@ impl View {
 }
 
 fn observe(planet: Planet, at: DateTime<Utc>) -> View {
-    let t = (to_julian(at) - J2000) / super::time::DAYS_PER_CENTURY;
+    let t = centuries_at(at);
 
     let body = heliocentric(&planet.elements(), t);
     let earth = heliocentric(&EARTH, t);
@@ -314,6 +349,120 @@ fn observe(planet: Planet, at: DateTime<Utc>) -> View {
         magnitude,
         distance: delta,
     }
+}
+
+pub fn earth_distance_au(at: DateTime<Utc>) -> f64 {
+    length(heliocentric(&EARTH, centuries_at(at)))
+}
+
+fn unit(vector: [f64; 3]) -> [f64; 3] {
+    let size = length(vector).max(1e-12);
+    [vector[0] / size, vector[1] / size, vector[2] / size]
+}
+
+fn angle_between(one: [f64; 3], two: [f64; 3]) -> f64 {
+    (one[0] * two[0] + one[1] * two[1] + one[2] * two[2])
+        .clamp(-1.0, 1.0)
+        .acos()
+        .to_degrees()
+}
+
+fn sky_at(at: DateTime<Utc>) -> ([[f64; 3]; 7], [f64; 3]) {
+    let t = centuries_at(at);
+    let earth = heliocentric(&EARTH, t);
+
+    let mut directions = [[0.0; 3]; 7];
+    for (slot, &planet) in directions.iter_mut().zip(Planet::ALL.iter()) {
+        let body = heliocentric(&planet.elements(), t);
+        *slot = unit([body[0] - earth[0], body[1] - earth[1], body[2] - earth[2]]);
+    }
+
+    (directions, unit([-earth[0], -earth[1], -earth[2]]))
+}
+
+fn separation(one: usize, two: usize, at: DateTime<Utc>) -> f64 {
+    let (directions, _) = sky_at(at);
+    angle_between(directions[one], directions[two])
+}
+
+pub fn upcoming_conjunctions(from: DateTime<Utc>, horizon_days: i64) -> Vec<Conjunction> {
+    let pairs: Vec<(usize, usize)> = (0..Planet::ALL.len())
+        .flat_map(|one| (one + 1..Planet::ALL.len()).map(move |two| (one, two)))
+        .collect();
+
+    let days = horizon_days.max(2);
+    let samples: Vec<([[f64; 3]; 7], [f64; 3])> = (0..=days)
+        .map(|day| sky_at(offset_days(from, day as f64)))
+        .collect();
+
+    let mut found: Vec<Conjunction> = Vec::new();
+
+    for &(one, two) in &pairs {
+        let apart =
+            |sample: &([[f64; 3]; 7], [f64; 3])| angle_between(sample.0[one], sample.0[two]);
+
+        for day in 1..samples.len() - 1 {
+            let (before, here, after) = (
+                apart(&samples[day - 1]),
+                apart(&samples[day]),
+                apart(&samples[day + 1]),
+            );
+
+            if here > before || here > after || here > CONJUNCTION_DEGREES * 3.0 {
+                continue;
+            }
+
+            let closest = closest_approach(one, two, from, day as f64 - 1.0, day as f64 + 1.0);
+            let separation = separation(one, two, closest);
+            if separation > CONJUNCTION_DEGREES {
+                continue;
+            }
+
+            let views = [
+                observe(Planet::ALL[one], closest),
+                observe(Planet::ALL[two], closest),
+            ];
+            let elongation = views[0].elongation.min(views[1].elongation);
+            if elongation < CONJUNCTION_MIN_ELONGATION {
+                continue;
+            }
+
+            if views.iter().any(|view| view.visibility == Visibility::Lost) {
+                continue;
+            }
+
+            let visibility = if views[0].offset.signum() == views[1].offset.signum() {
+                views[0].visibility
+            } else {
+                Visibility::AllNight
+            };
+
+            found.push(Conjunction {
+                planets: [Planet::ALL[one], Planet::ALL[two]],
+                names: [Planet::ALL[one].name(), Planet::ALL[two].name()],
+                at: closest,
+                separation,
+                elongation,
+                visibility,
+                visibility_label: visibility.label(),
+            });
+        }
+    }
+
+    found.sort_by_key(|conjunction| conjunction.at);
+    found
+}
+
+fn closest_approach(
+    one: usize,
+    two: usize,
+    from: DateTime<Utc>,
+    low: f64,
+    high: f64,
+) -> DateTime<Utc> {
+    let apart = |day: f64| separation(one, two, offset_days(from, day));
+
+    offset_days(from, lowest_between(apart, low, high))
 }
 
 fn magnitude(planet: Planet, r: f64, delta: f64, phase_angle: f64) -> f64 {
@@ -404,17 +553,14 @@ pub fn next_milestone(planet: Planet, from: DateTime<Utc>) -> Option<PlanetEvent
         name: planet.name(),
         milestone,
         label: milestone.label(),
+        short: milestone.short(),
         at,
         elongation: view.elongation,
     })
 }
 
-fn days_from(from: DateTime<Utc>, offset: f64) -> DateTime<Utc> {
-    from + TimeDelta::milliseconds((offset * 86_400_000.0) as i64)
-}
-
 fn opposition(planet: Planet, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
-    let gap = |offset: f64| observe(planet, days_from(from, offset)).opposition_gap();
+    let gap = |offset: f64| observe(planet, offset_days(from, offset)).opposition_gap();
 
     let mut previous = gap(0.0);
 
@@ -423,7 +569,7 @@ fn opposition(planet: Planet, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
 
         if previous > 0.0 && current <= 0.0 && previous < 90.0 && current > -90.0 {
             let crossing = bisect(&gap, (day - 1) as f64, day as f64);
-            return Some(days_from(from, crossing));
+            return Some(offset_days(from, crossing));
         }
 
         previous = current;
@@ -433,7 +579,7 @@ fn opposition(planet: Planet, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
 }
 
 fn greatest_elongation(planet: Planet, from: DateTime<Utc>) -> Option<DateTime<Utc>> {
-    let elongation_at = |offset: f64| observe(planet, days_from(from, offset)).elongation;
+    let elongation_at = |offset: f64| observe(planet, offset_days(from, offset)).elongation;
 
     let mut previous = elongation_at(0.0);
     let mut current = elongation_at(1.0);
@@ -443,7 +589,7 @@ fn greatest_elongation(planet: Planet, from: DateTime<Utc>) -> Option<DateTime<U
 
         if current > previous && current >= next {
             let peak = refine_peak(&elongation_at, (day - 1) as f64, (day + 1) as f64);
-            return Some(days_from(from, peak));
+            return Some(offset_days(from, peak));
         }
 
         previous = current;
@@ -486,6 +632,7 @@ fn bisect(gap: &dyn Fn(f64) -> f64, mut low: f64, mut high: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeDelta;
     use chrono::TimeZone;
 
     fn utc(y: i32, m: u32, d: u32) -> DateTime<Utc> {
@@ -495,7 +642,7 @@ mod tests {
     #[test]
     fn earth_sits_one_astronomical_unit_from_the_sun() {
         for year in [2020, 2026, 2030] {
-            let t = (to_julian(utc(year, 6, 1)) - J2000) / super::super::time::DAYS_PER_CENTURY;
+            let t = centuries_at(utc(year, 6, 1));
             let distance = length(heliocentric(&EARTH, t));
             assert!(
                 (0.98..1.02).contains(&distance),
@@ -515,7 +662,7 @@ mod tests {
             (Planet::Uranus, 19.19),
             (Planet::Neptune, 30.07),
         ] {
-            let t = (to_julian(utc(2026, 1, 1)) - J2000) / super::super::time::DAYS_PER_CENTURY;
+            let t = centuries_at(utc(2026, 1, 1));
             let distance = length(heliocentric(&planet.elements(), t));
 
             let tolerance = expected * 0.25;
@@ -834,5 +981,77 @@ mod tests {
             view.elongation
         );
         assert_eq!(view.visibility, Visibility::Lost);
+    }
+    #[test]
+    fn finds_the_great_conjunction_of_2020() {
+        let from = "2020-11-01T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let found = upcoming_conjunctions(from, 120);
+
+        let great = found
+            .iter()
+            .find(|meeting| meeting.planets == [Planet::Jupiter, Planet::Saturn])
+            .expect("Jupiter and Saturn met in December 2020");
+
+        assert!(
+            (great.separation - 0.102).abs() < 0.01,
+            "they closed to about six arcminutes, got {:.3} degrees",
+            great.separation
+        );
+        assert!(
+            (great.at - "2020-12-21T13:20:00Z".parse::<DateTime<Utc>>().unwrap())
+                .num_hours()
+                .abs()
+                <= 24,
+            "within a day of the published closest approach, got {}",
+            great.at
+        );
+    }
+
+    #[test]
+    fn a_conjunction_is_the_closest_the_pair_actually_comes() {
+        let from = "2026-09-07T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let found = upcoming_conjunctions(from, 400);
+        assert!(!found.is_empty());
+
+        for meeting in &found {
+            let (one, two) = (
+                Planet::ALL
+                    .iter()
+                    .position(|p| *p == meeting.planets[0])
+                    .unwrap(),
+                Planet::ALL
+                    .iter()
+                    .position(|p| *p == meeting.planets[1])
+                    .unwrap(),
+            );
+
+            for offset in [-1.0, -0.25, 0.25, 1.0] {
+                let nearby = separation(one, two, offset_days(meeting.at, offset));
+                assert!(
+                    nearby >= meeting.separation - 1e-6,
+                    "{:?} is closer {offset} days away: {nearby:.4} against {:.4}",
+                    meeting.names,
+                    meeting.separation
+                );
+            }
+
+            assert!(meeting.separation <= CONJUNCTION_DEGREES);
+            assert!(meeting.elongation >= CONJUNCTION_MIN_ELONGATION);
+            assert_ne!(
+                meeting.visibility,
+                Visibility::Lost,
+                "{:?} is listed as a sight but is lost in the glare",
+                meeting.names
+            );
+        }
+    }
+
+    #[test]
+    fn conjunctions_come_out_in_order() {
+        let from = "2026-09-07T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let found = upcoming_conjunctions(from, 400);
+
+        assert!(found.windows(2).all(|pair| pair[0].at <= pair[1].at));
+        assert!(found.iter().all(|meeting| meeting.at > from));
     }
 }

@@ -49,7 +49,7 @@ watch([name, notFound], ([named, missing]) => {
 <template>
   <div class="stack">
     <RouterLink class="muted back" to="/resources">
-      <i aria-hidden="true" class="pi pi-arrow-left" /> All resources
+      <AppIcon name="arrow-left" /> All resources
     </RouterLink>
 
     <div v-if="notFound" class="card notice">
@@ -58,7 +58,9 @@ watch([name, notFound], ([named, missing]) => {
         The catalogue is rebuilt whenever the parser changes, so an old link into it can go stale.
       </p>
       <RouterLink class="plain" to="/resources">
-        <Button icon="pi pi-arrow-left" label="Back to the catalogue" outlined tabindex="-1" />
+        <Button label="Back to the catalogue" outlined tabindex="-1">
+          <template #icon><AppIcon name="arrow-left" /></template>
+        </Button>
       </RouterLink>
     </div>
 
@@ -73,7 +75,7 @@ watch([name, notFound], ([named, missing]) => {
       <header class="card stack head">
         <h1>{{ name }}</h1>
         <a :href="resource.url" class="address" rel="noopener nofollow" target="_blank">
-          {{ address }} <i aria-hidden="true" class="pi pi-external-link" />
+          {{ address }} <AppIcon name="external" />
         </a>
 
         <dl class="facts">
@@ -166,7 +168,7 @@ h1 {
   text-decoration: underline;
 }
 
-.address i {
+.address .icon {
   font-size: 0.7em;
 }
 

@@ -341,7 +341,7 @@ watch(
     <div v-else-if="playing" class="card board">
       <header class="row bar">
         <span v-if="endless" class="count muted">
-          <i aria-hidden="true" class="pi pi-bolt" />
+          <AppIcon name="bolt" />
           <template v-if="settled && !settled.right">Run ended at {{ best }}</template>
           <template v-else-if="streak">Run of {{ streak }}</template>
           <template v-else>New run</template>
@@ -350,12 +350,13 @@ watch(
         <GameBands v-if="!endless" :bands="bands" :total="pairs.length" size="small" />
         <Button
           v-if="settled"
-          :icon="over ? 'pi pi-flag' : 'pi pi-arrow-right'"
           :icon-pos="over ? 'left' : 'right'"
           :label="over ? 'See your result' : 'Next picture'"
           size="small"
           @click="settled = undefined"
-        />
+        >
+          <template #icon><AppIcon :name="over ? 'flag' : 'arrow-right'" /></template>
+        </Button>
       </header>
 
       <p v-if="!settled" class="ask">
@@ -363,10 +364,7 @@ watch(
       </p>
       <p v-else class="ask">
         <strong :class="settled.right ? 'right' : 'wrong'">
-          <i
-            :class="['pi', settled.right ? 'pi-check-circle' : 'pi-times-circle']"
-            aria-hidden="true"
-          />
+          <AppIcon :name="settled.right ? 'check-circle' : 'times-circle'" />
           {{ settled.right ? 'Right' : 'Wrong' }}
         </strong>
         <span class="muted">{{ gap(settled.a, settled.b) }}</span>
@@ -383,13 +381,13 @@ watch(
           <GameReveal v-if="settled" :reveal="settled.a" />
           <p v-else-if="held" class="caption">
             <span class="when">
-              <i aria-hidden="true" class="pi pi-calendar" />
+              <AppIcon name="calendar" />
               {{ formatDate(held.dates[0]) }}
             </span>
           </p>
           <p v-else class="caption">
             <span class="when muted unknown">
-              <i aria-hidden="true" class="pi pi-spin pi-spinner" />
+              <AppIcon name="spinner" spin />
               Reading its date…
             </span>
           </p>
@@ -405,21 +403,18 @@ watch(
           />
           <GameReveal v-if="settled" :reveal="settled.b" />
           <div v-else class="row choices">
+            <Button :disabled="deciding || !held" label="Older" outlined @click="choose('older')">
+              <template #icon><AppIcon name="first-page" /></template>
+            </Button>
             <Button
               :disabled="deciding || !held"
-              icon="pi pi-angle-double-left"
-              label="Older"
-              outlined
-              @click="choose('older')"
-            />
-            <Button
-              :disabled="deciding || !held"
-              icon="pi pi-angle-double-right"
               icon-pos="right"
               label="Newer"
               outlined
               @click="choose('newer')"
-            />
+            >
+              <template #icon><AppIcon name="last-page" /></template>
+            </Button>
           </div>
         </div>
       </div>
@@ -480,7 +475,7 @@ watch(
   margin-right: auto;
 }
 
-.count i {
+.count .icon {
   font-size: 0.85em;
   margin-right: var(--space-0);
 }
@@ -549,7 +544,7 @@ watch(
   font-variant-numeric: tabular-nums;
 }
 
-.when i {
+.when .icon {
   font-size: 0.8em;
 }
 
@@ -579,7 +574,7 @@ watch(
   text-wrap: pretty;
 }
 
-.carried i {
+.carried .icon {
   font-size: 0.85em;
 }
 </style>

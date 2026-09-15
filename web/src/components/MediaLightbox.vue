@@ -28,6 +28,16 @@ const emit = defineEmits<{ close: [] }>()
 
 const router = useRouter()
 
+function svg(paths: string): string {
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" ' +
+    'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    'stroke-linejoin="round" aria-hidden="true">' +
+    paths +
+    '</svg>'
+  )
+}
+
 let gallery: PhotoSwipeLightbox | null = null
 
 function creditFor(slide: Slide): string {
@@ -109,7 +119,9 @@ function show(index: number) {
       isButton: true,
       tagName: 'a',
       title: 'Open this entry',
-      html: '<i class="pi pi-book" aria-hidden="true"></i>',
+      html: svg(
+        '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+      ),
       onInit: (element, pswp) => {
         const anchor = element as HTMLAnchorElement
         const paint = () => {
@@ -137,7 +149,9 @@ function show(index: number) {
       isButton: true,
       tagName: 'a',
       title: 'Open the original file at NASA',
-      html: '<i class="pi pi-external-link" aria-hidden="true"></i>',
+      html: svg(
+        '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+      ),
       onInit: (element, pswp) => {
         const anchor = element as HTMLAnchorElement
         anchor.target = '_blank'

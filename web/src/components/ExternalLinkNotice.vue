@@ -56,12 +56,9 @@ watch(pending, (value) => {
 
     <template #footer>
       <Button label="Stay here" outlined severity="secondary" @click="dismiss" />
-      <Button
-        icon="pi pi-external-link"
-        icon-pos="right"
-        label="Open it anyway"
-        @click="follow(remember)"
-      />
+      <Button icon-pos="right" label="Open it anyway" @click="follow(remember)">
+        <template #icon><AppIcon name="external" /></template>
+      </Button>
     </template>
   </Dialog>
 </template>

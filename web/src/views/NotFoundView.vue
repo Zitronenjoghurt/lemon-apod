@@ -2,9 +2,9 @@
 import { RouterLink } from 'vue-router'
 
 const links = [
-  { to: '/', label: 'Latest entry', icon: 'pi pi-image' },
-  { to: '/archive', label: 'Archive', icon: 'pi pi-calendar' },
-  { to: '/random', label: 'Something random', icon: 'pi pi-sync' },
+  { to: '/', label: 'Latest entry', icon: 'image' },
+  { to: '/archive', label: 'Archive', icon: 'calendar' },
+  { to: '/random', label: 'Something random', icon: 'random' },
 ]
 </script>
 
@@ -14,14 +14,9 @@ const links = [
     <p class="muted">The page you were trying to open does not exist.</p>
     <div class="row links">
       <RouterLink v-for="link in links" :key="link.to" :to="link.to" class="plain">
-        <Button
-          :icon="link.icon"
-          :label="link.label"
-          outlined
-          severity="secondary"
-          size="small"
-          tabindex="-1"
-        />
+        <Button :label="link.label" outlined severity="secondary" size="small" tabindex="-1">
+          <template #icon><AppIcon :name="link.icon" /></template>
+        </Button>
       </RouterLink>
     </div>
   </div>

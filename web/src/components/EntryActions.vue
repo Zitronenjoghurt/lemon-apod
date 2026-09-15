@@ -66,17 +66,17 @@ async function share() {
       type="button"
       @click="saveToggle"
     >
-      <i :class="saved ? 'pi pi-star-fill' : 'pi pi-star'" aria-hidden="true" />
+      <AppIcon :fill="saved" name="star" />
       <span class="label">{{ saved ? 'Saved' : 'Save' }}</span>
     </button>
 
     <button class="act" type="button" @click="share">
-      <i aria-hidden="true" class="pi pi-share-alt" />
+      <AppIcon name="share" />
       <span class="label">Share</span>
     </button>
 
     <a :href="originalPath(date)" aria-label="Original: the page as APOD published it" class="act">
-      <i aria-hidden="true" class="pi pi-file" />
+      <AppIcon name="file" />
       <span class="label">Original</span>
     </a>
 
@@ -88,7 +88,7 @@ async function share() {
       rel="noopener"
       target="_blank"
     >
-      <i aria-hidden="true" class="pi pi-external-link" />
+      <AppIcon name="external" />
       <span class="label">Source</span>
     </a>
 

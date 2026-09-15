@@ -44,6 +44,28 @@ const router = createRouter({
       meta: { title: 'Space weather' },
     },
     {
+      path: '/sky',
+      name: 'sky',
+      component: () => import('@/views/SkyView.vue'),
+      meta: { title: 'The sky' },
+    },
+    {
+      path: `/sky/:date(${DATE})`,
+      name: 'sky-on',
+      component: () => import('@/views/SkyView.vue'),
+    },
+    {
+      path: '/launches',
+      name: 'launches',
+      component: () => import('@/views/LaunchesView.vue'),
+      meta: { title: 'Rocket launches' },
+    },
+    {
+      path: '/launches/:id',
+      name: 'launch',
+      component: () => import('@/views/LaunchView.vue'),
+    },
+    {
       path: '/games',
       name: 'games',
       component: () => import('@/views/GamesView.vue'),

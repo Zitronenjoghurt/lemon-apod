@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use apod_core::Pause;
 use chrono_tz::Tz;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -39,6 +40,7 @@ pub struct Config {
 
     pub backfill: Backfill,
     pub daily: Daily,
+    pub pause: Option<Pause>,
     pub recheck_per_day: u32,
     pub media: MediaArchive,
     pub thumbs: Thumbs,
@@ -95,10 +97,16 @@ pub struct Sky {
     pub launches_enabled: bool,
     pub weather_enabled: bool,
     pub launches_url: String,
+    pub past_launches_url: String,
     pub launch_page_url: String,
     pub swpc_base_url: String,
     pub launch_limit: u32,
+    pub past_launch_limit: u32,
+    pub launch_history_days: u32,
+    pub webcast_lookahead: u32,
     pub interval: Duration,
+    pub imminent: Duration,
+    pub imminent_interval: Duration,
 }
 
 #[derive(Debug, Clone)]
@@ -209,6 +217,8 @@ impl Config {
                 ),
             },
 
+            pause: pause()?,
+
             recheck_per_day: env_or("APOD_RECHECK_PER_DAY", 0)?,
 
             media: MediaArchive {
@@ -227,6 +237,10 @@ impl Config {
                     "APOD_SKY_LAUNCHES_URL",
                     "https://ll.thespacedevs.com/2.3.0/launches/upcoming/".to_owned(),
                 )?,
+                past_launches_url: env_or(
+                    "APOD_SKY_PAST_LAUNCHES_URL",
+                    "https://ll.thespacedevs.com/2.3.0/launches/previous/".to_owned(),
+                )?,
                 launch_page_url: env_or(
                     "APOD_SKY_LAUNCH_PAGE_URL",
                     "https://spacelaunchnow.me/launch/{slug}/".to_owned(),
@@ -236,8 +250,15 @@ impl Config {
                     "https://services.swpc.noaa.gov/products".to_owned(),
                 )
                 .map(|url: String| url.trim_end_matches('/').to_owned())?,
-                launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 20)?,
+                launch_limit: env_or("APOD_SKY_LAUNCH_LIMIT", 40)?,
+                past_launch_limit: env_or("APOD_SKY_PAST_LAUNCH_LIMIT", 20)?,
+                launch_history_days: env_or("APOD_SKY_LAUNCH_HISTORY_DAYS", 30)?,
+                webcast_lookahead: env_or("APOD_SKY_WEBCAST_LOOKAHEAD", 5)?,
                 interval: secs("APOD_SKY_INTERVAL_SECS", 1_800)?,
+                imminent: Duration::from_secs(
+                    u64::from(env_or::<u32>("APOD_SKY_IMMINENT_HOURS", 2)?) * 3600,
+                ),
+                imminent_interval: secs("APOD_SKY_IMMINENT_INTERVAL_SECS", 600)?,
             },
 
             notify: Notify {
@@ -367,6 +388,25 @@ impl Config {
             "APOD_NOTIFY_INTERVAL_SECS must be greater than zero"
         );
         anyhow::ensure!(
+            self.sky.launch_history_days > 0,
+            "APOD_SKY_LAUNCH_HISTORY_DAYS must be at least 1; a window of zero would drop each \
+             launch the moment it flew, and the feed stops listing it at the same time"
+        );
+        anyhow::ensure!(
+            self.pause.as_ref().is_none_or(Pause::well_formed),
+            "APOD_PAUSE_END must not be earlier than APOD_PAUSE_START"
+        );
+        anyhow::ensure!(
+            self.sky.imminent_interval >= Duration::from_secs(300),
+            "APOD_SKY_IMMINENT_INTERVAL_SECS must be at least 300; The Space Devs rate limit \
+             unauthenticated callers by the hour and a tighter loop would spend the whole budget"
+        );
+        anyhow::ensure!(
+            self.sky.imminent_interval <= self.sky.interval,
+            "APOD_SKY_IMMINENT_INTERVAL_SECS must not exceed APOD_SKY_INTERVAL_SECS; it exists to \
+             look more often, not less"
+        );
+        anyhow::ensure!(
             self.sky.interval >= Duration::from_secs(60),
             "APOD_SKY_INTERVAL_SECS must be at least 60; NOAA's feeds do not move faster than \
              that and there is no reason to ask them to"
@@ -430,6 +470,26 @@ where
             .map_err(|e| anyhow::anyhow!("{e}"))
             .with_context(|| format!("{key}='{raw}' could not be parsed")),
     }
+}
+
+fn pause() -> Result<Option<Pause>> {
+    let Some(raw) = optional("APOD_PAUSE_START") else {
+        return Ok(None);
+    };
+
+    let start = raw
+        .parse()
+        .with_context(|| format!("APOD_PAUSE_START='{raw}' could not be parsed"))?;
+
+    let end = match optional("APOD_PAUSE_END") {
+        Some(raw) => Some(
+            raw.parse()
+                .with_context(|| format!("APOD_PAUSE_END='{raw}' could not be parsed"))?,
+        ),
+        None => None,
+    };
+
+    Ok(Some(Pause::new(start, end, optional("APOD_PAUSE_REASON"))))
 }
 
 fn secs(key: &str, default: u64) -> Result<Duration> {

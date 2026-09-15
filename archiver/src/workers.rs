@@ -19,6 +19,31 @@ use tracing::Instrument;
 const MAX_SLEEP: Duration = Duration::from_secs(900);
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 
+enum Standing {
+    Publishing,
+    StoodDown,
+    Stopped,
+}
+
+async fn standing(cfg: &Config, shutdown: &mut Shutdown, worker: &str) -> Standing {
+    let today = today_in(cfg.daily.timezone);
+    let Some(pause) = cfg.pause.as_ref().filter(|pause| pause.running_on(today)) else {
+        return Standing::Publishing;
+    };
+
+    tracing::info!(
+        since = %pause.start,
+        until = pause.end.map(|end| end.to_string()),
+        wait = %duration(MAX_SLEEP),
+        "APOD is paused; {worker} is standing down"
+    );
+
+    match shutdown.sleep(MAX_SLEEP).await {
+        true => Standing::StoodDown,
+        false => Standing::Stopped,
+    }
+}
+
 pub async fn run(cfg: Config) -> Result<()> {
     let clients = Clients::new(&cfg.user_agent, cfg.fetch_timeout, cfg.fetch_max_retries)?;
     let (stop, shutdown) = Shutdown::channel();
@@ -26,6 +51,16 @@ pub async fn run(cfg: Config) -> Result<()> {
 
     let archive = ArchiveStore::open(&cfg.archive_db).await?;
     let index = ApodWriter::open(&cfg.index_db).await?;
+
+    match cfg.pause.as_ref() {
+        Some(pause) => tracing::warn!(
+            since = %pause.start,
+            until = pause.end.map(|end| end.to_string()),
+            "a publication pause is configured; the workers that ask NASA for entries will stand \
+             down while it is running"
+        ),
+        None => tracing::info!("no publication pause configured"),
+    }
 
     if !cfg.fetch_legacy {
         tracing::info!("legacy fetching disabled; apod.nasa.gov will not be contacted");
@@ -319,12 +354,24 @@ async fn backfill(
     let mut caught_up = false;
 
     while !shutdown.is_triggered() {
+        match standing(&cfg, &mut shutdown, "the backfill").await {
+            Standing::Publishing => {}
+            Standing::StoodDown => continue,
+            Standing::Stopped => break,
+        }
+
         let now = Utc::now().timestamp();
         let today = today_in(cfg.daily.timezone);
         let start = backfill_bound(&cfg.daily, today, now);
 
         let bound = match archive
-            .next_target(start, source, cfg.retry_backoff_max, now)
+            .next_target(
+                start,
+                source,
+                cfg.retry_backoff_max,
+                now,
+                cfg.pause.as_ref(),
+            )
             .await?
         {
             Next::Fetch(date) => date,
@@ -358,7 +405,7 @@ async fn backfill(
 
         caught_up = false;
 
-        let owed = archive.owed(today, source).await?;
+        let owed = archive.owed(today, source, cfg.pause.as_ref()).await?;
         tracing::info!(%bound, dates_owed = owed, "asking for the next batch");
 
         let advance = walk
@@ -596,6 +643,12 @@ async fn daily(
     let source = walk.source;
 
     while !shutdown.is_triggered() {
+        match standing(&cfg, &mut shutdown, "the daily poll").await {
+            Standing::Publishing => {}
+            Standing::StoodDown => continue,
+            Standing::Stopped => break,
+        }
+
         let now = Utc::now().with_timezone(&cfg.daily.timezone);
         let today = ApodDate::from(now.date_naive());
 
@@ -697,6 +750,12 @@ async fn recheck(
     let source = walk.source;
 
     while tick(&mut shutdown, interval, "waiting for the next re-check").await {
+        match standing(&cfg, &mut shutdown, "the re-check").await {
+            Standing::Publishing => {}
+            Standing::StoodDown => continue,
+            Standing::Stopped => break,
+        }
+
         let candidates = archive.recheck_candidates(source, 1).await?;
         tracing::debug!(count = candidates.len(), "re-checking the oldest entries");
         for date in candidates {
@@ -718,6 +777,12 @@ async fn modern_refresh(
     let period = Duration::from_secs(u64::from(cfg.modern_refresh_days) * 86_400);
 
     loop {
+        match standing(&cfg, &mut shutdown, "the modern refresh").await {
+            Standing::Publishing => {}
+            Standing::StoodDown => continue,
+            Standing::Stopped => break,
+        }
+
         let today = today_in(cfg.daily.timezone);
         let pace = paced(&cfg, today, period);
         let cutoff = Utc::now().timestamp() - period.as_secs() as i64;

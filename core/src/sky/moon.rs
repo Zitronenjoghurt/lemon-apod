@@ -1,6 +1,6 @@
 use super::time::{
-    self, centuries, cos_deg, dynamical_julian, dynamical_to_utc, normalize_degrees, sin_deg,
-    to_julian,
+    self, centuries, cos_deg, dynamical_julian, dynamical_to_utc, lowest_between,
+    normalize_degrees, offset_days, sin_deg, to_julian,
 };
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -9,6 +9,8 @@ const MEAN_DISTANCE_KM: f64 = 385_000.56;
 const SUPERMOON_KM: f64 = 360_000.0;
 pub const PERIGEE_KM: f64 = 356_500.0;
 pub const APOGEE_KM: f64 = 406_700.0;
+
+const APSIDE_SEARCH_DAYS: f64 = 40.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -69,6 +71,30 @@ impl Quarter {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Apside {
+    Perigee,
+    Apogee,
+}
+
+impl Apside {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Perigee => "Closest to Earth",
+            Self::Apogee => "Furthest from Earth",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ApsideEvent {
+    pub apside: Apside,
+    pub label: &'static str,
+    pub at: DateTime<Utc>,
+    pub distance_km: f64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct QuarterEvent {
     pub quarter: Quarter,
@@ -90,6 +116,7 @@ pub struct MoonNow {
     pub cycle: f64,
     pub last_new_moon: DateTime<Utc>,
     pub next_quarters: Vec<QuarterEvent>,
+    pub next_apsides: Vec<ApsideEvent>,
 }
 
 pub fn now(at: DateTime<Utc>) -> MoonNow {
@@ -128,7 +155,43 @@ pub fn now(at: DateTime<Utc>) -> MoonNow {
         cycle,
         last_new_moon: last_new,
         next_quarters,
+        next_apsides: next_apsides(at),
     }
+}
+
+pub fn next_apsides(at: DateTime<Utc>) -> Vec<ApsideEvent> {
+    let mut found: Vec<ApsideEvent> = [Apside::Perigee, Apside::Apogee]
+        .into_iter()
+        .filter_map(|apside| next_apside(at, apside))
+        .collect();
+
+    found.sort_by_key(|event| event.at);
+    found
+}
+
+fn next_apside(at: DateTime<Utc>, apside: Apside) -> Option<ApsideEvent> {
+    let sign = match apside {
+        Apside::Perigee => 1.0,
+        Apside::Apogee => -1.0,
+    };
+    let reach = |offset: f64| sign * distance_km(offset_days(at, offset));
+
+    let mut day = 0.0;
+    while day < APSIDE_SEARCH_DAYS {
+        let (before, here, after) = (reach(day), reach(day + 1.0), reach(day + 2.0));
+        if here < before && here < after {
+            let when = offset_days(at, lowest_between(reach, day, day + 2.0));
+            return Some(ApsideEvent {
+                apside,
+                label: apside.label(),
+                at: when,
+                distance_km: distance_km(when),
+            });
+        }
+        day += 1.0;
+    }
+
+    None
 }
 
 fn phase_for(cycle: f64) -> Phase {
@@ -652,5 +715,39 @@ mod tests {
         }
 
         assert!((3..=6).contains(&turns), "{turns} turns in sixty days");
+    }
+
+    #[test]
+    fn the_next_perigee_and_apogee_are_real_extremes_at_plausible_distances() {
+        let at = "2026-09-07T00:00:00Z".parse::<DateTime<Utc>>().unwrap();
+        let found = next_apsides(at);
+        assert_eq!(found.len(), 2);
+
+        let perigee = found.iter().find(|e| e.apside == Apside::Perigee).unwrap();
+        let apogee = found.iter().find(|e| e.apside == Apside::Apogee).unwrap();
+
+        assert!(
+            (356_400.0..=370_400.0).contains(&perigee.distance_km),
+            "perigee ranges over about fourteen thousand kilometres, got {:.0}",
+            perigee.distance_km
+        );
+        assert!(
+            (404_000.0..=406_800.0).contains(&apogee.distance_km),
+            "apogee varies far less, got {:.0}",
+            apogee.distance_km
+        );
+
+        for event in &found {
+            assert!(event.at > at);
+            assert!((event.at - at).num_days() < 40);
+
+            for offset in [-2.0, -0.5, 0.5, 2.0] {
+                let nearby = distance_km(offset_days(event.at, offset));
+                match event.apside {
+                    Apside::Perigee => assert!(nearby > event.distance_km - 1.0),
+                    Apside::Apogee => assert!(nearby < event.distance_km + 1.0),
+                }
+            }
+        }
     }
 }

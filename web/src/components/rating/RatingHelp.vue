@@ -103,15 +103,16 @@ async function forget(): Promise<void> {
           <Button
             :disabled="busy"
             :loading="busy"
-            icon="pi pi-trash"
             label="Forget my votes"
             outlined
             severity="secondary"
             size="small"
             @click="confirming = true"
-          />
+          >
+            <template #icon><AppIcon name="trash" /></template>
+          </Button>
           <span v-if="forgotten !== null" class="muted done">
-            <i aria-hidden="true" class="pi pi-check" />
+            <AppIcon name="check" />
             {{ forgotten }} vote{{ forgotten === 1 ? '' : 's' }} removed.
           </span>
         </div>
@@ -133,7 +134,9 @@ async function forget(): Promise<void> {
 
     <template #footer>
       <Button label="Keep them" severity="secondary" text @click="confirming = false" />
-      <Button icon="pi pi-trash" label="Forget them" severity="danger" @click="forget" />
+      <Button label="Forget them" severity="danger" @click="forget">
+        <template #icon><AppIcon name="trash" /></template>
+      </Button>
     </template>
   </Dialog>
 </template>

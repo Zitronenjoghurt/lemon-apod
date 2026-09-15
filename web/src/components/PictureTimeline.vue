@@ -11,10 +11,10 @@ const props = defineProps<{
 }>()
 
 const LABELS: Array<[keyof Changed, string, string]> = [
-  ['title', 'New title', 'pi-pencil'],
-  ['explanation', 'Rewritten', 'pi-align-left'],
-  ['credit', 'New credit', 'pi-user'],
-  ['file', 'New image source', 'pi-image'],
+  ['title', 'New title', 'pencil'],
+  ['explanation', 'Rewritten', 'align-left'],
+  ['credit', 'New credit', 'user'],
+  ['file', 'New image source', 'image'],
 ]
 
 function changes(changed: Changed): Array<[string, string]> {
@@ -69,7 +69,7 @@ function toggle(date: string) {
 
         <ul v-if="index > 0" class="tags">
           <li v-for="[label, icon] in changes(item.changed)" :key="label">
-            <i :class="['pi', icon]" aria-hidden="true" /> {{ label }}
+            <AppIcon :name="icon" /> {{ label }}
           </li>
           <li v-if="!changes(item.changed).length" class="same">Exactly as before</li>
         </ul>
@@ -81,11 +81,7 @@ function toggle(date: string) {
             type="button"
             @click="toggle(item.date)"
           >
-            <i
-              :class="opened.has(item.date) ? 'pi-chevron-down' : 'pi-chevron-right'"
-              aria-hidden="true"
-              class="pi"
-            />
+            <AppIcon :name="opened.has(item.date) ? 'chevron-down' : 'chevron-right'" />
             {{
               opened.has(item.date)
                 ? 'Hide the differences'
@@ -203,12 +199,11 @@ function toggle(date: string) {
   gap: var(--space-1);
 }
 
-.tags i {
+.tags .icon {
   font-size: 0.9em;
   line-height: 1;
   flex: none;
   width: 1.45em;
-  text-align: center;
 }
 
 .tags .same {
@@ -235,7 +230,7 @@ function toggle(date: string) {
   color: var(--accent);
 }
 
-.reveal i {
+.reveal .icon {
   font-size: 0.65em;
 }
 

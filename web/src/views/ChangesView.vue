@@ -56,7 +56,7 @@ onMounted(() => {
   <div class="stack changes">
     <header class="stack head">
       <RouterLink class="back muted" to="/modernization">
-        <i aria-hidden="true" class="pi pi-angle-left" />
+        <AppIcon name="chevron-left" />
         Modernization
       </RouterLink>
       <h1>What changed</h1>
@@ -89,7 +89,7 @@ onMounted(() => {
           <RouterLink :to="`/${row.date}`">{{ formatDate(row.date) }}</RouterLink>
           <a :href="`/${row.date}/original`" class="muted original">
             Original page
-            <i aria-hidden="true" class="pi pi-external-link" />
+            <AppIcon name="external" />
           </a>
         </div>
         <p class="title">{{ row.title }}</p>
@@ -196,7 +196,7 @@ h1 {
   white-space: nowrap;
 }
 
-.original i {
+.original .icon {
   font-size: 0.7em;
 }
 

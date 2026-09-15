@@ -7,16 +7,18 @@ import GapDetail from '@/components/GapDetail.vue'
 import { api } from '@/api/client'
 import { useAsync } from '@/composables/useAsync'
 import { useGaps } from '@/composables/useGaps'
-import { useLatestDate } from '@/composables/useStatus'
+import { useStatus } from '@/composables/useStatus'
 import { formatDate } from '@/utils/date'
 import { entryTitle, gapTitle, pageTitle, setTitle } from '@/utils/title'
 
 const route = useRoute()
-const latest = useLatestDate()
+const { latestDate: latest, pause, paused } = useStatus()
 const { gaps, loaded: gapsLoaded } = useGaps()
 const date = computed(() => String(route.params.date ?? ''))
 
 const gap = computed(() => gaps.value.find((one) => one.date === date.value) ?? null)
+
+const inPause = computed(() => paused.value(date.value))
 
 const highlight = computed(() => {
   const raw = String(route.query.q ?? '').trim()
@@ -45,6 +47,20 @@ watch([entry, notFound, gap], ([found, missing, empty]) => {
 
   <EntrySkeleton v-else-if="(loading && !entry) || (notFound && !gapsLoaded)" />
 
+  <div v-else-if="notFound && inPause" class="card notice">
+    <h1>No entry for {{ formatDate(date) }}</h1>
+    <p class="muted">
+      APOD was not publishing on this day. It will appear here if APOD puts it out once it resumes,
+      which is what has happened after every previous break.
+    </p>
+    <p v-if="pause?.reason" class="muted">{{ pause.reason }}</p>
+    <RouterLink class="plain" to="/">
+      <Button label="Back to the latest entry" outlined tabindex="-1">
+        <template #icon><AppIcon name="arrow-left" /></template>
+      </Button>
+    </RouterLink>
+  </div>
+
   <div v-else-if="notFound" class="card notice">
     <h1>No entry for {{ formatDate(date) }}</h1>
     <p class="muted">
@@ -52,13 +68,17 @@ watch([entry, notFound, gap], ([found, missing, empty]) => {
       backwards from today, so older dates arrive last.
     </p>
     <RouterLink class="plain" to="/">
-      <Button icon="pi pi-arrow-left" label="Back to the latest entry" outlined tabindex="-1" />
+      <Button label="Back to the latest entry" outlined tabindex="-1">
+        <template #icon><AppIcon name="arrow-left" /></template>
+      </Button>
     </RouterLink>
   </div>
 
   <div v-else-if="error" class="card notice">
     <p>{{ error }}</p>
-    <Button icon="pi pi-refresh" label="Try again" outlined @click="run" />
+    <Button label="Try again" outlined @click="run">
+      <template #icon><AppIcon name="refresh" /></template>
+    </Button>
   </div>
 
   <EntryDetail

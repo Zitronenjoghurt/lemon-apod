@@ -9,7 +9,7 @@ const popover = useTemplateRef<{ toggle: (event: Event) => void }>('popover')
 
 <template>
   <button :aria-label="label" class="hint" type="button" @click="popover?.toggle($event)">
-    <i aria-hidden="true" class="pi pi-question-circle" />
+    <AppIcon name="question" />
   </button>
 
   <Popover ref="popover">
@@ -34,7 +34,7 @@ const popover = useTemplateRef<{ toggle: (event: Event) => void }>('popover')
   line-height: 1;
 }
 
-.hint .pi {
+.hint .icon {
   font-size: 1em;
 }
 

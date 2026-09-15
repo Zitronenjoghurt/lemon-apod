@@ -8,21 +8,22 @@ pub mod sun;
 pub mod time;
 pub mod weather;
 
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Datelike, TimeDelta, Utc};
 use serde::Serialize;
 
 pub use eclipse::{Eclipse, EclipseEvent, LunarKind, SolarKind};
-pub use moon::{MoonNow, Phase, Quarter, QuarterEvent};
-pub use planets::{Milestone, Planet, PlanetEvent, PlanetNow, Visibility};
+pub use moon::{Apside, ApsideEvent, MoonNow, Phase, Quarter, QuarterEvent};
+pub use planets::{Conjunction, Milestone, Planet, PlanetEvent, PlanetNow, Visibility};
 pub use showers::{Moonlight, Shower, ShowerPeak};
-pub use sun::{Turning, TurningEvent};
+pub use sun::{Apsis, ApsisEvent, Turning, TurningEvent};
 pub use weather::{Alert, Band, Notice, WeatherReport, WeatherSummary};
 
-const TIMELINE_LENGTH: usize = 10;
+pub const FIRST_YEAR: i32 = 1900;
+pub const LAST_YEAR: i32 = 2100;
+
 const TIMELINE_HORIZON_DAYS: i64 = 400;
 const TIMELINE_LOOKBACK_DAYS: i64 = 3;
 const TIMELINE_PAST: usize = 3;
-const SHOWERS_AHEAD: usize = 4;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -32,6 +33,7 @@ pub enum EventKind {
     Shower,
     Eclipse,
     Planet,
+    Conjunction,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +42,8 @@ pub struct SkyEvent {
     pub title: String,
     pub detail: Option<String>,
     pub at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_label: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -51,7 +55,13 @@ pub struct SkyNow {
     pub planets: Vec<PlanetNow>,
     pub showers: Vec<ShowerPeak>,
     pub eclipses: Vec<EclipseEvent>,
+    pub conjunctions: Vec<Conjunction>,
+    pub earth_apsides: Vec<ApsisEvent>,
     pub events: Vec<SkyEvent>,
+}
+
+pub fn in_reach(at: DateTime<Utc>) -> bool {
+    (FIRST_YEAR..=LAST_YEAR).contains(&at.year())
 }
 
 pub fn now(at: DateTime<Utc>) -> SkyNow {
@@ -59,11 +69,10 @@ pub fn now(at: DateTime<Utc>) -> SkyNow {
     let season = sun::current_season(at);
     let next_turning = sun::next_turning(at);
     let planets = planets::now(at);
-    let showers: Vec<ShowerPeak> = showers::upcoming(at)
-        .into_iter()
-        .take(SHOWERS_AHEAD)
-        .collect();
-    let eclipses = eclipse::upcoming(at);
+    let showers = showers::upcoming(at);
+    let eclipses = eclipse::upcoming_until(at, at + TimeDelta::days(TIMELINE_HORIZON_DAYS));
+    let conjunctions = planets::upcoming_conjunctions(at, TIMELINE_HORIZON_DAYS);
+    let earth_apsides = sun::next_apsides(at);
 
     let events = timeline(at);
 
@@ -75,6 +84,8 @@ pub fn now(at: DateTime<Utc>) -> SkyNow {
         planets,
         showers,
         eclipses,
+        conjunctions,
+        earth_apsides,
         events,
     }
 }
@@ -88,11 +99,9 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
 
     let next_turning = sun::next_turning(since);
     let planets = planets::now(since);
-    let showers: Vec<ShowerPeak> = showers::upcoming(since)
-        .into_iter()
-        .take(SHOWERS_AHEAD)
-        .collect();
-    let eclipses = eclipse::upcoming(since);
+    let showers = showers::upcoming(since);
+    let eclipses = eclipse::upcoming_until(since, horizon);
+    let conjunctions = planets::upcoming_conjunctions(since, TIMELINE_HORIZON_DAYS);
 
     let mut events = Vec::new();
 
@@ -134,6 +143,7 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
                     })
                 }),
             at: quarter.at,
+            time_label: None,
         });
     }
 
@@ -146,6 +156,7 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             next_turning.opens_southern
         )),
         at: next_turning.at,
+        time_label: None,
     });
 
     for shower in &showers {
@@ -157,6 +168,7 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
                 shower.zenith_hourly_rate, shower.radiant, shower.moonlight_label
             )),
             at: shower.peak,
+            time_label: None,
         });
     }
 
@@ -178,6 +190,7 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             title: found.label.to_owned(),
             detail: Some(detail),
             at: found.at,
+            time_label: None,
         });
     }
 
@@ -199,6 +212,20 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
                 ),
             }),
             at: milestone.at,
+            time_label: None,
+        });
+    }
+
+    for meeting in &conjunctions {
+        events.push(SkyEvent {
+            kind: EventKind::Conjunction,
+            title: format!("{} meets {}", meeting.names[0], meeting.names[1]),
+            detail: Some(format!(
+                "{:.1} degrees apart. {}",
+                meeting.separation, meeting.visibility_label
+            )),
+            at: meeting.at,
+            time_label: Some(meeting.visibility.part_of_night()),
         });
     }
 
@@ -206,10 +233,7 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
     events.sort_by_key(|event| event.at);
 
     let behind = events.iter().take_while(|event| event.at <= at).count();
-    let surplus = behind.saturating_sub(TIMELINE_PAST);
-
-    events.drain(..surplus);
-    events.truncate(behind - surplus + TIMELINE_LENGTH);
+    events.drain(..behind.saturating_sub(TIMELINE_PAST));
     events
 }
 
@@ -249,8 +273,10 @@ mod tests {
         let sky = now(utc(2026, 8, 8));
 
         assert_eq!(sky.planets.len(), 7);
-        assert_eq!(sky.showers.len(), SHOWERS_AHEAD);
-        assert_eq!(sky.eclipses.len(), 2);
+        assert_eq!(sky.showers.len(), showers::SHOWERS.len());
+        assert!(sky.eclipses.len() >= 2, "{:?}", sky.eclipses);
+        assert_eq!(sky.earth_apsides.len(), 2);
+        assert!(!sky.conjunctions.is_empty());
         assert!(!sky.events.is_empty());
         assert!((0.0..=1.0).contains(&sky.moon.illumination));
     }
@@ -271,7 +297,6 @@ mod tests {
                 .iter()
                 .all(|event| event.at > at - TimeDelta::days(TIMELINE_LOOKBACK_DAYS))
         );
-        assert!(sky.events.len() <= TIMELINE_PAST + TIMELINE_LENGTH);
     }
 
     #[test]
@@ -295,7 +320,7 @@ mod tests {
         assert!(
             !sky.events
                 .iter()
-                .any(|event| event.title.starts_with("Perseids")),
+                .any(|event| event.title.starts_with("Perseids") && event.at < sky.at),
             "{:#?}",
             sky.events
         );

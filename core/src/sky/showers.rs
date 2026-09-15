@@ -119,6 +119,14 @@ impl Moonlight {
             Self::WashedOut => "A bright moon will drown it",
         }
     }
+
+    pub const fn short(self) -> &'static str {
+        match self {
+            Self::Dark => "Dark skies",
+            Self::Some => "Some moonlight",
+            Self::WashedOut => "Bright moon",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -131,6 +139,7 @@ pub struct ShowerPeak {
     pub moon_illumination: f64,
     pub moonlight: Moonlight,
     pub moonlight_label: &'static str,
+    pub moonlight_short: &'static str,
 }
 
 pub fn upcoming(at: DateTime<Utc>) -> Vec<ShowerPeak> {
@@ -168,6 +177,7 @@ pub fn next_peak(shower: &Shower, at: DateTime<Utc>) -> Option<ShowerPeak> {
         moon_illumination: illumination,
         moonlight,
         moonlight_label: moonlight.label(),
+        moonlight_short: moonlight.short(),
     })
 }
 

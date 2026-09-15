@@ -68,7 +68,7 @@ watch([name, notFound], ([named, missing]) => {
 <template>
   <div class="stack">
     <RouterLink class="muted back" to="/credits">
-      <i aria-hidden="true" class="pi pi-arrow-left" /> All credits
+      <AppIcon name="arrow-left" /> All credits
     </RouterLink>
 
     <div v-if="notFound" class="card notice">
@@ -78,7 +78,9 @@ watch([name, notFound], ([named, missing]) => {
         can go stale.
       </p>
       <RouterLink class="plain" to="/credits">
-        <Button icon="pi pi-arrow-left" label="Back to the credits" outlined tabindex="-1" />
+        <Button label="Back to the credits" outlined tabindex="-1">
+          <template #icon><AppIcon name="arrow-left" /></template>
+        </Button>
       </RouterLink>
     </div>
 
@@ -121,7 +123,7 @@ watch([name, notFound], ([named, missing]) => {
           rel="noopener nofollow"
           target="_blank"
         >
-          {{ contributor.url }} <i aria-hidden="true" class="pi pi-external-link" />
+          {{ contributor.url }} <AppIcon name="external" />
         </a>
       </header>
 
@@ -231,7 +233,7 @@ h2.section {
   text-decoration: underline;
 }
 
-.site i {
+.site .icon {
   font-size: 0.7em;
 }
 

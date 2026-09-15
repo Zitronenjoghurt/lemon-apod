@@ -60,7 +60,7 @@ function confirmClear() {
   confirm.require({
     header: `Forget your ${props.title} history?`,
     message: `This removes all ${history.value.length} recorded games from this browser, streak included. There is no undo.`,
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Forget it', severity: 'danger' },
     accept: () => {
@@ -77,7 +77,7 @@ function confirmClear() {
 
     <div class="split">
       <div class="side">
-        <h3><i aria-hidden="true" class="pi pi-calendar" /> Daily</h3>
+        <h3><AppIcon name="calendar" /> Daily</h3>
         <div class="figures">
           <div class="figure">
             <strong>{{ daily.played.toLocaleString() }}</strong>
@@ -103,7 +103,7 @@ function confirmClear() {
       </div>
 
       <div class="side">
-        <h3><i aria-hidden="true" class="pi pi-sync" /> Free play</h3>
+        <h3><AppIcon name="random" /> Free play</h3>
         <div class="figures">
           <div class="figure">
             <strong>{{ free.played.toLocaleString() }}</strong>
@@ -145,7 +145,7 @@ function confirmClear() {
             <td class="kind">
               <i
                 v-tooltip.top="result.day ? 'Daily' : 'Free play'"
-                :class="['pi', result.day ? 'pi-calendar' : 'pi-sync']"
+                :name="result.day ? 'calendar' : 'random'"
                 aria-hidden="true"
               />
             </td>
@@ -163,7 +163,7 @@ function confirmClear() {
                   class="squares"
                   size="small"
                 />
-                <i aria-hidden="true" class="pi pi-clipboard" />
+                <AppIcon name="copy" />
                 <span class="sr-only">Copy this result</span>
               </button>
             </td>
@@ -185,14 +185,9 @@ function confirmClear() {
     <p v-else class="muted empty">You haven't played any mode yet.</p>
 
     <footer v-if="history.length" class="row foot">
-      <Button
-        icon="pi pi-trash"
-        label="Clear history"
-        severity="danger"
-        size="small"
-        text
-        @click="confirmClear"
-      />
+      <Button label="Clear history" severity="danger" size="small" text @click="confirmClear">
+        <template #icon><AppIcon name="trash" /></template>
+      </Button>
     </footer>
   </section>
 </template>
@@ -337,7 +332,7 @@ h3 i {
   cursor: pointer;
 }
 
-.copy .pi {
+.copy .icon {
   font-size: var(--text-xs);
   opacity: 0.45;
   transition: opacity 0.15s ease;
@@ -348,8 +343,8 @@ h3 i {
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.copy:hover .pi,
-.copy:focus-visible .pi {
+.copy:hover .icon,
+.copy:focus-visible .icon {
   opacity: 1;
   color: var(--accent);
 }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use apod_core::ApodDate;
 use apod_core::db::{Db, DbConfig};
+use apod_core::{ApodDate, Pause};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use sqlx::migrate::Migrator;
@@ -57,6 +57,15 @@ struct Attempted {
 impl Attempted {
     fn settled(self) -> bool {
         matches!(self.http_status, Some(200 | 404 | 410 | 300..=399))
+    }
+
+    fn succeeded(self) -> bool {
+        self.http_status == Some(200)
+    }
+
+    fn reopened_by(self, pause: Option<&Pause>) -> bool {
+        !self.succeeded()
+            && pause.is_some_and(|pause| pause.covers(ApodDate::from_days(self.date_id as i32)))
     }
 
     fn due_in(self, backoff_max: Duration, now: i64) -> i64 {
@@ -274,11 +283,17 @@ impl ArchiveStore {
         Ok(newest.map(|days| ApodDate::from_days(days as i32)))
     }
 
-    pub async fn owed(&self, today: ApodDate, source: Source) -> Result<usize> {
+    pub async fn owed(
+        &self,
+        today: ApodDate,
+        source: Source,
+        pause: Option<&Pause>,
+    ) -> Result<usize> {
         let seen: HashSet<i64> = self
             .attempted(source)
             .await?
             .iter()
+            .filter(|row| !row.reopened_by(pause))
             .map(|row| row.date_id)
             .collect();
 
@@ -294,9 +309,14 @@ impl ArchiveStore {
         source: Source,
         backoff_max: Duration,
         now: i64,
+        pause: Option<&Pause>,
     ) -> Result<Next<ApodDate>> {
         let attempted = self.attempted(source).await?;
-        let seen: HashSet<i64> = attempted.iter().map(|row| row.date_id).collect();
+        let seen: HashSet<i64> = attempted
+            .iter()
+            .filter(|row| !row.reopened_by(pause))
+            .map(|row| row.date_id)
+            .collect();
 
         if let Some(date) = today
             .iter_desc()
@@ -306,7 +326,10 @@ impl ArchiveStore {
         }
 
         let mut soonest: Option<i64> = None;
-        for row in attempted.iter().filter(|row| !row.settled()) {
+        for row in attempted
+            .iter()
+            .filter(|row| !row.settled() && !row.reopened_by(pause))
+        {
             let due_in = row.due_in(backoff_max, now);
             if due_in <= 0 {
                 return Ok(Next::Fetch(ApodDate::from_days(row.date_id as i32)));
@@ -515,16 +538,27 @@ mod tests {
 
     async fn target(store: &ArchiveStore, today: ApodDate) -> Next<ApodDate> {
         store
-            .next_target(today, Source::Legacy, NEVER, LATER)
+            .next_target(today, Source::Legacy, NEVER, LATER, None)
             .await
             .unwrap()
     }
 
     async fn target_at(store: &ArchiveStore, today: ApodDate, now: i64) -> Next<ApodDate> {
         store
-            .next_target(today, Source::Legacy, CEILING, now)
+            .next_target(today, Source::Legacy, CEILING, now, None)
             .await
             .unwrap()
+    }
+
+    async fn target_paused(store: &ArchiveStore, today: ApodDate, pause: &Pause) -> Next<ApodDate> {
+        store
+            .next_target(today, Source::Legacy, NEVER, LATER, Some(pause))
+            .await
+            .unwrap()
+    }
+
+    fn pause(start: ApodDate, end: Option<ApodDate>) -> Pause {
+        Pause::new(start, end, None)
     }
 
     async fn succeed(store: &ArchiveStore, date: ApodDate, now: i64) {
@@ -650,7 +684,7 @@ mod tests {
         let store = store().await;
         let today = date(1995, 6, 25);
 
-        let all = store.owed(today, Source::Legacy).await.unwrap();
+        let all = store.owed(today, Source::Legacy, None).await.unwrap();
         assert_eq!(
             all,
             today.iter_desc().count(),
@@ -660,13 +694,13 @@ mod tests {
         succeed(&store, today, 1).await;
         fail(&store, date(1995, 6, 24), 500, 1).await;
         assert_eq!(
-            store.owed(today, Source::Legacy).await.unwrap(),
+            store.owed(today, Source::Legacy, None).await.unwrap(),
             all - 2,
             "a date that failed has still been asked for, so it is no longer owed a first ask"
         );
 
         assert_eq!(
-            store.owed(today, Source::Modern).await.unwrap(),
+            store.owed(today, Source::Modern, None).await.unwrap(),
             all,
             "the two sources are counted apart"
         );
@@ -769,7 +803,7 @@ mod tests {
         );
         assert_eq!(
             store
-                .next_target(day, Source::Modern, CEILING, LATER)
+                .next_target(day, Source::Modern, CEILING, LATER, None)
                 .await
                 .unwrap(),
             Next::Fetch(day),
@@ -1019,5 +1053,90 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_pause_reopens_the_absences_it_covers() {
+        let store = store().await;
+        let today = date(2026, 10, 5);
+        let window = pause(date(2026, 10, 1), None);
+
+        for day in [date(2026, 10, 3), date(2026, 10, 4), today] {
+            fail(&store, day, 404, 1).await;
+        }
+        for day in [date(2026, 9, 29), date(2026, 9, 30)] {
+            succeed(&store, day, 1).await;
+        }
+
+        assert_eq!(
+            target(&store, today).await,
+            Next::Fetch(date(2026, 10, 2)),
+            "without a pause the 404s are settled and only the untouched date is owed"
+        );
+        assert_eq!(
+            target_paused(&store, today, &window).await,
+            Next::Fetch(today),
+            "the pause hands back the newest date it wrote off"
+        );
+
+        let settled = store.owed(today, Source::Legacy, None).await.unwrap();
+        let reopened = store
+            .owed(today, Source::Legacy, Some(&window))
+            .await
+            .unwrap();
+        assert_eq!(
+            reopened - settled,
+            3,
+            "the three days it wrote off are owed again"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_pause_leaves_stored_dates_and_dates_outside_it_alone() {
+        let store = store().await;
+        let today = date(2026, 10, 5);
+        let window = pause(date(2026, 10, 1), Some(date(2026, 10, 3)));
+
+        for day in [date(2026, 10, 1), date(2026, 10, 2), date(2026, 10, 3)] {
+            succeed(&store, day, 1).await;
+        }
+        fail(&store, date(2026, 9, 20), 404, 1).await;
+        for day in [date(2026, 10, 4), today] {
+            succeed(&store, day, 1).await;
+        }
+
+        assert_eq!(
+            target_paused(&store, today, &window).await,
+            Next::Fetch(date(2026, 9, 30)),
+            "every date the window covers is stored, so the walk carries on past it, and the \
+             404 outside the window stays settled"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_days_apod_never_published_are_out_of_reach_of_a_pause() {
+        let store = store().await;
+        let skipped = date(2020, 6, 10);
+        let today = date(2020, 6, 12);
+        let window = pause(date(2020, 6, 1), None);
+
+        for day in [date(2020, 6, 11), today] {
+            succeed(&store, day, 1).await;
+        }
+        fail(&store, skipped, 404, 1).await;
+
+        assert_eq!(
+            target(&store, today).await,
+            Next::Fetch(date(2020, 6, 9)),
+            "no pause: the skipped day is settled and the walk moves past it"
+        );
+
+        assert_eq!(
+            target_paused(&store, today, &window).await,
+            Next::Fetch(date(2020, 6, 9)),
+            "and a pause covering it still does not offer it: KNOWN_MISSING keeps the four days \
+             APOD never published out of the walk entirely, so no pause can reopen them"
+        );
+        assert!(skipped.is_known_missing());
     }
 }

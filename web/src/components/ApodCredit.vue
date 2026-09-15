@@ -20,23 +20,29 @@ const href = computed(() => props.source || APOD_URL)
 
 <template>
   <p v-if="variant === 'banner'" class="apod-credit banner">
-    <i aria-hidden="true" class="pi pi-image mark" />
+    <AppIcon name="image" class="mark" />
     <span class="line">
       {{ lead }}
       <a :href="href" class="name" rel="noopener" target="_blank">
-        Astronomy Picture of the Day
-        <i aria-hidden="true" class="pi pi-external-link away" />
+        Astronomy Picture of the
+        <span class="tail">
+          Day
+          <AppIcon name="external" class="away" />
+        </span>
       </a>
     </span>
   </p>
 
   <p v-else class="apod-credit caption">
-    <i aria-hidden="true" class="pi pi-image mark" />
+    <AppIcon name="image" class="mark" />
     <span class="stack-text">
       <span class="kicker">From NASA's</span>
       <a :href="href" class="name" rel="noopener" target="_blank">
-        Astronomy Picture of the Day
-        <i aria-hidden="true" class="pi pi-external-link away" />
+        Astronomy Picture of the
+        <span class="tail">
+          Day
+          <AppIcon name="external" class="away" />
+        </span>
       </a>
     </span>
   </p>
@@ -62,6 +68,10 @@ a.name:hover,
 a.name:focus-visible {
   color: var(--accent);
   text-decoration: underline;
+}
+
+.tail {
+  white-space: nowrap;
 }
 
 .away {

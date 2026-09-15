@@ -15,18 +15,18 @@ const games = useGameSummary()
       <li v-for="game in games" :key="game.slug">
         <RouterLink :to="game.path" class="card game">
           <span class="row title">
-            <i :class="game.icon" aria-hidden="true" />
+            <AppIcon :name="game.icon" />
             <strong>{{ game.name }}</strong>
           </span>
           <span class="muted blurb">{{ game.blurb }}</span>
 
           <span class="row foot">
             <span v-if="game.streak" class="badge">
-              <i aria-hidden="true" class="pi pi-bolt" />
+              <AppIcon name="bolt" />
               {{ game.streak }} day{{ game.streak === 1 ? '' : 's' }} streak
             </span>
             <span :class="['today', game.today ? 'muted' : 'open']">
-              <i :class="['pi', game.today ? 'pi-check-circle' : 'pi-play']" aria-hidden="true" />
+              <AppIcon :name="game.today ? 'check-circle' : 'play'" />
               {{ game.today ? "Today's is done" : "Today's is waiting" }}
             </span>
           </span>
@@ -80,7 +80,7 @@ h1 {
   font-size: var(--text-md);
 }
 
-.title i {
+.title .icon {
   color: var(--accent);
 }
 
@@ -111,7 +111,7 @@ h1 {
   gap: var(--space-1);
 }
 
-.today i {
+.today .icon {
   font-size: 0.85em;
 }
 

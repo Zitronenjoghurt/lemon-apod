@@ -11,6 +11,7 @@ withDefaults(
     empty?: string
     query?: string
     credit?: boolean
+    creditLead?: string
   }>(),
   {
     entries: () => [],
@@ -19,6 +20,7 @@ withDefaults(
     empty: 'Nothing here.',
     query: undefined,
     credit: true,
+    creditLead: undefined,
   },
 )
 
@@ -36,10 +38,10 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
 <template>
   <div v-if="loading && !entries.length" aria-busy="true" aria-label="Loading entries" class="grid">
     <div v-for="index in placeholders" :key="index" class="card skeleton-card">
-      <Skeleton class="thumb" height="0" width="100%" />
+      <Skeleton class="thumb" height="auto" width="100%" />
       <div class="lines">
-        <Skeleton height="0.8rem" width="40%" />
-        <Skeleton height="0.8rem" width="100%" />
+        <Skeleton height="1.4rem" width="45%" />
+        <Skeleton height="1.2rem" width="85%" />
       </div>
     </div>
   </div>
@@ -47,7 +49,7 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
   <p v-else-if="!entries.length" class="muted empty">{{ empty }}</p>
 
   <template v-else>
-    <ApodCredit v-if="credit" variant="banner" />
+    <ApodCredit v-if="credit" :lead="creditLead" variant="banner" />
 
     <div class="grid">
       <EntryCard
@@ -74,10 +76,10 @@ function hitOf(entry: ApodSummary | SearchHit): SearchHit | undefined {
 }
 
 .lines {
-  padding: var(--space-4) var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .empty {

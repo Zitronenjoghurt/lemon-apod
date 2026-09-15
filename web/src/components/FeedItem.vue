@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import ApodBirthday from './ApodBirthday.vue'
 import EntryActions from './EntryActions.vue'
 import MediaFrame from './MediaFrame.vue'
 import RetryNotice from './RetryNotice.vue'
@@ -129,6 +130,7 @@ onBeforeUnmount(() => {
           {{ formatDate(date) }}
         </time>
       </RouterLink>
+      <ApodBirthday :date="date" />
       <h2 class="title">
         <RouterLink :to="`/${date}`">{{ title || 'Untitled' }}</RouterLink>
       </h2>
@@ -173,7 +175,7 @@ onBeforeUnmount(() => {
       <template #actions>
         <EntryActions :date="date" :source-url="entry?.source_url" :title="title">
           <RouterLink :to="`/${date}`" aria-label="Open this entry on its own page" class="act">
-            <i aria-hidden="true" class="pi pi-arrow-up-right" />
+            <AppIcon name="arrow-up-right" />
             <span class="label">Open</span>
           </RouterLink>
         </EntryActions>

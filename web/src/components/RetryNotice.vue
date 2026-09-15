@@ -14,12 +14,13 @@ defineEmits<{ retry: [] }>()
       <span class="text">{{ message }}</span>
       <Button
         :loading="busy"
-        icon="pi pi-refresh"
         label="Try again"
         severity="secondary"
         size="small"
         @click="$emit('retry')"
-      />
+      >
+        <template #icon><AppIcon name="refresh" /></template>
+      </Button>
     </div>
   </Message>
 </template>

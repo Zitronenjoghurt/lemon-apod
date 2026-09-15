@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import ApodBirthday from './ApodBirthday.vue'
 import EntryActions from './EntryActions.vue'
 import MediaFrame from './MediaFrame.vue'
 import EntryGrid from './EntryGrid.vue'
@@ -60,8 +61,8 @@ const absent = computed(() => props.entry.absent === true)
 
 const migration = computed(() =>
   absent.value
-    ? { icon: 'pi-ban', lead: "Missing from APOD's modernized site" }
-    : { icon: 'pi-arrow-right-arrow-left', lead: "Changed through APOD's modernization" },
+    ? { icon: 'absent', lead: "Missing from APOD's modernized site" }
+    : { icon: 'compare', lead: "Changed through APOD's modernization" },
 )
 
 const terms = computed(() => (props.highlight ? queryTerms(props.highlight) : []))
@@ -214,30 +215,33 @@ watch([() => props.entry.date, hits], async () => {
             class="muted when"
           >
             <time :datetime="entry.date">{{ formatDate(entry.date) }}</time>
-            <i aria-hidden="true" class="pi pi-calendar" />
+            <AppIcon name="calendar" />
           </RouterLink>
+          <ApodBirthday :date="entry.date" />
           <nav aria-label="Adjacent days" class="row nav">
             <RouterLink v-if="previous" v-slot="{ navigate }" :to="`/${previous}`" custom>
               <Button
                 v-tooltip.bottom="'Previous day (←)'"
                 aria-label="Previous day"
-                icon="pi pi-chevron-left"
                 outlined
                 rounded
                 severity="secondary"
                 @click="navigate"
-              />
+              >
+                <template #icon><AppIcon name="chevron-left" /></template>
+              </Button>
             </RouterLink>
             <RouterLink v-if="next" v-slot="{ navigate }" :to="`/${next}`" custom>
               <Button
                 v-tooltip.bottom="'Next day (→)'"
                 aria-label="Next day"
-                icon="pi pi-chevron-right"
                 outlined
                 rounded
                 severity="secondary"
                 @click="navigate"
-              />
+              >
+                <template #icon><AppIcon name="chevron-right" /></template>
+              </Button>
             </RouterLink>
           </nav>
         </div>
@@ -246,7 +250,7 @@ watch([() => props.entry.date, hits], async () => {
       </header>
 
       <div v-if="highlight" class="row hits">
-        <i aria-hidden="true" class="pi pi-search" />
+        <AppIcon name="search" />
         <span class="term">{{ highlight }}</span>
         <span aria-live="polite" class="muted count">
           {{ hits }} {{ hits === 1 ? 'match' : 'matches' }} in the explanation
@@ -255,23 +259,25 @@ watch([() => props.entry.date, hits], async () => {
           <Button
             aria-label="Previous match"
             class="hop"
-            icon="pi pi-chevron-up"
             rounded
             severity="secondary"
             size="small"
             text
             @click="jump(-1)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-up" /></template>
+          </Button>
           <Button
             aria-label="Next match"
             class="hop"
-            icon="pi pi-chevron-down"
             rounded
             severity="secondary"
             size="small"
             text
             @click="jump(1)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-down" /></template>
+          </Button>
         </span>
         <Button
           class="clear"
@@ -297,7 +303,7 @@ watch([() => props.entry.date, hits], async () => {
                 :to="`/pictures/${encore.picture.id}`"
                 class="lead"
               >
-                <i aria-hidden="true" class="pi pi-replay" />
+                <AppIcon name="replay" />
                 {{ encore.picture.appearances }}
               </RouterLink>
 
@@ -320,13 +326,13 @@ watch([() => props.entry.date, hits], async () => {
               </ol>
 
               <RouterLink :to="`/pictures/${encore.picture.id}`" class="all">
-                What changed <i aria-hidden="true" class="pi pi-arrow-right" />
+                What changed <AppIcon name="arrow-right" />
               </RouterLink>
             </div>
           </template>
 
           <span v-else class="lead waiting">
-            <i aria-hidden="true" class="pi pi-replay" />
+            <AppIcon name="replay" />
             Shown more than once
           </span>
         </nav>
@@ -339,13 +345,13 @@ watch([() => props.entry.date, hits], async () => {
             @click="migrationOpen = !migrationOpen"
           >
             <span class="lead">
-              <i :class="['pi', migration.icon]" aria-hidden="true" />
+              <AppIcon :name="migration.icon" />
               {{ migration.lead }}
             </span>
             <span v-if="changed.length" class="row fields">
               <span v-for="name in changedNames" :key="name" class="what">{{ name }}</span>
             </span>
-            <i aria-hidden="true" class="pi pi-chevron-down turn" />
+            <AppIcon name="chevron-down" class="turn" />
           </button>
 
           <Transition name="unfold">
@@ -358,7 +364,7 @@ watch([() => props.entry.date, hits], async () => {
                 <FieldChange v-for="row in changed" :key="row.field" :row="row" />
                 <RouterLink class="about" to="/modernization">
                   More information about the modernization of the official APOD website
-                  <i aria-hidden="true" class="pi pi-arrow-right" />
+                  <AppIcon name="arrow-right" />
                 </RouterLink>
               </div>
             </div>
@@ -404,7 +410,7 @@ watch([() => props.entry.date, hits], async () => {
                   class="act"
                   to="/random"
                 >
-                  <i aria-hidden="true" class="pi pi-sync" />
+                  <AppIcon name="random" />
                   <span class="label">Random</span>
                 </RouterLink>
               </EntryActions>
@@ -576,7 +582,7 @@ watch([() => props.entry.date, hits], async () => {
   color: var(--accent);
 }
 
-.encore .all i {
+.encore .all .icon {
   font-size: 0.7em;
 }
 
@@ -611,9 +617,6 @@ watch([() => props.entry.date, hits], async () => {
 
 .migrated .turn {
   margin-left: auto;
-}
-
-.migrated .turn {
   font-size: 0.8em;
   transition: transform var(--dur-base) var(--ease-out);
 }
@@ -683,7 +686,7 @@ watch([() => props.entry.date, hits], async () => {
   text-decoration: none;
 }
 
-.about i {
+.about .icon {
   font-size: 0.8em;
 }
 
@@ -726,7 +729,7 @@ watch([() => props.entry.date, hits], async () => {
   border-radius: 0.4rem;
 }
 
-.when i {
+.when .icon {
   font-size: 0.8em;
   opacity: 0;
   transition: opacity 0.15s ease;
@@ -737,8 +740,8 @@ watch([() => props.entry.date, hits], async () => {
   color: var(--accent);
 }
 
-.when:hover i,
-.when:focus-visible i {
+.when:hover .icon,
+.when:focus-visible .icon {
   opacity: 0.75;
 }
 

@@ -261,7 +261,7 @@ function count(value: number | undefined): string {
               </span>
               <RouterLink :to="`/${run.from}`" class="why">
                 why
-                <i aria-hidden="true" class="pi pi-angle-right" />
+                <AppIcon name="chevron-right" />
               </RouterLink>
             </span>
           </li>
@@ -393,7 +393,7 @@ function count(value: number | undefined): string {
       <h2>Every word</h2>
       <div class="row controls">
         <IconField class="word-search">
-          <InputIcon class="pi pi-search" />
+          <InputIcon><AppIcon name="search" /></InputIcon>
           <InputText
             v-model="query"
             aria-label="Search words"
@@ -593,7 +593,7 @@ h2 {
   text-decoration: underline;
 }
 
-.gaps .why i {
+.gaps .why .icon {
   font-size: 0.75em;
 }
 
@@ -738,8 +738,8 @@ h2 {
 }
 
 .count {
+  margin: calc(var(--space-2) - var(--gap)) 0 0;
   font-size: var(--text-sm);
-  margin: 0;
 }
 
 .words {

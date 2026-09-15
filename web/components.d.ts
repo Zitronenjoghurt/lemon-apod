@@ -11,7 +11,10 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ApodBirthday: typeof import('./src/components/ApodBirthday.vue')['default']
     ApodCredit: typeof import('./src/components/ApodCredit.vue')['default']
+    AppIcon: typeof import('./src/components/AppIcon.vue')['default']
+    ArchiveStrip: typeof import('./src/components/ArchiveStrip.vue')['default']
     Button: typeof import('primevue/button')['default']
     CalendarMonth: typeof import('./src/components/CalendarMonth.vue')['default']
     Checkbox: typeof import('primevue/checkbox')['default']
@@ -43,6 +46,8 @@ declare module 'vue' {
     InputIcon: typeof import('primevue/inputicon')['default']
     InputText: typeof import('primevue/inputtext')['default']
     KpGauge: typeof import('./src/components/KpGauge.vue')['default']
+    LaunchImminent: typeof import('./src/components/LaunchImminent.vue')['default']
+    LaunchRow: typeof import('./src/components/LaunchRow.vue')['default']
     MediaFrame: typeof import('./src/components/MediaFrame.vue')['default']
     MediaLightbox: typeof import('./src/components/MediaLightbox.vue')['default']
     Message: typeof import('primevue/message')['default']
@@ -51,6 +56,7 @@ declare module 'vue' {
     Paginator: typeof import('primevue/paginator')['default']
     PictureTimeline: typeof import('./src/components/PictureTimeline.vue')['default']
     Popover: typeof import('primevue/popover')['default']
+    RangeTrack: typeof import('./src/components/RangeTrack.vue')['default']
     RatingCard: typeof import('./src/components/rating/RatingCard.vue')['default']
     RatingHelp: typeof import('./src/components/rating/RatingHelp.vue')['default']
     RatingOdds: typeof import('./src/components/rating/RatingOdds.vue')['default']
@@ -68,6 +74,7 @@ declare module 'vue' {
     SettingsDialog: typeof import('./src/components/SettingsDialog.vue')['default']
     Skeleton: typeof import('primevue/skeleton')['default']
     SkyPanels: typeof import('./src/components/SkyPanels.vue')['default']
+    TabBar: typeof import('./src/components/TabBar.vue')['default']
     Tag: typeof import('primevue/tag')['default']
     Textarea: typeof import('primevue/textarea')['default']
     Toast: typeof import('primevue/toast')['default']

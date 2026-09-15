@@ -80,7 +80,7 @@ async function onFile(event: Event) {
       header: 'Replace everything in this browser?',
       message:
         'Your favorites and read progress here are thrown away and the backup takes their place. There is no way back.',
-      icon: 'pi pi-exclamation-triangle',
+      icon: 'exclamation-triangle',
       rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
       acceptProps: { label: 'Replace', severity: 'danger' },
       accept: () => run(text),
@@ -116,7 +116,7 @@ function confirmClearRead() {
   confirm.require({
     header: 'Forget what you have read?',
     message: `This marks all ${marked.toLocaleString()} entries unread again in this browser. There is no way back`,
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Mark all unread', severity: 'danger' },
     accept: () => {
@@ -132,7 +132,7 @@ function confirmClearFavorites() {
   confirm.require({
     header: 'Remove every favorite?',
     message: `This drops all ${saved.toLocaleString()} saved entries in this browser. There is no way back.`,
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Remove them all', severity: 'danger' },
     accept: () => {
@@ -174,7 +174,7 @@ function bringBackWelcome() {
   >
     <div class="panels">
       <section class="panel">
-        <h3><i aria-hidden="true" class="pi pi-book" />Reading</h3>
+        <h3><AppIcon name="book" />Reading</h3>
         <ReadProgress :read="countIn()" :total="archiveTotal" label="the archive" />
         <div class="rows">
           <div class="line">
@@ -183,19 +183,20 @@ function bringBackWelcome() {
             <Button
               :disabled="!readCount"
               class="act"
-              icon="pi pi-eraser"
               label="Mark all unread"
               outlined
               severity="danger"
               size="small"
               @click="confirmClearRead"
-            />
+            >
+              <template #icon><AppIcon name="eraser" /></template>
+            </Button>
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <h3><i aria-hidden="true" class="pi pi-star" />Favorites</h3>
+        <h3><AppIcon name="star" />Favorites</h3>
         <div class="rows">
           <div class="line">
             <span class="name">Saved</span>
@@ -203,19 +204,20 @@ function bringBackWelcome() {
             <Button
               :disabled="!favoriteCount"
               class="act"
-              icon="pi pi-trash"
               label="Remove all"
               outlined
               severity="danger"
               size="small"
               @click="confirmClearFavorites"
-            />
+            >
+              <template #icon><AppIcon name="trash" /></template>
+            </Button>
           </div>
         </div>
       </section>
 
       <section class="panel">
-        <h3><i aria-hidden="true" class="pi pi-calendar" />Calendar</h3>
+        <h3><AppIcon name="calendar" />Calendar</h3>
         <div class="rows">
           <div class="line">
             <span class="name">Week starts on</span>
@@ -234,20 +236,21 @@ function bringBackWelcome() {
       </section>
 
       <section class="panel">
-        <h3><i aria-hidden="true" class="pi pi-database" />Backup</h3>
+        <h3><AppIcon name="database" />Backup</h3>
         <p class="lead muted">All your data is stored solely in this browser.</p>
         <div class="rows">
           <div class="line">
             <span class="name">Save a copy</span>
             <Button
               class="act"
-              icon="pi pi-download"
               label="Export"
               outlined
               severity="secondary"
               size="small"
               @click="exportData"
-            />
+            >
+              <template #icon><AppIcon name="download" /></template>
+            </Button>
           </div>
 
           <div class="line">
@@ -268,13 +271,14 @@ function bringBackWelcome() {
                     ? 'Keeps what exists and adds the backup on top'
                     : 'Throws away what exists and replaces it with the backup'
                 "
-                icon="pi pi-upload"
                 label="Import"
                 outlined
                 severity="secondary"
                 size="small"
                 @click="pickFile"
-              />
+              >
+                <template #icon><AppIcon name="upload" /></template>
+              </Button>
             </span>
           </div>
         </div>
@@ -289,32 +293,34 @@ function bringBackWelcome() {
       </section>
 
       <section v-if="reminders" class="panel">
-        <h3><i aria-hidden="true" class="pi pi-bell" />Dismissed notices</h3>
+        <h3><AppIcon name="bell" />Dismissed notices</h3>
         <div class="rows">
           <div v-if="acknowledged" class="line">
             <span class="name">Warning before external links</span>
             <Button
               class="act"
-              icon="pi pi-shield"
               label="Warn me again"
               outlined
               severity="secondary"
               size="small"
               @click="bringBackWarning"
-            />
+            >
+              <template #icon><AppIcon name="shield" /></template>
+            </Button>
           </div>
 
           <div v-if="welcomeGone" class="line">
             <span class="name">Welcome note</span>
             <Button
               class="act"
-              icon="pi pi-info-circle"
               label="Show it again"
               outlined
               severity="secondary"
               size="small"
               @click="bringBackWelcome"
-            />
+            >
+              <template #icon><AppIcon name="info" /></template>
+            </Button>
           </div>
         </div>
       </section>
@@ -347,7 +353,7 @@ h3 {
   font-weight: 600;
 }
 
-h3 i {
+h3 .icon {
   font-size: 0.85em;
 }
 

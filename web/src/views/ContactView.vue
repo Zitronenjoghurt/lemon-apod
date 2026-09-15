@@ -120,13 +120,13 @@ function writeAnother() {
 
 const elsewhere = computed(() => [
   {
-    icon: 'pi pi-github',
+    icon: 'github',
     label: 'GitHub',
     value: 'Zitronenjoghurt/lemon-apod',
     href: REPO_URL,
   },
   {
-    icon: 'pi pi-at',
+    icon: 'at',
     label: 'Mastodon',
     value: '@zitronenjoghurt@mastodon.social',
     href: MASTODON_URL,
@@ -134,7 +134,7 @@ const elsewhere = computed(() => [
   ...(address.value
     ? [
         {
-          icon: 'pi pi-envelope',
+          icon: 'envelope',
           label: 'Mail',
           value: address.value,
           href: `mailto:${address.value}`,
@@ -171,7 +171,9 @@ const elsewhere = computed(() => [
             other platforms.
           </p>
           <a v-if="address" :href="`mailto:${address}`" class="plain" data-ours>
-            <Button :label="address" icon="pi pi-envelope" outlined severity="secondary" />
+            <Button :label="address" outlined severity="secondary">
+              <template #icon><AppIcon name="envelope" /></template>
+            </Button>
           </a>
           <p v-else class="muted note">
             No address is published either. The links on the right still reach me.
@@ -184,13 +186,14 @@ const elsewhere = computed(() => [
           </Message>
           <div class="row">
             <Button
-              icon="pi pi-pencil"
               label="Write another"
               outlined
               severity="secondary"
               size="small"
               @click="writeAnother"
-            />
+            >
+              <template #icon><AppIcon name="pencil" /></template>
+            </Button>
           </div>
         </template>
 
@@ -251,13 +254,9 @@ const elsewhere = computed(() => [
           </Message>
 
           <div class="row actions">
-            <Button
-              :disabled="!canSend"
-              :loading="sending"
-              icon="pi pi-send"
-              label="Send"
-              type="submit"
-            />
+            <Button :disabled="!canSend" :loading="sending" label="Send" type="submit">
+              <template #icon><AppIcon name="launch" /></template>
+            </Button>
             <span class="muted hint">
               {{ address ? `Goes to ${address}` : 'Goes straight to my inbox' }}
             </span>
@@ -276,7 +275,7 @@ const elsewhere = computed(() => [
               :target="link.href.startsWith('mailto:') ? undefined : '_blank'"
               data-ours
             >
-              <i :class="link.icon" aria-hidden="true" />
+              <AppIcon :name="link.icon" />
               <span class="text">
                 <span class="muted label">{{ link.label }}</span>
                 <span class="value">{{ link.value }}</span>
@@ -404,11 +403,10 @@ h1 {
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
-.links i {
+.links .icon {
   font-size: var(--text-md);
   color: var(--accent);
   width: 1.3rem;
-  text-align: center;
   flex: none;
 }
 

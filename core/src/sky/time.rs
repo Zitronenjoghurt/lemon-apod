@@ -26,6 +26,10 @@ pub fn centuries(jd: f64) -> f64 {
     (jd - J2000) / DAYS_PER_CENTURY
 }
 
+pub fn centuries_at(at: DateTime<Utc>) -> f64 {
+    centuries(to_julian(at))
+}
+
 pub fn approximate_year(jd: f64) -> f64 {
     2000.0 + (jd - J2000) / 365.25
 }
@@ -86,6 +90,29 @@ pub fn angle_difference(from: f64, to: f64) -> f64 {
     } else {
         difference
     }
+}
+
+pub fn offset_days(from: DateTime<Utc>, days: f64) -> DateTime<Utc> {
+    from + chrono::TimeDelta::milliseconds((days * MILLIS_PER_DAY) as i64)
+}
+
+pub fn lowest_between(of: impl Fn(f64) -> f64, mut low: f64, mut high: f64) -> f64 {
+    const RATIO: f64 = 0.618_033_988_749_895;
+    const ROUNDS: usize = 40;
+
+    for _ in 0..ROUNDS {
+        let span = high - low;
+        let left = high - span * RATIO;
+        let right = low + span * RATIO;
+
+        if of(left) < of(right) {
+            high = right;
+        } else {
+            low = left;
+        }
+    }
+
+    (low + high) / 2.0
 }
 
 pub fn sin_deg(degrees: f64) -> f64 {

@@ -120,7 +120,7 @@ onMounted(() => void run())
         >
           <template #option="{ option }">
             <span class="pick-label">
-              <i :class="CATEGORY_ICONS[option as RatingCategory]" aria-hidden="true" />
+              <AppIcon :name="CATEGORY_ICONS[option as RatingCategory]" />
               {{ CATEGORIES[option as RatingCategory].short }}
             </span>
           </template>
@@ -132,7 +132,7 @@ onMounted(() => void run())
           type="button"
           @click="helpOpen = true"
         >
-          <i aria-hidden="true" class="pi pi-question-circle" />
+          <AppIcon name="question" />
           <span class="sr-only">How this works</span>
         </button>
       </div>
@@ -168,7 +168,9 @@ onMounted(() => void run())
             :to="{ path: '/rating/vote', query: { category } }"
             custom
           >
-            <Button icon="pi pi-images" label="Get voting!" @click="navigate" />
+            <Button label="Get voting!" @click="navigate">
+              <template #icon><AppIcon name="vote" /></template>
+            </Button>
           </RouterLink>
         </div>
 
@@ -235,7 +237,7 @@ onMounted(() => void run())
                       loading="lazy"
                     />
                     <span v-else class="fallback">
-                      <i aria-hidden="true" class="pi pi-image" />
+                      <AppIcon name="image" />
                     </span>
                   </RouterLink>
 
@@ -246,8 +248,7 @@ onMounted(() => void run())
                     <p class="muted when">
                       <time :datetime="row.date">{{ formatDate(row.date) }}</time>
                       <span v-if="row.dates.length > 1" class="tag">
-                        <i aria-hidden="true" class="pi pi-replay" /> shown
-                        {{ row.dates.length }}&times;
+                        <AppIcon name="replay" /> shown {{ row.dates.length }}&times;
                       </span>
                     </p>
 
@@ -312,7 +313,7 @@ h1 {
   gap: var(--space-1);
 }
 
-.pick-label i {
+.pick-label .icon {
   font-size: 0.85em;
 }
 
@@ -514,7 +515,7 @@ h3 a:hover {
   padding: 0 var(--space-2);
 }
 
-.tag i {
+.tag .icon {
   font-size: 0.7em;
 }
 

@@ -24,7 +24,9 @@ A service for archiving and serving NASA's Astronomy Picture of the Day in a mod
   put two pictures in chronological order, or match an explanation to the picture it describes. Each one deals the same
   puzzle to everybody each day (but also offers a free play mode).
 - **What the sky is up to**, on the front page: the moon's phase, which planets are up and when, the next meteor shower
-  and whether the moon will ruin it, the next eclipse, and the next few rocket launches.
+  and whether the moon will ruin it, the next eclipse, and the next few rocket launches. `/sky` carries all of it for
+  any date between 1900 and 2100, and links each kind of event to the entries that caught it. `/launches` carries every
+  launch coming up and the last thirty days of them.
 - **Feeds and push notifications**. The latest entries with their explanations as Atom at `/atom.xml` or RSS at
   `/feed.xml`, both linked from the page head so a reader can find them on its own. Optionally, four
   [ntfy](https://ntfy.sh) topics: the picture of the day, aurora alerts, the rest of NOAA's space weather, and sky
@@ -105,11 +107,16 @@ subscription and every favorite, and each has to be set again with `/apod settin
 same file read only, to publish a few counts on its Discord page; the file is optional, and an API running without a
 bot beside it shows none of them.
 
-`sky.db` holds the two things the front page cannot work out for itself, upcoming rocket launches and the current
-geomagnetic activity. The archiver refreshes it every half hour by default (`APOD_SKY_INTERVAL_SECS`), and `make sky`
-does one pass now and prints what it got. Deleting it costs one poll. Everything else on those panels, the moon and the
-planets and the showers and the
-eclipses, is computed on the spot and needs neither this file nor a network.
+`sky.db` holds the two things the front page cannot work out for itself, rocket launches and the current geomagnetic
+activity. The archiver refreshes it every half hour by default (`APOD_SKY_INTERVAL_SECS`), and drops to
+`APOD_SKY_IMMINENT_INTERVAL_SECS` once a launch is within `APOD_SKY_IMMINENT_HOURS` or already streaming, because a
+hold or a scrub reaches the feed within minutes. `make sky` does one pass now and prints what it got. Launches serve
+from their own short `APOD_CACHE_LAUNCHES_SECS`, which is why `/api/sky` no longer carries them. Deleting the file costs
+one poll, plus whatever launch history had built up: launches are kept for `APOD_SKY_LAUNCH_HISTORY_DAYS` after they
+fly, because the upcoming feed stops listing one the moment it goes up. Webcast links come from the detailed feed, which
+runs to tens of kilobytes a launch, so it is asked only about the next `APOD_SKY_WEBCAST_LOOKAHEAD`. Everything else on
+those pages, the moon and the planets and the showers and the eclipses and the conjunctions, is computed on the spot and
+needs neither this file nor a network, for any date between 1900 and 2100.
 
 `notify.db` records every notification already sent, which is what stops the same eclipse being announced on every
 pass. Deleting it re-announces everything currently inside its lead window, so on an archive that has been running a
@@ -120,3 +127,17 @@ make notify SEED=1
 ```
 
 `make notify DRY=1` lists what is due, with the link each message would open, and touches nothing.
+
+### When APOD stops publishing
+
+Government shutdowns have twice taken APOD's site down for weeks. Both times the missing days were published afterwards
+with their original dates, so the archive has no holes from either, but an archiver watching it happen writes those days
+off as permanently absent and never asks again unless it is told.
+
+Set `APOD_PAUSE_START` to the first day APOD went quiet, as `YYYY-MM-DD`, read in `APOD_PUBLISH_TZ`. `APOD_PAUSE_END` is
+optional and closes the window; `APOD_PAUSE_REASON` is free text for the notice on the front page. Both services read
+all three. While the window runs the workers stand down, and every date it covers that has no entry is treated as one
+never asked for, so the backfill picks those days up the moment APOD resumes.
+
+**Leave `APOD_PAUSE_START` set until the backfill has caught up.** Dropping it while those days are still empty settles
+their 404s again, which is what the flag exists to prevent.

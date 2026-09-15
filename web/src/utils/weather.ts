@@ -61,10 +61,10 @@ export const NOTICE_LABELS: Record<NoticeKind, string> = {
 }
 
 export const NOTICE_ICONS: Record<NoticeKind, string> = {
-  alert: 'pi-exclamation-triangle',
-  warning: 'pi-bell',
-  watch: 'pi-eye',
-  summary: 'pi-file',
+  alert: 'exclamation-triangle',
+  warning: 'bell',
+  watch: 'eye',
+  summary: 'file',
 }
 
 export const KP_SCALE: { at: number; label: string; note: string }[] = [

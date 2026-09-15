@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ApodBirthday from '@/components/ApodBirthday.vue'
 import CalendarMonth from '@/components/CalendarMonth.vue'
 import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
@@ -13,7 +14,15 @@ import { useCoverage } from '@/composables/useCoverage'
 import { usePreferences } from '@/composables/usePreferences'
 import { useLatestDate } from '@/composables/useStatus'
 import { provideReadScope, useRead } from '@/composables/useRead'
-import { FIRST_ENTRY, isoDate, month as monthOf, year as yearOf } from '@/utils/date'
+import {
+  birthdayAge,
+  FIRST_ENTRY,
+  isoDate,
+  localDay,
+  localMidnight,
+  month as monthOf,
+  year as yearOf,
+} from '@/utils/date'
 
 const FIRST_YEAR = yearOf(FIRST_ENTRY)
 const FIRST_MONTH = monthOf(FIRST_ENTRY)
@@ -22,8 +31,8 @@ const PAGE_SIZE = 60
 type View = 'grid' | 'calendar'
 
 const VIEWS: { value: View; icon: string; label: string }[] = [
-  { value: 'grid', icon: 'pi pi-th-large', label: 'Grid' },
-  { value: 'calendar', icon: 'pi pi-calendar', label: 'Calendar' },
+  { value: 'grid', icon: 'grid', label: 'Grid' },
+  { value: 'calendar', icon: 'calendar', label: 'Calendar' },
 ]
 
 const MONTHS = Array.from({ length: 12 }, (_, index) => ({
@@ -46,6 +55,11 @@ const year = computed(() =>
   route.params.year ? Number(route.params.year) : (newestYear.value ?? null),
 )
 const month = computed(() => (route.params.month ? Number(route.params.month) : null))
+
+const birthdayIn = computed(() => {
+  const date = `${year.value}-06-16`
+  return month.value === 6 && birthdayAge(date) ? date : null
+})
 
 const view = computed<View>(() => {
   if (route.query.view === 'calendar') return 'calendar'
@@ -136,32 +150,21 @@ function goTo(target: Period | null) {
   if (target) go(target.year, target.month)
 }
 
-function localDate(iso: string): Date {
-  const [on, of, day] = iso.split('-').map(Number)
-  return new Date(on!, of! - 1, day!)
-}
-
-const oldestDay = localDate(FIRST_ENTRY)
-const newestDay = computed(() => (latest.value ? localDate(latest.value) : new Date()))
+const oldestDay = localMidnight(FIRST_ENTRY)
+const newestDay = computed(() => (latest.value ? localMidnight(latest.value) : new Date()))
 
 const picked = ref<Date | null>(null)
-
-function toIso(date: Date): string {
-  const of = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${of}-${day}`
-}
 
 function openDate(date: Date) {
   jumpProblem.value = undefined
   typed.value = ''
-  void router.push(`/${toIso(date)}`)
+  void router.push(`/${localDay(date)}`)
 }
 
 const jumpProblem = ref<string>()
 const typed = ref('')
 
-const span = computed(() => ({ first: FIRST_ENTRY, last: latest.value ?? toIso(new Date()) }))
+const span = computed(() => ({ first: FIRST_ENTRY, last: latest.value ?? localDay(new Date()) }))
 
 function onJumpInput(event: Event) {
   typed.value = (event.target as HTMLInputElement | null)?.value ?? ''
@@ -332,6 +335,7 @@ const countLabel = computed(() => {
     <header class="stack head">
       <div class="row justify">
         <h1>Archive</h1>
+        <ApodBirthday v-if="birthdayIn" :date="birthdayIn" />
         <SelectButton
           :allow-empty="false"
           :model-value="view"
@@ -342,7 +346,7 @@ const countLabel = computed(() => {
           @update:model-value="selectView"
         >
           <template #option="{ option }">
-            <i :class="option.icon" aria-hidden="true" />
+            <AppIcon :name="option.icon" />
             <span class="view-label">{{ option.label }}</span>
           </template>
         </SelectButton>
@@ -355,11 +359,12 @@ const countLabel = computed(() => {
             v-tooltip.bottom="previousYear ? labelFor(previousYear) : undefined"
             :aria-label="`Earlier year: ${labelFor(previousYear) || 'nothing before this'}`"
             :disabled="!previousYear"
-            icon="pi pi-chevron-left"
             outlined
             severity="secondary"
             @click="goTo(previousYear)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-left" /></template>
+          </Button>
           <Select
             :model-value="year"
             :options="years"
@@ -372,11 +377,12 @@ const countLabel = computed(() => {
             v-tooltip.bottom="nextYear ? labelFor(nextYear) : undefined"
             :aria-label="`Later year: ${labelFor(nextYear) || 'nothing after this'}`"
             :disabled="!nextYear"
-            icon="pi pi-chevron-right"
             outlined
             severity="secondary"
             @click="goTo(nextYear)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-right" /></template>
+          </Button>
         </div>
 
         <div class="row stepper">
@@ -384,11 +390,12 @@ const countLabel = computed(() => {
             v-tooltip.bottom="previousMonth ? labelFor(previousMonth) : undefined"
             :aria-label="`Earlier month: ${labelFor(previousMonth) || 'nothing before this'}`"
             :disabled="!previousMonth"
-            icon="pi pi-chevron-left"
             outlined
             severity="secondary"
             @click="goTo(previousMonth)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-left" /></template>
+          </Button>
           <Select
             :model-value="month"
             :options="months"
@@ -404,11 +411,12 @@ const countLabel = computed(() => {
             v-tooltip.bottom="nextMonth ? labelFor(nextMonth) : undefined"
             :aria-label="`Later month: ${labelFor(nextMonth) || 'nothing after this'}`"
             :disabled="!nextMonth"
-            icon="pi pi-chevron-right"
             outlined
             severity="secondary"
             @click="goTo(nextMonth)"
-          />
+          >
+            <template #icon><AppIcon name="chevron-right" /></template>
+          </Button>
         </div>
 
         <DatePicker
@@ -432,7 +440,7 @@ const countLabel = computed(() => {
       </div>
 
       <p v-if="jumpProblem" aria-live="polite" class="row jump-problem">
-        <i aria-hidden="true" class="pi pi-exclamation-circle" />
+        <AppIcon name="exclamation-circle" />
         {{ jumpProblem }}
       </p>
 
@@ -474,12 +482,13 @@ const countLabel = computed(() => {
       <Button
         v-if="cursor"
         :loading="loadingMore"
-        icon="pi pi-chevron-down"
         label="Load more"
         outlined
         severity="secondary"
         @click="load(true)"
-      />
+      >
+        <template #icon><AppIcon name="chevron-down" /></template>
+      </Button>
     </div>
   </div>
 </template>

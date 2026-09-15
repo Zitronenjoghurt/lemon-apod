@@ -60,6 +60,7 @@ impl ServerState {
             sky: Sky::new(
                 config.sky_db.clone(),
                 Duration::from_secs(config.cache_sky_secs),
+                Duration::from_secs(config.cache_launches_secs),
             ),
             sitemap: Cached::new(Duration::from_secs(config.cache_sitemap_secs)),
             atom: Cached::new(Duration::from_secs(config.cache_feed_secs)),
@@ -80,15 +81,17 @@ pub struct Sky {
     reader: Arc<RwLock<Option<SkyReader>>>,
     pub cached: Cached,
     pub weather: Cached,
+    pub launches: Cached,
 }
 
 impl Sky {
-    fn new(path: PathBuf, ttl: Duration) -> Self {
+    fn new(path: PathBuf, ttl: Duration, launches: Duration) -> Self {
         Self {
             path: Arc::new(path),
             reader: Arc::new(RwLock::new(None)),
             cached: Cached::new(ttl),
             weather: Cached::new(ttl),
+            launches: Cached::new(launches),
         }
     }
 

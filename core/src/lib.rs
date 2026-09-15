@@ -14,6 +14,7 @@ pub mod notify;
 pub mod object;
 pub mod original;
 pub mod parse;
+pub mod pause;
 pub mod quality;
 #[cfg(feature = "rating")]
 pub mod rating;
@@ -43,6 +44,7 @@ pub use entry::{
 pub use media::{KindFilter, Media, MediaKind, Thumb, ThumbSource};
 pub use merge::{Divergence, Merged, is_content, merge};
 pub use parse::{ParseError, parse_page};
+pub use pause::Pause;
 pub use quality::{QualityWarning, quality_control};
 
 pub const APOD_BASE_URL: &str = "https://apod.nasa.gov/apod/";

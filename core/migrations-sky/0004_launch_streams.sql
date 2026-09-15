@@ -1,0 +1,2 @@
+ALTER TABLE launches ADD COLUMN webcast_live INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE launches ADD COLUMN streams TEXT;

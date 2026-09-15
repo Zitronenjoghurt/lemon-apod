@@ -84,7 +84,7 @@ const tally = computed(() => {
     <template v-else-if="pair">
       <p class="muted note">
         <span class="pair">
-          {{ formatDate(before) }} <i aria-hidden="true" class="pi pi-arrow-right" />
+          {{ formatDate(before) }} <AppIcon name="arrow-right" />
           {{ formatDate(after) }}
         </span>
         <span v-if="tally.added || tally.removed" class="tally">
@@ -131,7 +131,7 @@ const tally = computed(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.pair i {
+.pair .icon {
   font-size: 0.7em;
   margin-inline: var(--space-0);
 }

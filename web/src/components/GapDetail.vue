@@ -31,7 +31,7 @@ const span = computed(() =>
           class="muted when"
         >
           <time :datetime="gap.date">{{ formatDate(gap.date) }}</time>
-          <i aria-hidden="true" class="pi pi-calendar" />
+          <AppIcon name="calendar" />
         </RouterLink>
 
         <nav aria-label="Adjacent days" class="row nav">
@@ -39,29 +39,31 @@ const span = computed(() =>
             <Button
               v-tooltip.bottom="`Previous entry, ${formatDate(gap.previous)} (←)`"
               aria-label="Previous entry"
-              icon="pi pi-chevron-left"
               outlined
               rounded
               severity="secondary"
               @click="navigate"
-            />
+            >
+              <template #icon><AppIcon name="chevron-left" /></template>
+            </Button>
           </RouterLink>
           <RouterLink v-if="gap.next" v-slot="{ navigate }" :to="`/${gap.next}`" custom>
             <Button
               v-tooltip.bottom="`Next entry, ${formatDate(gap.next)} (→)`"
               aria-label="Next entry"
-              icon="pi pi-chevron-right"
               outlined
               rounded
               severity="secondary"
               @click="navigate"
-            />
+            >
+              <template #icon><AppIcon name="chevron-right" /></template>
+            </Button>
           </RouterLink>
         </nav>
       </div>
 
       <p class="muted kicker">
-        <i aria-hidden="true" class="pi pi-calendar-times" />
+        <AppIcon name="calendar-times" />
         <template v-if="gap.days === 1">No picture this day</template>
         <template v-else>No picture for {{ gap.days }} days</template>
       </p>
@@ -77,7 +79,7 @@ const span = computed(() =>
       <p v-if="gap.source" class="source">
         <a :href="gap.source.url" rel="noopener" target="_blank">
           {{ gap.source.label }}
-          <i aria-hidden="true" class="pi pi-external-link" />
+          <AppIcon name="external" />
         </a>
       </p>
 
@@ -134,7 +136,7 @@ const span = computed(() =>
   letter-spacing: 0.07em;
 }
 
-.kicker i {
+.kicker .icon {
   color: var(--accent);
 }
 
@@ -180,7 +182,7 @@ const span = computed(() =>
   text-decoration: underline;
 }
 
-.source i {
+.source .icon {
   font-size: 0.75em;
 }
 

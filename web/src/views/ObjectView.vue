@@ -87,7 +87,7 @@ watch([object, notFound], ([found, missing]) => {
 <template>
   <div class="stack">
     <RouterLink class="muted back" to="/objects">
-      <i aria-hidden="true" class="pi pi-arrow-left" /> All objects
+      <AppIcon name="arrow-left" /> All objects
     </RouterLink>
 
     <div v-if="notFound" class="card notice">
@@ -97,7 +97,9 @@ watch([object, notFound], ([found, missing]) => {
         can go stale.
       </p>
       <RouterLink class="plain" to="/objects">
-        <Button icon="pi pi-arrow-left" label="Back to the objects" outlined tabindex="-1" />
+        <Button label="Back to the objects" outlined tabindex="-1">
+          <template #icon><AppIcon name="arrow-left" /></template>
+        </Button>
       </RouterLink>
     </div>
 

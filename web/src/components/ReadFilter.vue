@@ -17,7 +17,7 @@ function confirmClear() {
   confirm.require({
     header: 'Forget what you have read?',
     message: `This marks all ${marked.toLocaleString()} entries unread again in this browser. There is no undo.`,
-    icon: 'pi pi-exclamation-triangle',
+    icon: 'exclamation-triangle',
     rejectProps: { label: 'Cancel', severity: 'secondary', outlined: true },
     acceptProps: { label: 'Mark all unread', severity: 'danger' },
     accept: () => {
@@ -45,7 +45,7 @@ function confirmClear() {
       size="small"
     >
       <template #option="{ option }">
-        <i :class="option.icon" aria-hidden="true" />
+        <AppIcon :name="option.icon" />
         <span class="label">{{ option.label }}</span>
       </template>
     </SelectButton>
@@ -55,13 +55,14 @@ function confirmClear() {
       v-if="count"
       v-tooltip.bottom="`${count.toLocaleString()} read. Mark them all unread again.`"
       aria-label="Clear read state"
-      icon="pi pi-eraser"
       rounded
       severity="secondary"
       size="small"
       text
       @click="confirmClear"
-    />
+    >
+      <template #icon><AppIcon name="eraser" /></template>
+    </Button>
 
     <span v-if="hidden" aria-live="polite" class="muted hidden-note">
       {{ hidden }} hidden on this page

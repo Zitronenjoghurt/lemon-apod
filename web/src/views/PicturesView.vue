@@ -94,13 +94,11 @@ function span(first: string, last: string): string {
 
 <template>
   <div class="stack">
-    <h1>Encores</h1>
-
     <IndexTabs />
 
     <div class="row controls">
       <IconField class="search">
-        <InputIcon class="pi pi-search" />
+        <InputIcon><AppIcon name="search" /></InputIcon>
         <InputText
           v-model="query"
           aria-label="Search encores"
@@ -157,10 +155,10 @@ function span(first: string, last: string): string {
             />
             <div v-else :class="{ gone: isLost(picture.media) }" class="fallback">
               <template v-if="isLost(picture.media)">
-                <i aria-hidden="true" class="pi pi-ban" />
+                <AppIcon name="image-lost" />
                 <span class="what">Media lost</span>
               </template>
-              <i v-else aria-hidden="true" class="pi pi-image" />
+              <AppIcon v-else name="image" />
             </div>
             <span class="tally">{{ picture.appearances }}&times;</span>
           </div>
@@ -227,7 +225,7 @@ h1 {
 }
 
 .count {
-  margin: 0;
+  margin: calc(var(--space-2) - var(--gap)) 0 0;
   font-size: var(--text-sm);
 }
 

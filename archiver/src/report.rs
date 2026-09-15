@@ -128,7 +128,13 @@ pub async fn status(cfg: &Config, archive: &ArchiveStore, index: &ApodWriter) ->
         println!(
             "    next target   {}",
             match archive
-                .next_target(today, source, cfg.retry_backoff_max, now)
+                .next_target(
+                    today,
+                    source,
+                    cfg.retry_backoff_max,
+                    now,
+                    cfg.pause.as_ref()
+                )
                 .await?
             {
                 Next::Fetch(date) => date.to_string(),

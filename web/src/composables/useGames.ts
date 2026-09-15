@@ -53,7 +53,7 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
       slug: 'order',
       name: 'Older or Newer',
       path: '/games/order',
-      icon: 'pi pi-sort-alt',
+      icon: 'swap',
       blurb:
         'One picture with its date, one without. Say whether the new one appeared before or after it, and keep the run going.',
     },
@@ -61,7 +61,7 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
       slug: 'match',
       name: 'Match the Picture',
       path: '/games/match',
-      icon: 'pi pi-images',
+      icon: 'images',
       blurb:
         'One blurred out explanation and six pictures. Uncover as little of the text as you can and still pick right.',
     },
@@ -69,7 +69,7 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
       slug: 'words',
       name: 'Fill the Words',
       path: '/games/words',
-      icon: 'pi pi-align-left',
+      icon: 'align-left',
       blurb:
         'An explanation with its words blacked out. Fill them in one at a time and clear the title to win.',
     },
@@ -77,7 +77,7 @@ export const GAMES: { slug: GameSlug; name: string; path: string; icon: string; 
       slug: 'date',
       name: 'Guess the Date',
       path: '/games/date',
-      icon: 'pi pi-calendar-clock',
+      icon: 'calendar-clock',
       blurb:
         'A picture will come into focus step by step. Guess the date it appeared at as fast as possible',
     },

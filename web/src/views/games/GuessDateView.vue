@@ -387,22 +387,18 @@ onUnmounted(stopTicking)
               <span v-else class="muted next">fully in focus</span>
 
               <template v-if="sharpening">
+                <Button label="Sharpen" severity="secondary" size="small" text @click="sharpen">
+                  <template #icon><AppIcon name="bolt" /></template>
+                </Button>
                 <Button
-                  icon="pi pi-bolt"
-                  label="Sharpen"
-                  severity="secondary"
-                  size="small"
-                  text
-                  @click="sharpen"
-                />
-                <Button
-                  icon="pi pi-eye"
                   label="Full focus"
                   severity="secondary"
                   size="small"
                   text
                   @click="revealAll"
-                />
+                >
+                  <template #icon><AppIcon name="eye" /></template>
+                </Button>
               </template>
             </div>
             <div class="track thin">
@@ -434,7 +430,9 @@ onUnmounted(stopTicking)
               class="date-input"
               type="date"
             />
-            <Button :loading="checking" icon="pi pi-check" label="Lock it in" @click="lockIn" />
+            <Button :loading="checking" label="Lock it in" @click="lockIn">
+              <template #icon><AppIcon name="check" /></template>
+            </Button>
           </div>
         </div>
 
@@ -480,10 +478,11 @@ onUnmounted(stopTicking)
 
           <Button
             :label="at < rounds.length ? 'Next picture' : 'See the score'"
-            icon="pi pi-arrow-right"
             icon-pos="right"
             @click="next"
-          />
+          >
+            <template #icon><AppIcon name="arrow-right" /></template>
+          </Button>
         </div>
       </div>
     </div>

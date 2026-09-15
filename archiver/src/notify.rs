@@ -247,7 +247,7 @@ fn alert_notification(topic: &str, alert: &Alert, url: &str) -> Notification {
 }
 
 fn sky(cfg: &Notify, topic: &str, now: DateTime<Utc>) -> Vec<Notification> {
-    let url = format!("{}/", cfg.public_url);
+    let url = format!("{}/sky", cfg.public_url);
     let Ok(lead) = TimeDelta::from_std(cfg.sky_lead) else {
         return Vec::new();
     };
@@ -450,14 +450,14 @@ mod tests {
     }
 
     #[test]
-    fn every_sky_event_sends_people_to_the_front_page_that_lists_them() {
+    fn every_sky_event_sends_people_to_the_page_that_lists_them() {
         let mut seen = 0;
         for day in 0..400 {
             for found in sky(&cfg(), "sky", at(2026, 1, 1) + TimeDelta::days(day)) {
                 assert_eq!(
                     found.click.as_deref(),
-                    Some("https://apod.example/"),
-                    "showers, eclipses and the moon are on the front page, \
+                    Some("https://apod.example/sky"),
+                    "showers, eclipses and the moon belong on /sky, \
                      not behind /space-weather: {}",
                     found.key
                 );

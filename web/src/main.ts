@@ -8,7 +8,6 @@ import App from './App.vue'
 import router from './router'
 import { ApodPreset } from './theme'
 
-import 'primeicons/primeicons.css'
 import './assets/main.css'
 
 createApp(App)

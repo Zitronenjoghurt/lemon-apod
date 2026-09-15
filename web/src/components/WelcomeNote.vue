@@ -25,12 +25,13 @@ const { dismissed, dismiss } = useWelcome()
     <Button
       aria-label="Dismiss this message"
       class="close"
-      icon="pi pi-times"
       rounded
       severity="secondary"
       text
       @click="dismiss"
-    />
+    >
+      <template #icon><AppIcon name="times" /></template>
+    </Button>
   </section>
 </template>
 

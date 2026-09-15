@@ -38,7 +38,7 @@ async function copy() {
 <template>
   <section aria-live="polite" class="card outcome">
     <p class="eyebrow">
-      <i :class="['pi', daily ? 'pi-calendar' : 'pi-sync']" aria-hidden="true" />
+      <AppIcon :name="daily ? 'calendar' : 'random'" />
       <template v-if="daily">Daily result{{ day ? ` · ${day}` : '' }}</template>
       <template v-else>Free play result</template>
     </p>
@@ -63,19 +63,12 @@ async function copy() {
     </div>
 
     <div class="row actions">
-      <Button
-        :icon="daily ? 'pi pi-sync' : 'pi pi-refresh'"
-        :label="daily ? 'Free play' : 'Play again'"
-        @click="emit('again')"
-      />
-      <Button
-        :loading="copying"
-        icon="pi pi-clipboard"
-        label="Copy result"
-        outlined
-        severity="secondary"
-        @click="copy"
-      />
+      <Button :label="daily ? 'Free play' : 'Play again'" @click="emit('again')">
+        <template #icon><AppIcon :name="daily ? 'random' : 'refresh'" /></template>
+      </Button>
+      <Button :loading="copying" label="Copy result" outlined severity="secondary" @click="copy">
+        <template #icon><AppIcon name="copy" /></template>
+      </Button>
     </div>
 
     <p v-if="replayed" class="muted note">You have already played today's game.</p>
@@ -110,7 +103,7 @@ async function copy() {
   font-variant-numeric: tabular-nums;
 }
 
-.eyebrow i {
+.eyebrow .icon {
   font-size: 0.85em;
 }
 

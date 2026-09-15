@@ -33,6 +33,9 @@ services:
       APOD_NTFY_TOPIC_AURORA: apod-aurora
       APOD_NTFY_TOPIC_SPACE_WEATHER: apod-space-weather
       APOD_NTFY_TOPIC_SKY: apod-sky
+      APOD_PAUSE_START: "${APOD_PAUSE_START:-}"
+      APOD_PAUSE_END: "${APOD_PAUSE_END:-}"
+      APOD_PAUSE_REASON: "${APOD_PAUSE_REASON:-}"
       RUST_LOG: info
     stop_grace_period: 35s
     read_only: true
@@ -72,6 +75,9 @@ services:
       APOD_NTFY_TOPIC_SPACE_WEATHER: apod-space-weather
       APOD_NTFY_TOPIC_SKY: apod-sky
       APOD_DISCORD_CLIENT_ID: "${APOD_DISCORD_CLIENT_ID:-}"
+      APOD_PAUSE_START: "${APOD_PAUSE_START:-}"
+      APOD_PAUSE_END: "${APOD_PAUSE_END:-}"
+      APOD_PAUSE_REASON: "${APOD_PAUSE_REASON:-}"
       RUST_LOG: info
     healthcheck:
       test: [ "CMD", "apod-api", "--health" ]

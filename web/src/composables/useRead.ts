@@ -12,9 +12,9 @@ export function filterKey(scope: ReadScope): string {
 }
 
 export const READ_FILTERS: { label: string; value: ReadFilter; icon: string }[] = [
-  { label: 'All', value: 'all', icon: 'pi pi-list' },
-  { label: 'Unread', value: 'unread', icon: 'pi pi-circle-fill' },
-  { label: 'Read', value: 'read', icon: 'pi pi-check' },
+  { label: 'All', value: 'all', icon: 'list' },
+  { label: 'Unread', value: 'unread', icon: 'moon-phase' },
+  { label: 'Read', value: 'read', icon: 'check' },
 ]
 
 const SCOPE: InjectionKey<ReadScope> = Symbol('read-scope')

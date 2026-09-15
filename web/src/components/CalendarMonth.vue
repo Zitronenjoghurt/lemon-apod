@@ -1,11 +1,13 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import ApodBirthday from './ApodBirthday.vue'
 import ApodCredit from './ApodCredit.vue'
 import { type ApodSummary, isLost } from '@/api/types'
 import { useGaps } from '@/composables/useGaps'
 import { usePreferences } from '@/composables/usePreferences'
 import { useRead } from '@/composables/useRead'
+import { useStatus } from '@/composables/useStatus'
 
 const props = defineProps<{
   year: number
@@ -17,6 +19,7 @@ const props = defineProps<{
 const { isRead, dimmed } = useRead()
 const { weekStartsOn } = usePreferences()
 const { gaps } = useGaps()
+const { paused } = useStatus()
 const missing = computed(() => new Set(gaps.value.map((gap) => gap.date)))
 
 const NAMES = Array.from({ length: 7 }, (_, index) =>
@@ -147,8 +150,9 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
             decoding="async"
             loading="lazy"
           />
-          <i v-else-if="isLost(slot.entry.media)" aria-hidden="true" class="pi pi-ban lost" />
+          <AppIcon v-else-if="isLost(slot.entry.media)" name="image-lost" class="lost" />
           <span class="day">{{ slot.day }}</span>
+          <ApodBirthday :date="slot.date" class="cake" compact />
           <span v-if="!isRead(slot.date)" aria-hidden="true" class="unread-dot" />
           <span class="sr-only">
             {{ slot.entry.title }}, {{ isRead(slot.date) ? 'read' : 'unread' }}
@@ -162,8 +166,19 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
           class="cell gap"
         >
           <span class="day">{{ slot.day }}</span>
-          <i aria-hidden="true" class="pi pi-calendar-times mark" />
+          <AppIcon name="calendar-times" class="mark" />
           <span class="sr-only">No picture on this day, and why</span>
+        </RouterLink>
+
+        <RouterLink
+          v-else-if="paused(slot.date) && !loading"
+          v-tooltip.bottom="'APOD was not publishing this day'"
+          :to="`/${slot.date}`"
+          class="cell held"
+        >
+          <span class="day">{{ slot.day }}</span>
+          <AppIcon name="pause" class="mark" />
+          <span class="sr-only">APOD was not publishing on this day</span>
         </RouterLink>
 
         <div v-else class="cell empty">
@@ -232,6 +247,36 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
 .gap .mark {
   font-size: 0.8em;
   opacity: 0.85;
+}
+
+.held {
+  border: 1px dashed hsl(var(--tone-raised) / 0.6);
+  background: hsl(var(--tone-raised) / 0.1);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-0);
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.held:hover,
+.held:focus-visible {
+  border-color: hsl(var(--tone-raised));
+  background: hsl(var(--tone-raised) / 0.2);
+}
+
+.held .mark {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.cake {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.2rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgb(8 10 20 / 0.8);
 }
 
 .filled .lost {

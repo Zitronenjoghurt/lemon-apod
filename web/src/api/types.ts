@@ -175,6 +175,12 @@ export interface Timeline {
   years: YearStats[]
 }
 
+export interface PublishPause {
+  start: string
+  end: string | null
+  reason?: string
+}
+
 export interface PublishSchedule {
   timezone: string
   abbreviation: string
@@ -214,6 +220,7 @@ export interface Status {
   latest: ApodSummary | null
   entries: number
   publish: PublishSchedule
+  pause?: PublishPause
   rating: RatingStatus
   contact: ContactConfig
   notify: NotifyConfig
@@ -335,6 +342,20 @@ export interface MoonQuarter {
   at: string
 }
 
+export interface MoonApside {
+  apside: 'perigee' | 'apogee'
+  label: string
+  at: string
+  distance_km: number
+}
+
+export interface EarthApsis {
+  apsis: 'perihelion' | 'aphelion'
+  label: string
+  at: string
+  distance_au: number
+}
+
 export interface Moon {
   phase: MoonPhase
   label: string
@@ -348,6 +369,7 @@ export interface Moon {
   cycle: number
   last_new_moon: string
   next_quarters: MoonQuarter[]
+  next_apsides: MoonApside[]
 }
 
 export interface Turning {
@@ -364,6 +386,7 @@ export interface PlanetMilestone {
   name: string
   milestone: 'opposition' | 'greatest_eastern_elongation' | 'greatest_western_elongation'
   label: string
+  short: string
   at: string
   elongation: number
 }
@@ -389,6 +412,7 @@ export interface ShowerPeak {
   moon_illumination: number
   moonlight: 'dark' | 'some' | 'washed_out'
   moonlight_label: string
+  moonlight_short: string
 }
 
 export interface EclipseEvent {
@@ -398,13 +422,37 @@ export interface EclipseEvent {
   magnitude: number
 }
 
-export type SkyEventKind = 'moon' | 'season' | 'shower' | 'eclipse' | 'planet'
+export type SkyEventKind = 'moon' | 'season' | 'shower' | 'eclipse' | 'planet' | 'conjunction'
+
+export interface Conjunction {
+  planets: string[]
+  names: string[]
+  at: string
+  separation: number
+  elongation: number
+  visibility: PlanetVisibility
+  visibility_label: string
+}
+
+export interface SkyStrip {
+  id: string
+  kind: SkyEventKind
+  title: string
+  entries: number
+}
+
+export interface SkyStripEntries {
+  id: string
+  title: string
+  entries: ApodSummary[]
+}
 
 export interface SkyEvent {
   kind: SkyEventKind
   title: string
   detail: string | null
   at: string
+  time_label?: string
 }
 
 export interface Launch {
@@ -422,6 +470,34 @@ export interface Launch {
   precision: string | null
   image_url: string | null
   info_url: string | null
+  webcast_live: boolean
+  streams: LaunchStream[]
+  image_credit?: string
+  image_full_url?: string
+  status_note?: string
+  mission_name?: string
+  mission_type?: string
+  program?: string
+  pad_location?: string
+  pad_map_image?: string
+  pad_map_url?: string
+  pad_launches?: number
+  probability?: number
+  weather_concerns?: string
+  fail_reason?: string
+}
+
+export interface LaunchStream {
+  title?: string
+  kind?: string
+  url: string
+  official: boolean
+}
+
+export interface Launches {
+  upcoming: Launch[]
+  flown: Launch[]
+  feeds: FeedState[]
 }
 
 export type WeatherBand = 'r' | 's' | 'g'
@@ -506,11 +582,14 @@ export interface Sky {
   planets: Planet[]
   showers: ShowerPeak[]
   eclipses: EclipseEvent[]
+  conjunctions: Conjunction[]
+  earth_apsides: EarthApsis[]
   events: SkyEvent[]
-  launches: Launch[]
   weather: WeatherSummary | null
   feeds: FeedState[]
 }
+
+export type SkyOnDate = Omit<Sky, 'weather' | 'feeds'>
 
 export type GameSlug = 'date' | 'order' | 'match' | 'words'
 

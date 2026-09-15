@@ -1,7 +1,7 @@
 use super::weather::WeatherReport;
 use crate::db::{Db, DbConfig, DbResult};
 use chrono::{DateTime, TimeZone, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::SqliteRow;
@@ -11,7 +11,48 @@ pub static MIGRATIONS: Migrator = sqlx::migrate!("./migrations-sky");
 
 pub const LAUNCHES: &str = "launches";
 pub const SPACE_WEATHER: &str = "space_weather";
-pub const LAUNCH_LOOKBACK_HOURS: i64 = 36;
+
+const UNSEEN: i64 = 0;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Stream {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    pub url: String,
+    pub official: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LaunchDetails {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_credit: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_full_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pad_location: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pad_map_image: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pad_map_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pad_launches: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probability: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weather_concerns: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fail_reason: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Launch {
@@ -29,6 +70,10 @@ pub struct Launch {
     pub precision: Option<String>,
     pub image_url: Option<String>,
     pub info_url: Option<String>,
+    pub webcast_live: bool,
+    pub streams: Vec<Stream>,
+    #[serde(flatten)]
+    pub details: LaunchDetails,
 }
 
 impl Launch {
@@ -67,7 +112,8 @@ impl SkyReader {
     ) -> DbResult<Vec<Launch>> {
         let rows = sqlx::query(
             "SELECT id, name, provider, vehicle, pad, mission, orbit, status, net,
-                    window_start, window_end, precision, image_url, info_url
+                    window_start, window_end, precision, image_url, info_url,
+                    webcast_live, streams, details
              FROM launches
              WHERE net >= ?1
              ORDER BY net ASC
@@ -89,7 +135,8 @@ impl SkyReader {
     ) -> DbResult<Vec<Launch>> {
         let rows = sqlx::query(
             "SELECT id, name, provider, vehicle, pad, mission, orbit, status, net,
-                    window_start, window_end, precision, image_url, info_url
+                    window_start, window_end, precision, image_url, info_url,
+                    webcast_live, streams, details
              FROM launches
              WHERE net >= ?1 AND net < ?2
              ORDER BY net DESC
@@ -102,6 +149,20 @@ impl SkyReader {
         .await?;
 
         Ok(rows.iter().rev().map(launch_from_row).collect())
+    }
+
+    pub async fn launch(&self, id: &str) -> DbResult<Option<Launch>> {
+        let row = sqlx::query(
+            "SELECT id, name, provider, vehicle, pad, mission, orbit, status, net,
+                    window_start, window_end, precision, image_url, info_url,
+                    webcast_live, streams, details
+             FROM launches WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(self.db.reader())
+        .await?;
+
+        Ok(row.as_ref().map(launch_from_row))
     }
 
     pub async fn weather_report(&self) -> DbResult<Option<WeatherReport>> {
@@ -153,27 +214,50 @@ impl SkyWriter {
         }
     }
 
-    pub async fn replace_launches(
+    pub async fn store_launches(
         &self,
         launches: &[Launch],
+        at: Option<DateTime<Utc>>,
         keep_from: DateTime<Utc>,
     ) -> DbResult<u64> {
         let writer = self.db.writer()?;
         let mut transaction = writer.begin().await?;
         let now = Utc::now().timestamp();
 
-        sqlx::query("DELETE FROM launches")
-            .execute(&mut *transaction)
-            .await?;
+        if let Some(at) = at {
+            sqlx::query("UPDATE launches SET updated_at = ?1 WHERE net >= ?2")
+                .bind(UNSEEN)
+                .bind(at.timestamp())
+                .execute(&mut *transaction)
+                .await?;
+        }
 
         let mut written = 0;
         for launch in launches.iter().filter(|launch| launch.net >= keep_from) {
             sqlx::query(
                 "INSERT INTO launches (id, name, provider, vehicle, pad, mission, orbit, status,
                                        net, window_start, window_end, precision, image_url,
-                                       info_url, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
-                 ON CONFLICT(id) DO NOTHING",
+                                       info_url, webcast_live, streams, details, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                         ?17, ?18)
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name,
+                   provider = excluded.provider,
+                   vehicle = excluded.vehicle,
+                   pad = excluded.pad,
+                   mission = excluded.mission,
+                   orbit = excluded.orbit,
+                   status = excluded.status,
+                   net = excluded.net,
+                   window_start = excluded.window_start,
+                   window_end = excluded.window_end,
+                   precision = excluded.precision,
+                   image_url = excluded.image_url,
+                   info_url = excluded.info_url,
+                   webcast_live = excluded.webcast_live,
+                   streams = COALESCE(excluded.streams, launches.streams),
+                   details = excluded.details,
+                   updated_at = excluded.updated_at",
             )
             .bind(&launch.id)
             .bind(&launch.name)
@@ -189,12 +273,25 @@ impl SkyWriter {
             .bind(&launch.precision)
             .bind(&launch.image_url)
             .bind(&launch.info_url)
+            .bind(i64::from(launch.webcast_live))
+            .bind(streams_json(&launch.streams))
+            .bind(serde_json::to_string(&launch.details).ok())
             .bind(now)
             .execute(&mut *transaction)
             .await?;
 
             written += 1;
         }
+
+        sqlx::query("DELETE FROM launches WHERE updated_at = ?1")
+            .bind(UNSEEN)
+            .execute(&mut *transaction)
+            .await?;
+
+        sqlx::query("DELETE FROM launches WHERE net < ?1")
+            .bind(keep_from.timestamp())
+            .execute(&mut *transaction)
+            .await?;
 
         transaction.commit().await?;
         Ok(written)
@@ -260,6 +357,22 @@ fn launch_from_row(row: &SqliteRow) -> Launch {
         precision: row.get("precision"),
         image_url: row.get("image_url"),
         info_url: row.get("info_url"),
+        webcast_live: row.get::<i64, _>("webcast_live") != 0,
+        streams: row
+            .get::<Option<String>, _>("streams")
+            .and_then(|body| serde_json::from_str(&body).ok())
+            .unwrap_or_default(),
+        details: row
+            .get::<Option<String>, _>("details")
+            .and_then(|body| serde_json::from_str(&body).ok())
+            .unwrap_or_default(),
+    }
+}
+
+fn streams_json(streams: &[Stream]) -> Option<String> {
+    match streams.is_empty() {
+        true => None,
+        false => serde_json::to_string(streams).ok(),
     }
 }
 
@@ -272,6 +385,8 @@ fn timestamp(seconds: i64) -> DateTime<Utc> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const LOOKBACK_HOURS: i64 = 36;
     use chrono::TimeDelta;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -303,6 +418,9 @@ mod tests {
             precision: Some("SEC".to_owned()),
             image_url: None,
             info_url: None,
+            webcast_live: false,
+            streams: Vec::new(),
+            details: LaunchDetails::default(),
         }
     }
 
@@ -328,8 +446,9 @@ mod tests {
         let writer = SkyWriter::open(temp_path()).await.unwrap();
 
         let written = writer
-            .replace_launches(
+            .store_launches(
                 &[launch("c", 300), launch("a", 60), launch("b", 120)],
+                Some(Utc::now()),
                 Utc::now(),
             )
             .await
@@ -352,16 +471,17 @@ mod tests {
     async fn a_launch_that_has_just_gone_up_is_still_reachable() {
         let writer = SkyWriter::open(temp_path()).await.unwrap();
         let now = Utc::now();
-        let lookback = now - TimeDelta::hours(LAUNCH_LOOKBACK_HOURS);
+        let lookback = now - TimeDelta::hours(LOOKBACK_HOURS);
 
         writer
-            .replace_launches(
+            .store_launches(
                 &[
                     launch("ancient", -60 * 24 * 7),
                     launch("yesterday", -60 * 20),
                     launch("an hour ago", -60),
                     launch("soon", 90),
                 ],
+                Some(now),
                 lookback,
             )
             .await
@@ -387,11 +507,12 @@ mod tests {
     async fn the_limit_on_the_launches_behind_us_keeps_the_latest() {
         let writer = SkyWriter::open(temp_path()).await.unwrap();
         let now = Utc::now();
-        let lookback = now - TimeDelta::hours(LAUNCH_LOOKBACK_HOURS);
+        let lookback = now - TimeDelta::hours(LOOKBACK_HOURS);
 
         writer
-            .replace_launches(
+            .store_launches(
                 &[launch("a", -300), launch("b", -200), launch("c", -100)],
+                Some(now),
                 lookback,
             )
             .await
@@ -414,11 +535,15 @@ mod tests {
         let writer = SkyWriter::open(temp_path()).await.unwrap();
 
         writer
-            .replace_launches(&[launch("a", 60), launch("b", 120)], Utc::now())
+            .store_launches(
+                &[launch("a", 60), launch("b", 120)],
+                Some(Utc::now()),
+                Utc::now(),
+            )
             .await
             .unwrap();
         writer
-            .replace_launches(&[launch("b", 120)], Utc::now())
+            .store_launches(&[launch("b", 120)], Some(Utc::now()), Utc::now())
             .await
             .unwrap();
 
@@ -435,22 +560,41 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn anything_already_flown_is_never_written() {
+    async fn a_launch_stays_after_it_flies_and_goes_once_the_window_passes() {
         let writer = SkyWriter::open(temp_path()).await.unwrap();
+        let now = Utc::now();
+        let keep_from = now - TimeDelta::days(30);
 
         let written = writer
-            .replace_launches(&[launch("past", -600), launch("future", 600)], Utc::now())
+            .store_launches(
+                &[
+                    launch("long gone", -60 * 24 * 40),
+                    launch("flown", -60 * 24 * 3),
+                    launch("ahead", 600),
+                ],
+                Some(now),
+                keep_from,
+            )
+            .await
+            .unwrap();
+        assert_eq!(written, 2, "the one outside the window is not even written");
+
+        writer
+            .store_launches(
+                std::slice::from_ref(&launch("ahead", 600)),
+                Some(now),
+                keep_from,
+            )
             .await
             .unwrap();
 
-        assert_eq!(written, 1);
-        let found = writer
+        let kept = writer
             .reader()
-            .upcoming_launches(Utc::now() - TimeDelta::days(30), 10)
+            .upcoming_launches(keep_from, 10)
             .await
             .unwrap();
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].id, "future");
+        let ids: Vec<&str> = kept.iter().map(|launch| launch.id.as_str()).collect();
+        assert_eq!(ids, ["flown", "ahead"]);
 
         writer.close().await;
     }
@@ -461,7 +605,11 @@ mod tests {
         let original = launch("full", 90);
 
         writer
-            .replace_launches(std::slice::from_ref(&original), Utc::now())
+            .store_launches(
+                std::slice::from_ref(&original),
+                Some(Utc::now()),
+                Utc::now(),
+            )
             .await
             .unwrap();
 
@@ -528,7 +676,10 @@ mod tests {
             .map(|index| launch(&format!("l{index:02}"), 60 + index * 10))
             .collect();
 
-        writer.replace_launches(&many, Utc::now()).await.unwrap();
+        writer
+            .store_launches(&many, Some(Utc::now()), Utc::now())
+            .await
+            .unwrap();
 
         let found = writer
             .reader()
@@ -563,5 +714,36 @@ mod tests {
         let reader = SkyReader::open(&path).await.unwrap();
         assert!(reader.upcoming_launches(Utc::now(), 5).await.is_ok());
         reader.close().await;
+    }
+
+    #[tokio::test]
+    async fn a_partial_batch_prunes_nothing() {
+        let writer = SkyWriter::open(temp_path()).await.unwrap();
+        let now = Utc::now();
+        let keep_from = now - TimeDelta::days(30);
+
+        writer
+            .store_launches(
+                &[launch("a", 60), launch("b", 120), launch("flown", -60 * 24)],
+                Some(now),
+                keep_from,
+            )
+            .await
+            .unwrap();
+
+        writer
+            .store_launches(std::slice::from_ref(&launch("b", 120)), None, keep_from)
+            .await
+            .unwrap();
+
+        let kept = writer
+            .reader()
+            .upcoming_launches(keep_from, 10)
+            .await
+            .unwrap();
+        let ids: Vec<&str> = kept.iter().map(|launch| launch.id.as_str()).collect();
+        assert_eq!(ids, ["flown", "a", "b"]);
+
+        writer.close().await;
     }
 }
