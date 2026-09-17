@@ -101,6 +101,12 @@ function isActive(link: NavLink): boolean {
 
 const version = __APP_VERSION__
 
+const DRAWER_FIT = {
+  mask: { style: { height: '100dvh' } },
+  root: { style: { maxHeight: '100dvh' } },
+  content: { style: { overscrollBehavior: 'contain' } },
+}
+
 router.afterEach(() => (menuOpen.value = false))
 </script>
 
@@ -111,19 +117,25 @@ router.afterEach(() => (menuOpen.value = false))
     <div class="container bar">
       <RouterLink class="brand" to="/">
         <svg aria-hidden="true" class="mark" viewBox="0 0 24 24">
-          <ellipse
-            cx="12"
-            cy="12"
+          <path
+            d="M1 12A11 4.2 0 0 1 23 12"
             fill="none"
-            rx="11"
-            ry="4.2"
             stroke="currentColor"
+            stroke-linecap="round"
             stroke-width="1.6"
             transform="rotate(-22 12 12)"
           />
           <circle cx="12" cy="12" fill="var(--bg)" r="6.2" />
           <circle cx="12" cy="12" fill="currentColor" fill-opacity="0.22" r="6.2" />
           <circle cx="12" cy="12" fill="none" r="6.2" stroke="currentColor" stroke-width="1.6" />
+          <path
+            d="M1 12A11 4.2 0 0 0 23 12"
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-width="1.6"
+            transform="rotate(-22 12 12)"
+          />
         </svg>
         <span>APOD Archive</span>
       </RouterLink>
@@ -167,7 +179,7 @@ router.afterEach(() => (menuOpen.value = false))
     </div>
   </header>
 
-  <Drawer v-model:visible="menuOpen" header="Menu" position="right">
+  <Drawer v-model:visible="menuOpen" :pt="DRAWER_FIT" block-scroll header="Menu" position="right">
     <nav aria-label="Main" class="menu">
       <template v-for="group in groups" :key="group.name ?? 'top'">
         <p v-if="group.name" class="group">{{ group.name }}</p>

@@ -131,9 +131,9 @@ impl ApodReader {
         rows.iter().map(|row| self.summary(row)).collect()
     }
 
-    pub async fn objects_for(&self, date: ApodDate) -> ApodResult<Vec<ObjectCount>> {
+    pub async fn objects_for(&self, date: ApodDate) -> ApodResult<Vec<(ObjectCount, String)>> {
         let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT o.object AS id, o.catalog AS catalog,
+            "SELECT o.object AS id, o.catalog AS catalog, o.name AS name,
                     (SELECT COUNT(*) FROM entry_objects AS every
                      WHERE every.object = o.object) AS entries,
                     (SELECT MIN(date_id) FROM entry_objects AS every
@@ -148,7 +148,9 @@ impl ApodReader {
         .fetch_all(self.db().reader())
         .await?;
 
-        rows.iter().map(read).collect()
+        rows.iter()
+            .map(|row| Ok((read(row)?, row.try_get("name")?)))
+            .collect()
     }
 
     pub async fn entries_with_objects(&self) -> ApodResult<i64> {

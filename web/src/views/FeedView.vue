@@ -14,9 +14,10 @@ import { useRoute, useRouter } from 'vue-router'
 import FeedItem from '@/components/FeedItem.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
-import { api } from '@/api/client'
+import { api, ApiError } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
 import { provideReadScope, useRead } from '@/composables/useRead'
+import { useStatus } from '@/composables/useStatus'
 import { FIRST_ENTRY, formatDate } from '@/utils/date'
 
 defineOptions({ name: 'FeedView' })
@@ -36,6 +37,7 @@ const MODES: { label: string; value: Mode; icon: string }[] = [
 
 const PAGE_SIZE = 20
 const RANDOM_ATTEMPTS = 12
+const RANDOM_ATTEMPTS_MAX = 40
 const MAX_PAGES_PER_FILL = 5
 const PRELOAD_PX = 1200
 const TOP_BUTTON_AFTER = 3
@@ -43,7 +45,8 @@ const TOP_BUTTON_AFTER = 3
 const route = useRoute()
 const router = useRouter()
 provideReadScope('feed')
-const { apply, active: filtered, filter } = useRead('feed')
+const { apply, active: filtered, filter, count: readCount, readDates } = useRead('feed')
+const { entries: archiveSize } = useStatus()
 
 const mode = ref<Mode>(readMode())
 const from = ref<string | undefined>(readFrom())
@@ -161,7 +164,9 @@ async function nextPage(): Promise<Item[]> {
 }
 
 async function drawRandom(): Promise<Item[]> {
-  for (let attempt = 0; attempt < RANDOM_ATTEMPTS; attempt += 1) {
+  if (filter.value === 'read') return drawRead()
+
+  for (let attempt = 0; attempt < randomAttempts(); attempt += 1) {
     const entry = await api.random()
     if (seen.has(entry.date)) continue
 
@@ -172,6 +177,32 @@ async function drawRandom(): Promise<Item[]> {
 
   done.value = true
   return []
+}
+
+async function drawRead(): Promise<Item[]> {
+  const left = readDates().filter((date) => !seen.has(date))
+
+  while (left.length) {
+    const at = Math.floor(Math.random() * left.length)
+    const [date] = left.splice(at, 1) as [string]
+    seen.add(date)
+
+    try {
+      return [{ date, entry: await api.entry(date) }]
+    } catch (thrown) {
+      if (!(thrown instanceof ApiError && thrown.notFound)) throw thrown
+    }
+  }
+
+  done.value = true
+  return []
+}
+
+function randomAttempts(): number {
+  if (filter.value !== 'unread' || !archiveSize.value) return RANDOM_ATTEMPTS
+
+  const unreadShare = Math.max(0.1, 1 - readCount.value / archiveSize.value)
+  return Math.min(RANDOM_ATTEMPTS_MAX, Math.max(RANDOM_ATTEMPTS, Math.ceil(4 / unreadShare)))
 }
 
 watch([mode, from, filter], () => {
@@ -251,9 +282,15 @@ function toTop() {
 
 const endNote = computed(() => {
   if (mode.value === 'random') {
-    return filtered.value
-      ? 'Random ran out of entries the filter keeps. Switch it back to All for more.'
-      : 'That is enough randomness for one sitting. Reload for more.'
+    if (filter.value === 'read') {
+      return readCount.value
+        ? 'That is every entry you have read.'
+        : 'Nothing is marked read yet. Entries are marked as you scroll past them.'
+    }
+    if (filter.value === 'unread') {
+      return 'Random keeps landing on entries you have read. Switch the filter to All for more.'
+    }
+    return 'That is enough randomness for one sitting. Reload for more.'
   }
   return `That is the whole archive, back to ${formatDate(FIRST_ENTRY)}.`
 })

@@ -30,6 +30,13 @@ struct Showing {
     items: Vec<ApodSummary>,
 }
 
+#[derive(Debug, Serialize)]
+struct Mention {
+    #[serde(flatten)]
+    object: ObjectCount,
+    name: String,
+}
+
 async fn get_objects(
     State(state): State<ServerState>,
     Query(query): Query<ObjectsQuery>,
@@ -96,9 +103,15 @@ async fn get_objects_for(
     State(state): State<ServerState>,
     Path(date): Path<String>,
 ) -> ApiResult<Response> {
-    let objects = state.store.objects_for(params::date(&date)?).await?;
+    let mentions: Vec<Mention> = state
+        .store
+        .objects_for(params::date(&date)?)
+        .await?
+        .into_iter()
+        .map(|(object, name)| Mention { object, name })
+        .collect();
 
-    Ok(response::cached(state.config.cache_list_secs, objects))
+    Ok(response::cached(state.config.cache_list_secs, mentions))
 }
 
 pub fn router() -> Router<ServerState> {

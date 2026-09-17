@@ -1,7 +1,15 @@
 import { EXTERNAL_WARNING_KEY, hydrateExternalLinks } from './useExternalLinks'
 import { hydrateFavorites } from './useFavorites'
 import { gameKey, GAMES, hydrateGames } from './useGames'
-import { ARCHIVE_VIEW_KEY, hydratePreferences, WEEK_START_KEY } from './usePreferences'
+import {
+  ARCHIVE_VIEW_KEY,
+  ENCORE_RAIL_KEY,
+  HEMISPHERE_KEY,
+  hydratePreferences,
+  INDEX_MARKS_KEY,
+  MODERNIZATION_RAIL_KEY,
+  WEEK_START_KEY,
+} from './usePreferences'
 import { filterKey, hydrateRead, READ_SCOPES } from './useRead'
 import { hydrateTheme } from './useTheme'
 import { CARD_KEY, hydrateRatingCard } from './useRating'
@@ -30,7 +38,16 @@ const FIELDS: Field[] = [
   })),
   { key: 'apod:theme', shape: 'scalar', label: 'theme', hydrate: hydrateTheme },
   { key: WEEK_START_KEY, shape: 'scalar', label: 'week start', hydrate: hydratePreferences },
+  { key: HEMISPHERE_KEY, shape: 'scalar', label: 'hemisphere', hydrate: hydratePreferences },
   { key: ARCHIVE_VIEW_KEY, shape: 'scalar', label: 'archive layout', hydrate: hydratePreferences },
+  { key: INDEX_MARKS_KEY, shape: 'scalar', label: 'index marks', hydrate: hydratePreferences },
+  { key: ENCORE_RAIL_KEY, shape: 'scalar', label: 'encore rail', hydrate: hydratePreferences },
+  {
+    key: MODERNIZATION_RAIL_KEY,
+    shape: 'scalar',
+    label: 'modernization rail',
+    hydrate: hydratePreferences,
+  },
   {
     key: EXTERNAL_WARNING_KEY,
     shape: 'scalar',

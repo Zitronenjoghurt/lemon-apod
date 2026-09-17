@@ -6,7 +6,8 @@ import ReadProgress from './ReadProgress.vue'
 import { useCoverage } from '@/composables/useCoverage'
 import { useExternalLinks } from '@/composables/useExternalLinks'
 import { useFavorites } from '@/composables/useFavorites'
-import { usePreferences, WEEK_STARTS } from '@/composables/usePreferences'
+import { HEMISPHERES, usePreferences, WEEK_STARTS } from '@/composables/usePreferences'
+import { useRatingCard } from '@/composables/useRating'
 import { useRead } from '@/composables/useRead'
 import { BackupError, type ImportMode, useSiteData } from '@/composables/useSiteData'
 import { useStatus } from '@/composables/useStatus'
@@ -21,7 +22,8 @@ const { count: favoriteCount, clear: clearFavorites } = useFavorites()
 const { count: readCount, clear: clearRead, countIn } = useRead()
 const { acknowledged, reset: resetWarning } = useExternalLinks()
 const { dismissed: welcomeGone, reset: resetWelcome } = useWelcome()
-const { weekStart } = usePreferences()
+const { dismissed: ratingGone, reset: resetRatingCard } = useRatingCard()
+const { weekStart, hemisphere, indexMarks, encoreRail, modernizationRail } = usePreferences()
 const { download, restore } = useSiteData()
 const { entries } = useStatus()
 const coverage = useCoverage()
@@ -36,7 +38,7 @@ const MODES: { label: string; value: ImportMode }[] = [
 
 const archiveTotal = computed(() => coverage.total.value || entries.value)
 
-const reminders = computed(() => acknowledged.value || welcomeGone.value)
+const reminders = computed(() => acknowledged.value || welcomeGone.value || ratingGone.value)
 
 function exportData() {
   try {
@@ -161,6 +163,16 @@ function bringBackWelcome() {
     life: 3000,
   })
 }
+
+function bringBackRatingCard() {
+  resetRatingCard()
+  toast.add({
+    severity: 'secondary',
+    summary: 'Voting card is back',
+    detail: 'You will find it on the start page again.',
+    life: 3000,
+  })
+}
 </script>
 
 <template>
@@ -217,7 +229,7 @@ function bringBackWelcome() {
       </section>
 
       <section class="panel">
-        <h3><AppIcon name="calendar" />Calendar</h3>
+        <h3><AppIcon name="globe" />Locale</h3>
         <div class="rows">
           <div class="line">
             <span class="name">Week starts on</span>
@@ -232,6 +244,40 @@ function bringBackWelcome() {
               size="small"
             />
           </div>
+
+          <div class="line">
+            <span class="name">Hemisphere</span>
+            <SelectButton
+              v-model="hemisphere"
+              :allow-empty="false"
+              :options="HEMISPHERES"
+              aria-label="Hemisphere you watch the sky from"
+              class="act"
+              option-label="label"
+              option-value="value"
+              size="small"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3><AppIcon name="file" />Entry content</h3>
+        <div class="rows">
+          <label class="line">
+            <span class="name">Link to credited names and objects</span>
+            <ToggleSwitch v-model="indexMarks" class="act" />
+          </label>
+
+          <label class="line">
+            <span class="name">Encore rail</span>
+            <ToggleSwitch v-model="encoreRail" class="act" />
+          </label>
+
+          <label class="line">
+            <span class="name">Modernization rail</span>
+            <ToggleSwitch v-model="modernizationRail" class="act" />
+          </label>
         </div>
       </section>
 
@@ -322,6 +368,20 @@ function bringBackWelcome() {
               <template #icon><AppIcon name="info" /></template>
             </Button>
           </div>
+
+          <div v-if="ratingGone" class="line">
+            <span class="name">Voting card on the start page</span>
+            <Button
+              class="act"
+              label="Show it again"
+              outlined
+              severity="secondary"
+              size="small"
+              @click="bringBackRatingCard"
+            >
+              <template #icon><AppIcon name="vote" /></template>
+            </Button>
+          </div>
         </div>
       </section>
     </div>
@@ -382,8 +442,14 @@ h3 .icon {
 }
 
 .name {
+  display: flex;
+  flex-direction: column;
   font-size: var(--text-sm);
   min-width: 0;
+}
+
+label.line {
+  cursor: pointer;
 }
 
 .value {

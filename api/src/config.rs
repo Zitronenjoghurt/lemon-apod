@@ -34,6 +34,8 @@ pub struct Config {
 
     pub rate_limit_per_second: u64,
     pub rate_limit_burst: u32,
+    pub rate_limit_shared_per_second: u64,
+    pub rate_limit_shared_burst: u32,
 
     pub trusted_proxy_hops: usize,
 
@@ -342,8 +344,10 @@ impl Config {
             search_max_limit: env_or("APOD_SEARCH_MAX_LIMIT", 100)?,
             search_snippet_tokens: env_or("APOD_SEARCH_SNIPPET_TOKENS", 32)?,
 
-            rate_limit_per_second: env_or("APOD_RATE_LIMIT_PER_SECOND", 5)?,
-            rate_limit_burst: env_or("APOD_RATE_LIMIT_BURST", 30)?,
+            rate_limit_per_second: env_or("APOD_RATE_LIMIT_PER_SECOND", 8)?,
+            rate_limit_burst: env_or("APOD_RATE_LIMIT_BURST", 60)?,
+            rate_limit_shared_per_second: env_or("APOD_RATE_LIMIT_SHARED_PER_SECOND", 20)?,
+            rate_limit_shared_burst: env_or("APOD_RATE_LIMIT_SHARED_BURST", 120)?,
             trusted_proxy_hops: env_or("APOD_TRUSTED_PROXY_HOPS", 0)?,
 
             cache_entry_secs: env_or("APOD_CACHE_ENTRY_SECS", 86_400)?,

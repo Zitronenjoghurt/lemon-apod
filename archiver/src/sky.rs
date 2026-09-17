@@ -166,17 +166,24 @@ async fn poll_launches(
     let authoritative = if watching {
         None
     } else {
-        launches.extend(
-            page(
-                cfg,
-                client,
-                &cfg.past_launches_url,
-                cfg.past_launch_limit,
-                Mode::Normal,
-            )
-            .await?,
-        );
-        Some(at)
+        match page(
+            cfg,
+            client,
+            &cfg.past_launches_url,
+            cfg.past_launch_limit,
+            Mode::Normal,
+        )
+        .await
+        {
+            Ok(flown) => {
+                launches.extend(flown);
+                Some(at)
+            }
+            Err(error) => {
+                tracing::warn!("no launch history this pass: {error:#}");
+                None
+            }
+        }
     };
 
     if cfg.webcast_lookahead > 0 {

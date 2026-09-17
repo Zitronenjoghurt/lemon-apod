@@ -50,7 +50,29 @@
     --diff-added: var(--good);
     --diff-removed: var(--bad);
     --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
-    --scroll-thumb: color-mix(in srgb, var(--accent) 45%, transparent);
+    --scroll-thumb: color-mix(in srgb, var(--accent) 13%, transparent);
+    --scroll-thumb-hover: color-mix(in srgb, var(--accent) 28%, transparent);
+
+    --dawn: hsl(200 72% 42%);
+    --dusk: hsl(22 88% 48%);
+    --night: hsl(272 52% 50%);
+    --sun: hsl(40 92% 48%);
+    --moon: hsl(215 22% 48%);
+    --meteor: hsl(162 58% 38%);
+    --blood-moon: hsl(8 68% 48%);
+
+    --planet-mercury: hsl(220 8% 52%);
+    --planet-venus: hsl(46 82% 44%);
+    --planet-mars: hsl(14 78% 50%);
+    --planet-jupiter: hsl(28 62% 48%);
+    --planet-saturn: hsl(34 48% 50%);
+    --planet-uranus: hsl(185 55% 42%);
+    --planet-neptune: hsl(222 70% 55%);
+
+    --season-spring: hsl(140 55% 42%);
+    --season-summer: hsl(44 92% 48%);
+    --season-autumn: hsl(22 82% 50%);
+    --season-winter: hsl(205 70% 52%);
 
     --tone-calm: 152 58% 34%;
     --tone-raised: 38 92% 38%;
@@ -72,6 +94,29 @@
     --good: #4ade80;
     --bad: #f87171;
     --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px rgb(0 0 0 / 0.35);
+    --scroll-thumb: color-mix(in srgb, var(--accent) 17%, transparent);
+    --scroll-thumb-hover: color-mix(in srgb, var(--accent) 32%, transparent);
+
+    --dawn: hsl(198 78% 68%);
+    --dusk: hsl(24 92% 62%);
+    --night: hsl(270 65% 74%);
+    --sun: hsl(42 95% 60%);
+    --moon: hsl(48 42% 80%);
+    --meteor: hsl(160 58% 60%);
+    --blood-moon: hsl(10 78% 64%);
+
+    --planet-mercury: hsl(220 10% 68%);
+    --planet-venus: hsl(48 90% 70%);
+    --planet-mars: hsl(14 85% 64%);
+    --planet-jupiter: hsl(30 70% 66%);
+    --planet-saturn: hsl(36 60% 70%);
+    --planet-uranus: hsl(185 65% 66%);
+    --planet-neptune: hsl(222 80% 70%);
+
+    --season-spring: hsl(140 55% 58%);
+    --season-summer: hsl(46 95% 62%);
+    --season-autumn: hsl(24 88% 62%);
+    --season-winter: hsl(205 75% 66%);
 
     --tone-calm: 152 52% 52%;
     --tone-raised: 45 90% 56%;
@@ -95,6 +140,10 @@
 
   html {
     scrollbar-color: var(--scroll-thumb) transparent;
+  }
+
+  html:hover {
+    --scroll-thumb: var(--scroll-thumb-hover);
   }
 
   @supports (interpolate-size: allow-keywords) {
@@ -202,6 +251,17 @@
     flex-wrap: wrap;
   }
 
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  .rise {
+    animation: rise var(--dur-slow) var(--ease-out) var(--rise-delay, 0ms) backwards;
+  }
+
   .fade-enter-active,
   .fade-leave-active {
     transition: opacity 0.1s ease;
@@ -251,6 +311,35 @@
     color: inherit;
     border-radius: 3px;
     padding: 0 0.15em;
+  }
+
+  .index-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    margin-left: 0.12em;
+    vertical-align: -0.12em;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    opacity: 0.55;
+    text-decoration: none;
+    transition:
+      opacity var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+
+  .index-link svg {
+    width: 0.78em;
+    height: 0.78em;
+  }
+
+  .index-link:hover,
+  .index-link:focus-visible {
+    opacity: 1;
+    color: var(--accent);
   }
 }
 

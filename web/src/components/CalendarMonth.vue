@@ -275,8 +275,13 @@ watch([() => props.month, () => props.entries.length], () => void nextTick(measu
   position: absolute;
   top: 0.15rem;
   right: 0.2rem;
+  display: grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
   color: #fff;
-  text-shadow: 0 1px 2px rgb(8 10 20 / 0.8);
+  background: rgb(0 0 0 / 0.45);
 }
 
 .filled .lost {

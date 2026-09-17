@@ -33,7 +33,14 @@ pub fn filters(
         kind: media_kind.map(kind).transpose()?,
         copyright,
         lost,
+        ..Filters::default()
     })
+}
+
+pub fn index_id(raw: Option<&str>) -> Option<String> {
+    raw.map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
 }
 
 pub fn order(raw: Option<&str>) -> ApiResult<Order> {

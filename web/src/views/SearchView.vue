@@ -5,7 +5,7 @@ import EntryGrid from '@/components/EntryGrid.vue'
 import ReadFilter from '@/components/ReadFilter.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
-import type { KindFilter } from '@/api/types'
+import type { Contributor, KindFilter, ObjectCount } from '@/api/types'
 import { useAsync } from '@/composables/useAsync'
 import { useNarrow } from '@/composables/useNarrow'
 import { provideReadScope, useRead } from '@/composables/useRead'
@@ -62,6 +62,14 @@ const CONDITION: { label: string; value: 'any' | 'existing' | 'lost' }[] = [
   { label: 'Lost', value: 'lost' },
 ]
 
+const ENCORES: { label: string; value: 'any' | 'yes' | 'no' }[] = [
+  { label: 'Any', value: 'any' },
+  { label: 'Shown again', value: 'yes' },
+  { label: 'Shown once', value: 'no' },
+]
+
+const SUGGESTIONS = 8
+
 const SYNTAX: { example: string; means: string }[] = [
   { example: 'crab nebula', means: 'both words, anywhere in the entry' },
   { example: '"star cluster"', means: 'the words next to each other, in that order' },
@@ -99,7 +107,56 @@ const rights = ref<'any' | 'yes' | 'no'>(
 const media = ref<'any' | 'existing' | 'lost'>(
   route.query.lost === 'true' ? 'lost' : route.query.lost === 'false' ? 'existing' : 'any',
 )
+const encore = ref<'any' | 'yes' | 'no'>(
+  route.query.encore === 'true' ? 'yes' : route.query.encore === 'false' ? 'no' : 'any',
+)
 const page = ref(Number.parseInt(String(route.query.page ?? '1'), 10) || 1)
+
+const contributor = ref<Contributor | string | null>(null)
+const object = ref<ObjectCount | string | null>(null)
+const contributorOptions = ref<Contributor[]>([])
+const objectOptions = ref<ObjectCount[]>([])
+
+const credited = computed(() => (typeof contributor.value === 'object' ? contributor.value : null))
+const naming = computed(() => (typeof object.value === 'object' ? object.value : null))
+
+async function suggestContributors(event: { query: string }) {
+  try {
+    const found = await api.credits({ q: event.query, sort: 'entries', limit: SUGGESTIONS })
+    contributorOptions.value = found.items
+  } catch {
+    contributorOptions.value = []
+  }
+}
+
+async function suggestObjects(event: { query: string }) {
+  try {
+    const found = await api.objects({ q: event.query, sort: 'entries', limit: SUGGESTIONS })
+    objectOptions.value = found.items
+  } catch {
+    objectOptions.value = []
+  }
+}
+
+async function resolveFromRoute() {
+  const creditId = String(route.query.contributor ?? '').trim()
+  const objectId = String(route.query.object ?? '').trim()
+
+  if (creditId) {
+    try {
+      contributor.value = (await api.credit(creditId, 0, 1)).contributor
+    } catch {
+      contributor.value = null
+    }
+  }
+  if (objectId) {
+    try {
+      object.value = (await api.object(objectId, { limit: 1 })).object
+    } catch {
+      object.value = null
+    }
+  }
+}
 
 const panelOpen = ref(false)
 const help = useTemplateRef<{ toggle: (event: Event) => void }>('help')
@@ -109,6 +166,7 @@ const { apply, active: filtered } = useRead('search')
 const typed = computed(() => query.value.trim().length > 0)
 const copyright = computed(() => (rights.value === 'any' ? undefined : rights.value === 'yes'))
 const lost = computed(() => (media.value === 'any' ? undefined : media.value === 'lost'))
+const shownAgain = computed(() => (encore.value === 'any' ? undefined : encore.value === 'yes'))
 
 const narrowed = computed(() => {
   const chips: { key: string; label: string; drop: () => void }[] = []
@@ -140,6 +198,27 @@ const narrowed = computed(() => {
       drop: () => (media.value = 'any'),
     })
   }
+  if (credited.value) {
+    chips.push({
+      key: 'contributor',
+      label: `Credited to ${credited.value.label}`,
+      drop: () => (contributor.value = null),
+    })
+  }
+  if (naming.value) {
+    chips.push({
+      key: 'object',
+      label: `Naming ${naming.value.id}`,
+      drop: () => (object.value = null),
+    })
+  }
+  if (encore.value !== 'any') {
+    chips.push({
+      key: 'encore',
+      label: encore.value === 'yes' ? 'Shown again' : 'Shown once',
+      drop: () => (encore.value = 'any'),
+    })
+  }
 
   return chips
 })
@@ -161,6 +240,9 @@ const {
       to: to.value ? `${to.value}-12-31` : undefined,
       copyright: copyright.value,
       lost: lost.value,
+      contributor: credited.value?.id,
+      object: naming.value?.id,
+      encore: shownAgain.value,
       sort: sort.value,
       offset: (page.value - 1) * PAGE_SIZE,
       limit: PAGE_SIZE,
@@ -188,12 +270,16 @@ function search(resetPage: boolean) {
         to: to.value ? `${to.value}-12-31` : undefined,
         copyright: copyright.value === undefined ? undefined : String(copyright.value),
         lost: lost.value === undefined ? undefined : String(lost.value),
+        contributor: credited.value?.id,
+        object: naming.value?.id,
+        encore: shownAgain.value === undefined ? undefined : String(shownAgain.value),
         sort: sort.value === 'relevance' ? undefined : sort.value,
         page: page.value === 1 ? undefined : String(page.value),
       },
     })
 
     if (asked.value) run()
+    else results.value = undefined
   }, DEBOUNCE_MS)
 }
 
@@ -217,12 +303,20 @@ function chooseCondition(value: 'any' | 'existing' | 'lost' | null) {
   search(true)
 }
 
+function chooseEncore(value: 'any' | 'yes' | 'no' | null) {
+  encore.value = value ?? 'any'
+  search(true)
+}
+
 function clear() {
   kinds.value = []
   from.value = null
   to.value = null
   rights.value = 'any'
   media.value = 'any'
+  contributor.value = null
+  object.value = null
+  encore.value = 'any'
   search(true)
 }
 
@@ -243,7 +337,8 @@ watch(
   },
 )
 
-onMounted(() => {
+onMounted(async () => {
+  await resolveFromRoute()
   if (asked.value) run()
 })
 
@@ -392,6 +487,90 @@ const onlyExclusions = computed(
         />
       </div>
 
+      <div class="control">
+        <span id="encore-label" class="muted name">Encores</span>
+        <SelectButton
+          :allow-empty="false"
+          :model-value="encore"
+          :options="ENCORES"
+          aria-labelledby="encore-label"
+          option-label="label"
+          option-value="value"
+          size="small"
+          @update:model-value="chooseEncore"
+        />
+      </div>
+
+      <div class="control">
+        <label class="muted name" for="credited">Credited to</label>
+        <button
+          v-if="credited"
+          :aria-label="`Remove ${credited.label}`"
+          class="chosen"
+          type="button"
+          @click="((contributor = null), search(true))"
+        >
+          <span class="chosen-name">{{ credited.label }}</span>
+          <AppIcon name="times" />
+        </button>
+        <AutoComplete
+          v-else
+          v-model="contributor"
+          :input-style="{ minWidth: '12rem' }"
+          :suggestions="contributorOptions"
+          force-selection
+          input-id="credited"
+          option-label="label"
+          placeholder="Anyone"
+          size="small"
+          @clear="search(true)"
+          @complete="suggestContributors"
+          @option-select="search(true)"
+        >
+          <template #option="{ option }">
+            <span class="pick">
+              <span>{{ option.label }}</span>
+              <span class="muted pick-count">{{ option.entries.toLocaleString() }}</span>
+            </span>
+          </template>
+        </AutoComplete>
+      </div>
+
+      <div class="control">
+        <label class="muted name" for="naming">Naming</label>
+        <button
+          v-if="naming"
+          :aria-label="`Remove ${naming.id}`"
+          class="chosen"
+          type="button"
+          @click="((object = null), search(true))"
+        >
+          <span class="chosen-name">{{ naming.id }}</span>
+          <AppIcon name="times" />
+        </button>
+        <AutoComplete
+          v-else
+          v-model="object"
+          :input-style="{ minWidth: '12rem' }"
+          :suggestions="objectOptions"
+          force-selection
+          input-id="naming"
+          option-label="id"
+          placeholder="Any object"
+          size="small"
+          @clear="search(true)"
+          @complete="suggestObjects"
+          @option-select="search(true)"
+        >
+          <template #option="{ option }">
+            <span class="pick">
+              <span>{{ option.id }}</span>
+              <span class="muted pick-count">{{ option.entries.toLocaleString() }}</span>
+            </span>
+          </template>
+        </AutoComplete>
+      </div>
+
       <Button
         v-if="narrowed.length"
         class="clear"
@@ -435,7 +614,7 @@ const onlyExclusions = computed(
 
     <p v-if="!asked" class="muted empty">
       Search titles, explanations, credits and keywords, or filter the archive without typing
-      anything.
+      anything: by year, kind, copyright, a credited name or a named object.
     </p>
 
     <Message v-else-if="onlyExclusions" :closable="false" severity="secondary">
@@ -455,7 +634,7 @@ const onlyExclusions = computed(
     />
 
     <Paginator
-      v-if="results && results.total > PAGE_SIZE"
+      v-if="asked && results && results.total > PAGE_SIZE"
       :first="(page - 1) * PAGE_SIZE"
       :page-link-size="pageLinks"
       :rows="PAGE_SIZE"
@@ -529,6 +708,54 @@ const onlyExclusions = computed(
 .clear {
   margin-left: auto;
   align-self: end;
+}
+
+.pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+.chosen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 12rem;
+  height: 100%;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.chosen:hover,
+.chosen:focus-visible {
+  border-color: var(--accent);
+}
+
+.chosen-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 16rem;
+}
+
+.chosen .icon {
+  flex: none;
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.pick-count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .chips {

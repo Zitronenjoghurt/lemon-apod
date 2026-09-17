@@ -794,6 +794,24 @@ fn push_filters(sql: &mut String, params: &mut Vec<Param>, filters: &Filters) {
         });
         sql.push_str(&lost_media_sql());
     }
+    if let Some(contributor) = &filters.contributor {
+        sql.push_str(
+            " AND entries.date_id IN (SELECT date_id FROM entry_credits WHERE contributor = ?)",
+        );
+        params.push(Param::Text(contributor.clone()));
+    }
+    if let Some(object) = &filters.object {
+        sql.push_str(
+            " AND entries.date_id IN (SELECT date_id FROM entry_objects WHERE object = ?)",
+        );
+        params.push(Param::Text(object.clone()));
+    }
+    if let Some(encore) = filters.encore {
+        sql.push_str(match encore {
+            true => " AND entries.picture_group IS NOT NULL",
+            false => " AND entries.picture_group IS NULL",
+        });
+    }
 }
 
 fn lost_media_sql() -> String {

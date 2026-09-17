@@ -107,6 +107,7 @@ struct Board {
     model: Option<String>,
     fitted_at: Option<DateTime<Utc>>,
     side_bias: Option<f64>,
+    waiting: Vec<u64>,
     rows: Vec<BoardRow>,
 }
 
@@ -342,6 +343,10 @@ async fn get_board(
     let progress = rating.progress(tally.votes).await;
 
     let ranked = rating.store.board_size(category, MIN_COMPARISONS).await?;
+    let waiting = waiting_room(
+        rating.store.waiting(category, MIN_COMPARISONS).await?,
+        pool.saturating_sub(ranked),
+    );
     let scores = rating
         .store
         .board(category, MIN_COMPARISONS, limit as i64, offset as i64)
@@ -382,9 +387,18 @@ async fn get_board(
             model: tally.model,
             fitted_at: tally.ran_at,
             side_bias: tally.side_bias,
+            waiting,
             rows,
         },
     ))
+}
+
+fn waiting_room(mut scored: Vec<u64>, unranked: u64) -> Vec<u64> {
+    let counted: u64 = scored.iter().sum();
+    if let Some(none) = scored.first_mut() {
+        *none += unranked.saturating_sub(counted);
+    }
+    scored
 }
 
 async fn tier_numbers(
@@ -627,6 +641,25 @@ mod tests {
         assert_eq!(outcome("left").unwrap(), Outcome::Left);
         assert_eq!(outcome("tie").unwrap(), Outcome::Tie);
         assert!(outcome("winner").is_err());
+    }
+
+    #[test]
+    fn the_pictures_nobody_has_voted_on_land_in_the_zero_bucket() {
+        assert_eq!(
+            waiting_room(vec![10, 300, 200, 50, 5], 9_000),
+            vec![8_445, 300, 200, 50, 5]
+        );
+        assert_eq!(
+            waiting_room(vec![0, 0], 0),
+            vec![0, 0],
+            "a fully ranked pool has nobody waiting"
+        );
+        assert_eq!(
+            waiting_room(vec![7, 3], 5),
+            vec![7, 3],
+            "a count the scores already exceed is not made negative"
+        );
+        assert!(waiting_room(Vec::new(), 12).is_empty());
     }
 
     #[test]

@@ -9,6 +9,9 @@ pub struct Filters {
     pub kind: Option<KindFilter>,
     pub copyright: Option<bool>,
     pub lost: Option<bool>,
+    pub contributor: Option<String>,
+    pub object: Option<String>,
+    pub encore: Option<bool>,
 }
 
 impl Filters {
@@ -18,6 +21,9 @@ impl Filters {
             && self.kind.is_none()
             && self.copyright.is_none()
             && self.lost.is_none()
+            && self.contributor.is_none()
+            && self.object.is_none()
+            && self.encore.is_none()
     }
 }
 

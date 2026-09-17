@@ -627,6 +627,30 @@ impl VoteStore {
             .collect())
     }
 
+    pub async fn waiting(&self, category: Category, min_comparisons: u32) -> DbResult<Vec<u64>> {
+        let rows: Vec<(i64, i64)> = sqlx::query_as(
+            "SELECT comparisons, COUNT(*) FROM scores
+             WHERE category = ?1 AND comparisons + COALESCE(prior_ess, 0) < ?2
+             GROUP BY comparisons",
+        )
+        .bind(category.as_str())
+        .bind(f64::from(min_comparisons))
+        .fetch_all(self.db.reader())
+        .await?;
+
+        let mut buckets = vec![0u64; min_comparisons as usize];
+        for (comparisons, pictures) in rows {
+            if let Some(bucket) = usize::try_from(comparisons)
+                .ok()
+                .and_then(|at| buckets.get_mut(at))
+            {
+                *bucket += pictures.max(0) as u64;
+            }
+        }
+
+        Ok(buckets)
+    }
+
     pub async fn board_size(&self, category: Category, min_comparisons: u32) -> DbResult<u64> {
         let rows: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM scores

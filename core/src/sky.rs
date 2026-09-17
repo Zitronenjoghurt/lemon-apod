@@ -44,6 +44,14 @@ pub struct SkyEvent {
     pub at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time_label: Option<&'static str>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub planets: Vec<Planet>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub solar: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub magnitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub illumination: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -144,6 +152,13 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
                 }),
             at: quarter.at,
             time_label: None,
+            planets: Vec::new(),
+            solar: None,
+            magnitude: None,
+            illumination: Some(match quarter.quarter {
+                Quarter::Full => 1.0,
+                _ => 0.0,
+            }),
         });
     }
 
@@ -157,6 +172,10 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
         )),
         at: next_turning.at,
         time_label: None,
+        planets: Vec::new(),
+        solar: None,
+        magnitude: None,
+        illumination: None,
     });
 
     for shower in &showers {
@@ -169,6 +188,10 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             )),
             at: shower.peak,
             time_label: None,
+            planets: Vec::new(),
+            solar: None,
+            magnitude: None,
+            illumination: None,
         });
     }
 
@@ -191,6 +214,10 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             detail: Some(detail),
             at: found.at,
             time_label: None,
+            planets: Vec::new(),
+            solar: Some(found.solar),
+            magnitude: Some(found.magnitude),
+            illumination: None,
         });
     }
 
@@ -213,6 +240,10 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             }),
             at: milestone.at,
             time_label: None,
+            planets: vec![planet.planet],
+            solar: None,
+            magnitude: None,
+            illumination: None,
         });
     }
 
@@ -226,6 +257,10 @@ fn timeline(at: DateTime<Utc>) -> Vec<SkyEvent> {
             )),
             at: meeting.at,
             time_label: Some(meeting.visibility.part_of_night()),
+            planets: meeting.planets.to_vec(),
+            solar: None,
+            magnitude: None,
+            illumination: None,
         });
     }
 

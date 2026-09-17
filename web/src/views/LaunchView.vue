@@ -177,79 +177,45 @@ watch(launch, (found) => {
       <header class="stack head">
         <p v-if="summaryOf(launch)" class="muted kicker">{{ summaryOf(launch) }}</p>
         <h1>{{ launch.name }}</h1>
-      </header>
-
-      <div class="top">
-        <figure v-if="hero" class="shot">
-          <img :alt="launch.name" :src="hero" decoding="async" />
-          <figcaption v-if="launch.image_credit" class="muted">
-            Image: {{ launch.image_credit }}
-          </figcaption>
-        </figure>
-
-        <aside class="stack rail">
-          <section :class="['card', 'clock', tone]">
-            <p v-if="counting" class="tminus">{{ counting }}</p>
-            <p v-else class="away">{{ countdown(launch.net, clock) }}</p>
-            <p class="muted at">{{ when }}</p>
-            <p v-if="launch.status" class="status">
+        <div :class="['moment', tone]">
+          <p class="now">
+            <span v-if="counting" class="tminus">{{ counting }}</span>
+            <span v-else class="away">{{ countdown(launch.net, clock) }}</span>
+            <span v-if="launch.status" class="status">
               {{ launch.status }}
               <HintPopover v-if="launch.status_note" :label="`About ${launch.status}`">
                 <p>{{ launch.status_note }}</p>
               </HintPopover>
-            </p>
-          </section>
+            </span>
+            <a
+              v-if="launch.webcast_live && launch.streams.length"
+              :href="launch.streams[0].url"
+              class="plain"
+              data-ours
+              rel="noopener"
+              target="_blank"
+            >
+              <Button label="Watch it live" severity="danger" size="small">
+                <template #icon><AppIcon name="video" /></template>
+              </Button>
+            </a>
+          </p>
+          <p class="muted at">{{ when }}</p>
+        </div>
+      </header>
 
-          <a
-            v-if="launch.webcast_live && launch.streams.length"
-            :href="launch.streams[0].url"
-            class="plain"
-            data-ours
-            rel="noopener"
-            target="_blank"
-          >
-            <Button class="wide" label="Watch it live" severity="danger">
-              <template #icon><AppIcon name="video" /></template>
-            </Button>
-          </a>
-
-          <section v-if="launch.fail_reason" class="card failure">
-            <h2 class="muted">What went wrong</h2>
-            <p>{{ launch.fail_reason }}</p>
-          </section>
-
-          <a
-            v-if="launch.pad_map_image"
-            :href="launch.pad_map_url ?? undefined"
-            class="map"
-            data-ours
-            rel="noopener"
-            target="_blank"
-          >
-            <img :alt="launch.pad ?? 'Launch pad'" :src="launch.pad_map_image" decoding="async" />
-          </a>
-        </aside>
-      </div>
+      <figure v-if="hero" class="shot">
+        <img :alt="launch.name" :src="hero" decoding="async" />
+        <figcaption v-if="launch.image_credit" class="muted">
+          Image: {{ launch.image_credit }}
+        </figcaption>
+      </figure>
 
       <div class="panels">
         <section v-if="groups.length" class="card panel">
           <h2 class="muted">
             <AppIcon name="info" />
             Details
-            <HintPopover label="About these details">
-              <p>
-                <strong>Orbit</strong> is where the payload is headed. Low Earth orbit is a few
-                hundred km up; geostationary is 36,000 km and holds one spot over the equator.
-              </p>
-              <p>
-                <strong>Weather</strong> is the provider's own go percentage for the window, where
-                one is published.
-              </p>
-              <p>
-                <strong>Timing</strong> says how settled the moment is. Anything short of a time
-                means only the day is known, and it can still move.
-              </p>
-            </HintPopover>
           </h2>
 
           <div class="groups">
@@ -268,6 +234,14 @@ watch(launch, (found) => {
         <section v-if="launch.mission" class="card panel">
           <h2 class="muted"><AppIcon name="payload" /> Mission</h2>
           <p class="mission">{{ launch.mission }}</p>
+        </section>
+
+        <section v-if="launch.fail_reason" class="card panel failure">
+          <h2 class="muted">
+            <AppIcon name="exclamation-triangle" />
+            What went wrong
+          </h2>
+          <p class="mission">{{ launch.fail_reason }}</p>
         </section>
 
         <section v-if="launch.streams.length || launch.info_url" class="card panel">
@@ -293,6 +267,22 @@ watch(launch, (found) => {
               </a>
             </li>
           </ul>
+        </section>
+
+        <section v-if="launch.pad_map_image" class="card panel site">
+          <h2 class="muted">
+            <AppIcon name="place" />
+            {{ launch.pad_location ?? launch.pad ?? 'Launch site' }}
+          </h2>
+          <a
+            :href="launch.pad_map_url ?? undefined"
+            class="map"
+            data-ours
+            rel="noopener"
+            target="_blank"
+          >
+            <img :alt="launch.pad ?? 'Launch pad'" :src="launch.pad_map_image" decoding="async" />
+          </a>
         </section>
       </div>
     </template>
@@ -333,17 +323,6 @@ h1 {
   text-wrap: balance;
 }
 
-.top {
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-}
-
-.rail {
-  gap: var(--space-3);
-}
-
 .shot {
   position: relative;
   margin: 0;
@@ -373,53 +352,64 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.clock {
+.moment {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-4) var(--space-5);
-  text-align: center;
+  gap: var(--space-0);
+  margin-top: var(--space-2);
 }
 
-.clock p {
+.moment p {
   margin: 0;
+}
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .tminus,
 .away {
-  font-size: var(--text-xl);
+  font-size: clamp(1.5rem, 1.15rem + 1.2vw, 1.9rem);
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.tminus {
+  color: var(--accent);
 }
 
 .at {
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 
 .status {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: var(--space-1);
-  align-self: center;
-  margin-top: var(--space-1);
   padding: 0 var(--space-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
-.clock.bad .status {
+.moment.bad .status {
   border-color: var(--bad);
   color: var(--bad);
 }
 
-.clock.warn .status {
+.moment.warn .status {
   border-color: hsl(var(--tone-raised));
   color: hsl(var(--tone-raised));
 }
 
-.clock.good .status {
+.moment.good .status {
   border-color: var(--good);
   color: var(--good);
 }
@@ -430,19 +420,12 @@ h1 {
   display: inline-flex;
 }
 
-.wide {
-  width: 100%;
-}
-
 .failure {
-  padding: var(--space-3) var(--space-4);
   border-color: color-mix(in srgb, var(--bad) 45%, var(--border));
 }
 
-.failure p {
-  margin: 0;
-  font-size: var(--text-sm);
-  text-wrap: pretty;
+.failure h2 .icon {
+  color: var(--bad);
 }
 
 .map {
@@ -453,7 +436,8 @@ h1 {
 
 .map img {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 21 / 9;
+  max-height: 16rem;
   object-fit: cover;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -566,15 +550,12 @@ h1 {
 }
 
 @media (min-width: 46rem) {
-  .top {
-    grid-template-columns: minmax(0, 1fr) 17rem;
-  }
-
   .panels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .panels > :first-child {
+  .panels > :first-child,
+  .panels > .site {
     grid-column: 1 / -1;
   }
 }

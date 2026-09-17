@@ -382,6 +382,8 @@ export interface Turning {
 
 export type PlanetVisibility = 'evening' | 'morning' | 'all_night' | 'lost'
 
+export type PlanetId = 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune'
+
 export interface PlanetMilestone {
   name: string
   milestone: 'opposition' | 'greatest_eastern_elongation' | 'greatest_western_elongation'
@@ -392,7 +394,7 @@ export interface PlanetMilestone {
 }
 
 export interface Planet {
-  planet: string
+  planet: PlanetId
   name: string
   naked_eye: boolean
   visibility: PlanetVisibility
@@ -425,7 +427,7 @@ export interface EclipseEvent {
 export type SkyEventKind = 'moon' | 'season' | 'shower' | 'eclipse' | 'planet' | 'conjunction'
 
 export interface Conjunction {
-  planets: string[]
+  planets: PlanetId[]
   names: string[]
   at: string
   separation: number
@@ -453,6 +455,10 @@ export interface SkyEvent {
   detail: string | null
   at: string
   time_label?: string
+  planets?: PlanetId[]
+  solar?: boolean
+  magnitude?: number
+  illumination?: number
 }
 
 export interface Launch {
@@ -756,6 +762,7 @@ export interface Board {
   model: string | null
   fitted_at: string | null
   side_bias: number | null
+  waiting: number[]
   rows: BoardRow[]
 }
 
@@ -872,6 +879,10 @@ export interface CatalogCount {
 export interface Showing {
   object: ObjectCount
   items: ApodSummary[]
+}
+
+export interface ObjectMention extends ObjectCount {
+  name: string
 }
 
 export type ObjectSort = 'entries' | 'latest' | 'designation'

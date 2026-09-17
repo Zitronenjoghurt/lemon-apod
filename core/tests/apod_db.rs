@@ -80,6 +80,7 @@ async fn every_read_query_matches_the_migrated_schema() {
         kind: Some(MediaKind::ImageJpg.into()),
         copyright: Some(true),
         lost: Some(false),
+        ..Filters::default()
     };
 
     reader.entry(date).await.unwrap();
@@ -2130,7 +2131,7 @@ async fn a_designation_with_no_catalogue_number_sorts_by_the_year_in_it() {
         .objects_for("2024-03-05".parse().unwrap())
         .await
         .unwrap();
-    let ids: Vec<&str> = listed.iter().map(|found| found.id.as_str()).collect();
+    let ids: Vec<&str> = listed.iter().map(|(found, _)| found.id.as_str()).collect();
     assert_eq!(
         ids,
         ["M31", "NGC 1900", "SN 1987A", "C/2020 F3"],
@@ -2155,7 +2156,7 @@ async fn what_an_entry_is_a_picture_of_is_listed_before_what_it_only_mentions() 
         .objects_for("2024-03-05".parse().unwrap())
         .await
         .unwrap();
-    let ids: Vec<&str> = listed.iter().map(|found| found.id.as_str()).collect();
+    let ids: Vec<&str> = listed.iter().map(|(found, _)| found.id.as_str()).collect();
     assert_eq!(ids, ["M81", "M31"]);
 
     writer.reader().db().close().await;

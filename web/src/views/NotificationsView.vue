@@ -46,7 +46,7 @@ const topics = computed(() => {
       topic: config.aurora_topic,
       icon: 'bolt',
       label: 'Aurora alerts',
-      hint: "Geomagnetic storms through NOAA's G-scale alerts",
+      hint: "Geomagnetic storms through NOAA's G-scale alerts.",
       cadence: 'Rare, depending on solar activity',
     },
     {

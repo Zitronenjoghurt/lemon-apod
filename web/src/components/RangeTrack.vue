@@ -1,15 +1,20 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
 
-const props = defineProps<{
-  value: number
-  min: number
-  max: number
-  minLabel: string
-  minNote: string
-  maxLabel: string
-  maxNote: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    value: number
+    min: number
+    max: number
+    minLabel: string
+    minNote: string
+    maxLabel: string
+    maxNote: string
+    fill?: string
+    pin?: string
+  }>(),
+  { fill: undefined, pin: undefined },
+)
 
 const at = computed(() => {
   const span = props.max - props.min
@@ -19,7 +24,7 @@ const at = computed(() => {
 </script>
 
 <template>
-  <div class="range">
+  <div :style="{ '--fill': fill, '--pin': pin }" class="range">
     <div class="track">
       <div :style="{ width: `${at}%` }" class="fill" />
       <span :style="{ left: `${at}%` }" class="pin" />
@@ -54,8 +59,8 @@ const at = computed(() => {
 .fill {
   height: 100%;
   border-radius: 999px 0 0 999px;
-  background: var(--accent);
-  transition: width var(--dur-base) var(--ease-out);
+  background: var(--fill, var(--accent));
+  transition: width var(--dur-slow) var(--ease-out);
 }
 
 .pin {
@@ -67,7 +72,8 @@ const at = computed(() => {
   transform: translateY(-50%);
   border-radius: var(--radius-pill);
   background: var(--bg-elevated);
-  border: 2px solid var(--accent);
+  border: 2px solid var(--pin, var(--accent));
+  transition: left var(--dur-slow) var(--ease-out);
 }
 
 .ends {

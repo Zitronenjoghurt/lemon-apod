@@ -2,15 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import ApodBirthday from './ApodBirthday.vue'
+import CreditLines from './CreditLines.vue'
 import EntryActions from './EntryActions.vue'
 import MediaFrame from './MediaFrame.vue'
 import RetryNotice from './RetryNotice.vue'
 import { api, ApiError } from '@/api/client'
 import type { ApodEntry, ApodSummary } from '@/api/types'
+import { useIndexMarks } from '@/composables/useIndexMarks'
 import { useRead } from '@/composables/useRead'
 import { apodPageUrl, withInternalLinks } from '@/utils/apodLinks'
-import { licenseName, roleLabel } from '@/utils/credits'
 import { formatDate } from '@/utils/date'
+import { objectTargets, withIndexLinks } from '@/utils/indexLinks'
 
 const props = defineProps<{
   date: string
@@ -33,21 +35,12 @@ const loading = ref(false)
 const media = computed(() => entry.value?.media ?? props.summary?.media)
 const title = computed(() => entry.value?.title ?? props.summary?.title ?? '')
 
+const { contributors, mentions } = useIndexMarks(computed(() => entry.value?.date))
+
 const explanation = computed(() =>
-  entry.value ? withInternalLinks(entry.value.explanation_html) : '',
-)
-
-const credits = computed(() =>
-  (entry.value?.credits ?? []).map((credit) => ({
-    label: roleLabel(credit.role),
-    html: withInternalLinks(credit.html),
-  })),
-)
-
-const license = computed(() =>
-  entry.value?.license_url
-    ? { url: entry.value.license_url, name: licenseName(entry.value.license_url) }
-    : null,
+  entry.value
+    ? withIndexLinks(withInternalLinks(entry.value.explanation_html), objectTargets(mentions.value))
+    : '',
 )
 
 const missing = ref(false)
@@ -124,13 +117,15 @@ onBeforeUnmount(() => {
 <template>
   <article ref="root" class="feed-item card">
     <header class="head">
-      <RouterLink :to="`/${date}`" class="plain">
-        <time :datetime="date" class="muted date">
-          <span v-if="!isRead(date)" aria-hidden="true" class="unread-dot" />
-          {{ formatDate(date) }}
-        </time>
-      </RouterLink>
-      <ApodBirthday :date="date" />
+      <div class="when">
+        <RouterLink :to="`/${date}`" class="plain">
+          <time :datetime="date" class="muted date">
+            <span v-if="!isRead(date)" aria-hidden="true" class="unread-dot" />
+            {{ formatDate(date) }}
+          </time>
+        </RouterLink>
+        <ApodBirthday :date="date" class="cake" compact />
+      </div>
       <h2 class="title">
         <RouterLink :to="`/${date}`">{{ title || 'Untitled' }}</RouterLink>
       </h2>
@@ -144,32 +139,13 @@ onBeforeUnmount(() => {
       :title="title"
       max-height="min(70vh, 44rem)"
     >
-      <template #credit>
-        <dl v-if="credits.length" class="credits muted" @click="onInternalLink">
-          <template v-for="(credit, index) in credits" :key="credit.label + index">
-            <dt>{{ credit.label }}</dt>
-            <dd>
-              <span v-html="credit.html" />
-              <span
-                v-if="index === 0 && entry?.has_copyright"
-                class="rights"
-                title="Credited to a named copyright holder rather than released as public domain by NASA"
-              >
-                Copyrighted
-              </span>
-              <a
-                v-if="index === 0 && license"
-                :href="license.url"
-                class="rights"
-                rel="noopener license"
-                target="_blank"
-                title="Released under this licence rather than as public domain by NASA"
-              >
-                {{ license.name }}
-              </a>
-            </dd>
-          </template>
-        </dl>
+      <template v-if="entry?.credits?.length" #credit>
+        <CreditLines
+          :contributors="contributors"
+          :credits="entry.credits"
+          :has-copyright="entry.has_copyright"
+          :license-url="entry.license_url"
+        />
       </template>
 
       <template #actions>
@@ -213,8 +189,18 @@ onBeforeUnmount(() => {
   gap: var(--space-1);
 }
 
+.when {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .date {
   font-size: var(--text-sm);
+}
+
+.cake {
+  color: var(--accent);
 }
 
 .title a {
@@ -250,42 +236,6 @@ onBeforeUnmount(() => {
 
 .lines {
   gap: var(--space-2);
-}
-
-.credits {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--space-1) var(--space-3);
-  font-size: var(--text-sm);
-  margin: 0;
-}
-
-.credits dt {
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding-top: var(--space-0);
-  opacity: 0.75;
-}
-
-.credits dd {
-  margin: 0;
-}
-
-.rights {
-  display: inline-block;
-  margin-left: var(--space-2);
-  padding: var(--space-0) var(--space-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  white-space: nowrap;
-  vertical-align: 0.05em;
-  text-decoration: none;
-}
-
-a.rights:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
 }
 
 @media (max-width: 40rem) {

@@ -15,6 +15,9 @@ pub struct SearchQuery {
     kind: Option<String>,
     copyright: Option<bool>,
     lost: Option<bool>,
+    contributor: Option<String>,
+    object: Option<String>,
+    encore: Option<bool>,
     sort: Option<String>,
     offset: Option<usize>,
     limit: Option<usize>,
@@ -26,13 +29,16 @@ async fn get_search(
 ) -> ApiResult<Response> {
     let q = query.q.as_deref().unwrap_or_default();
 
-    let filters = params::filters(
+    let mut filters = params::filters(
         query.from.as_deref(),
         query.to.as_deref(),
         query.kind.as_deref(),
         query.copyright,
         query.lost,
     )?;
+    filters.contributor = params::index_id(query.contributor.as_deref());
+    filters.object = params::index_id(query.object.as_deref());
+    filters.encore = query.encore;
 
     let results = state
         .store

@@ -743,16 +743,12 @@ h2 {
 }
 
 .words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: var(--space-2) var(--space-4);
   list-style: none;
   margin: 0;
   padding: 0;
-  columns: 19rem;
-  column-gap: var(--space-4);
-}
-
-.words li {
-  break-inside: avoid;
-  margin-bottom: var(--space-2);
 }
 
 .word {

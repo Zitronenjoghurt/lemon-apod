@@ -11,16 +11,20 @@ import WelcomeNote from '@/components/WelcomeNote.vue'
 import { api } from '@/api/client'
 import { type ApodEntry, type ApodSummary, isVideo } from '@/api/types'
 import { useCoverage } from '@/composables/useCoverage'
+import { useFavorites } from '@/composables/useFavorites'
+import { useGaps } from '@/composables/useGaps'
 import { useRead } from '@/composables/useRead'
 import { useStatus } from '@/composables/useStatus'
 import { apodPageUrl } from '@/utils/apodLinks'
-import { apodAgeParts, formatDate } from '@/utils/date'
+import { apodAgeParts, FIRST_ENTRY, formatDate, nextDay } from '@/utils/date'
 
 const TICK_MS = 1_000
 const POLL_MS = 30_000
 
 const { latest, entries, publish, pause, pauseRunning, refresh } = useStatus()
 const { countIn, isRead } = useRead()
+const { count: favorites } = useFavorites()
+const { gaps, loaded: gapsLoaded } = useGaps()
 const coverage = useCoverage()
 
 const now = ref(Date.now())
@@ -135,14 +139,16 @@ const pauseUntil = computed(() => (pause.value?.end ? formatDate(pause.value.end
 
 const archiveRead = computed(() => countIn())
 const archiveTotal = computed(() => coverage.total.value || entries.value)
+const archiveUnread = computed(() => Math.max(0, archiveTotal.value - archiveRead.value))
+
+const nextEntryDate = computed(() => {
+  if (!publish.value) return null
+  return caughtUp.value ? nextDay(publish.value.today) : publish.value.today
+})
 
 const featuredFull = ref<ApodEntry | null>(null)
 
-const credits = computed(() =>
-  (featuredFull.value?.credits ?? []).map((credit) => `${credit.role}: ${credit.text}`),
-)
-
-async function loadCredits() {
+async function loadFeatured() {
   const date = featured.value?.date
   featuredFull.value = null
   if (!date) return
@@ -183,7 +189,7 @@ onUnmounted(() => {
 
 watch([standing, localToday], loadLocalDay, { immediate: true })
 
-watch(() => featured.value?.date, loadCredits, { immediate: true })
+watch(() => featured.value?.date, loadFeatured, { immediate: true })
 </script>
 
 <template>
@@ -253,9 +259,6 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
                 lead="NASA's"
                 variant="banner"
               />
-              <p v-if="credits.length" class="muted credit">
-                <span v-for="line in credits" :key="line">{{ line }}</span>
-              </p>
             </div>
 
             <div class="row actions">
@@ -304,8 +307,8 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
       </section>
 
       <div class="panels">
-        <section v-if="!pauseRunning" class="card panel">
-          <h2 class="muted">Next picture most likely in</h2>
+        <section v-if="!pauseRunning" class="card panel rise">
+          <h2 class="muted"><AppIcon name="hourglass" />Next picture most likely in</h2>
 
           <p v-if="eta" class="countdown">
             <template v-if="eta.soon">
@@ -328,15 +331,15 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
               <dt class="muted">Your time</dt>
               <dd>{{ localPublishTime }}</dd>
             </div>
+            <div v-if="nextEntryDate">
+              <dt class="muted">Dated</dt>
+              <dd>{{ formatDate(nextEntryDate) }}</dd>
+            </div>
           </dl>
-
-          <p v-if="standing === 'level' && !caughtUp && !pauseRunning" class="muted note">
-            The entry for {{ formatDate(publish.today) }} has not been archived yet.
-          </p>
         </section>
 
-        <section class="card panel">
-          <h2 class="muted">Your reading progress</h2>
+        <section class="card panel rise">
+          <h2 class="muted"><AppIcon name="book" />Your reading progress</h2>
 
           <p class="countdown">
             <span class="part">
@@ -347,14 +350,25 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
 
           <ReadProgress :read="archiveRead" :total="archiveTotal" bare label="the archive" />
 
-          <p class="muted note">
-            Reading progress only lives in your browser. You can back it up like other site data in
-            the settings.
-          </p>
+          <dl class="facts">
+            <div>
+              <dt class="muted">Unread</dt>
+              <dd>{{ archiveUnread.toLocaleString() }}</dd>
+            </div>
+            <div>
+              <dt class="muted">Favorites</dt>
+              <dd>
+                <RouterLink v-if="favorites" class="plain-link" to="/favorites">
+                  {{ favorites.toLocaleString() }}
+                </RouterLink>
+                <template v-else>0</template>
+              </dd>
+            </div>
+          </dl>
         </section>
 
-        <section class="card panel">
-          <h2 class="muted">Astronomy Picture of the Day is</h2>
+        <section class="card panel rise">
+          <h2 class="muted"><AppIcon name="birthday" />Astronomy Picture of the Day is</h2>
 
           <p class="countdown">
             <span class="part">
@@ -367,11 +381,29 @@ watch(() => featured.value?.date, loadCredits, { immediate: true })
             </span>
           </p>
 
-          <p class="muted note">
-            APOD started on
-            <RouterLink to="/1995-06-16">16 June 1995</RouterLink>
-            and has run almost every day since then.
-          </p>
+          <dl class="facts">
+            <div>
+              <dt class="muted">Since</dt>
+              <dd>
+                <RouterLink :to="`/${FIRST_ENTRY}`" class="plain-link">
+                  {{ formatDate(FIRST_ENTRY) }}
+                </RouterLink>
+              </dd>
+            </div>
+            <div>
+              <dt class="muted">Entries</dt>
+              <dd>{{ archiveTotal.toLocaleString() }}</dd>
+            </div>
+            <div v-if="gapsLoaded">
+              <dt class="muted">Days missed</dt>
+              <dd>
+                <RouterLink v-if="gaps.length" class="plain-link" to="/stats">
+                  {{ gaps.length }}
+                </RouterLink>
+                <template v-else>0</template>
+              </dd>
+            </div>
+          </dl>
         </section>
       </div>
 
@@ -435,10 +467,26 @@ h1 {
 }
 
 .panel h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
+}
+
+.panel h2 .icon {
+  font-size: 1.15em;
+  color: var(--accent);
+}
+
+.panels > .panel:nth-child(2) {
+  --rise-delay: 60ms;
+}
+
+.panels > .panel:nth-child(3) {
+  --rise-delay: 120ms;
 }
 
 .today {
@@ -552,19 +600,9 @@ h1 {
 .attribution {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
   margin: var(--space-1) 0 var(--space-0);
-  padding-left: var(--space-3);
+  padding: var(--space-0) 0 var(--space-0) var(--space-3);
   border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
-}
-
-.credit {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0);
-  margin: 0;
-  font-size: var(--text-sm);
-  text-wrap: pretty;
 }
 
 .actions {
@@ -645,9 +683,20 @@ h1 {
 
 .facts {
   display: flex;
-  gap: var(--space-6);
-  margin: 0;
+  gap: var(--space-3) var(--space-6);
+  margin: auto 0 0;
+  padding-top: var(--space-1);
   flex-wrap: wrap;
+}
+
+.plain-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.plain-link:hover {
+  color: var(--accent);
 }
 
 .facts dt {
@@ -660,13 +709,6 @@ h1 {
   margin: 0;
   font-size: var(--text-md);
   font-variant-numeric: tabular-nums;
-}
-
-.note {
-  margin: 0;
-  font-size: var(--text-sm);
-  text-wrap: pretty;
-  margin-top: auto;
 }
 
 @media (max-width: 44rem) {

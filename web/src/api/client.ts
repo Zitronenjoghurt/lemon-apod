@@ -25,6 +25,7 @@ import type {
   MatchRound,
   Migration,
   ObjectCount,
+  ObjectMention,
   ObjectSort,
   OrderPair,
   Page,
@@ -232,6 +233,9 @@ export interface ListOptions {
 export interface SearchOptions extends Omit<ListOptions, 'cursor' | 'order'> {
   sort?: 'relevance' | 'date'
   offset?: number
+  contributor?: string
+  object?: string
+  encore?: boolean
 }
 
 export interface DivergenceOptions {
@@ -353,6 +357,9 @@ export const api = {
   credit: (id: string, offset = 0, limit = 24, signal?: AbortSignal) =>
     request<Credited>(`/api/credits/${encodeURIComponent(id)}${query({ offset, limit })}`, signal),
 
+  creditsFor: (date: string, signal?: AbortSignal) =>
+    request<Contributor[]>(`/api/credits/entry/${encodeURIComponent(date)}`, signal),
+
   objects: (options: ObjectOptions = {}, signal?: AbortSignal) =>
     request<Listing<ObjectCount>>(`/api/objects${query({ ...options })}`, signal),
 
@@ -361,6 +368,9 @@ export const api = {
 
   object: (id: string, options: ShowingOptions = {}, signal?: AbortSignal) =>
     request<Showing>(`/api/objects/${encodeURIComponent(id)}${query({ ...options })}`, signal),
+
+  objectsFor: (date: string, signal?: AbortSignal) =>
+    request<ObjectMention[]>(`/api/objects/entry/${encodeURIComponent(date)}`, signal),
 
   pictures: (options: PictureOptions = {}, signal?: AbortSignal) =>
     request<Listing<Picture>>(`/api/pictures${query({ ...options })}`, signal),

@@ -1,15 +1,16 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
-import { kpPercent, kpReading } from '@/utils/weather'
+import { kpPercent, kpReading, kpTone } from '@/utils/weather'
 
 const props = defineProps<{ kp: number; stamp?: string }>()
 
 const reading = computed(() => kpReading(props.kp))
 const dial = computed(() => kpPercent(props.kp))
+const tone = computed(() => kpTone(props.kp))
 </script>
 
 <template>
-  <div class="kp-gauge">
+  <div :data-tone="tone" class="kp-gauge">
     <p class="reading">
       <span class="figure">{{ kp.toFixed(2) }}</span>
       <span class="unit muted">Kp</span>
@@ -30,9 +31,26 @@ const dial = computed(() => kpPercent(props.kp))
 <style scoped>
 .kp-gauge {
   --kp-figure: 1.6rem;
+  --tone: var(--tone-calm);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.kp-gauge[data-tone='raised'] {
+  --tone: var(--tone-raised);
+}
+
+.kp-gauge[data-tone='warn'] {
+  --tone: var(--tone-warn);
+}
+
+.kp-gauge[data-tone='alert'] {
+  --tone: var(--tone-alert);
+}
+
+.kp-gauge[data-tone='severe'] {
+  --tone: var(--tone-severe);
 }
 
 .reading {
@@ -60,6 +78,7 @@ const dial = computed(() => kpPercent(props.kp))
   font-weight: 600;
   margin-left: var(--space-1);
   text-wrap: balance;
+  color: hsl(var(--tone));
 }
 
 .track {
@@ -73,8 +92,10 @@ const dial = computed(() => kpPercent(props.kp))
 .fill {
   height: 100%;
   border-radius: var(--radius-pill);
-  background: var(--accent);
-  transition: width 0.3s ease;
+  background: hsl(var(--tone));
+  transition:
+    width var(--dur-slow) var(--ease-out),
+    background-color var(--dur-slow) var(--ease-out);
 }
 
 .threshold {

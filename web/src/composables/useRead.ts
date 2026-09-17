@@ -143,6 +143,7 @@ export function useRead(scope?: ReadScope) {
     filter,
     active: computed(() => filter.value !== 'all'),
     count: computed(() => dates.value.size),
+    readDates: () => [...dates.value],
     isRead,
     markRead,
     markUnread,

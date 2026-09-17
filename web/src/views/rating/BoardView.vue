@@ -63,6 +63,21 @@ const tiers = computed(() => {
   return groups
 })
 
+const waiting = computed(() => {
+  const found = board.value
+  if (!found?.provisional) return []
+
+  const steps = found.waiting.map((pictures, votes) => ({ votes, pictures })).reverse()
+  const peak = Math.max(...steps.map((step) => step.pictures), 1)
+  return steps.map((step) => ({
+    ...step,
+    short: found.min_comparisons - step.votes,
+    width: step.pictures === 0 ? 0 : Math.max((step.pictures / peak) * 100, 1.5),
+  }))
+})
+
+const unranked = computed(() => waiting.value.reduce((sum, step) => sum + step.pictures, 0))
+
 const fitted = computed(() => {
   const at = board.value?.fitted_at
   if (!at) return null
@@ -192,6 +207,34 @@ onMounted(() => void run())
             <dd>{{ fitted }}</dd>
           </div>
         </dl>
+
+        <div v-if="unranked" class="waiting">
+          <p class="waiting-head">
+            <span class="muted scope">Still to qualify</span>
+            <span class="muted tabular">{{ unranked.toLocaleString() }} pictures</span>
+          </p>
+          <ul class="ladder">
+            <li v-for="step in waiting" :key="step.votes" :class="{ near: step.short === 1 }">
+              <span class="step-votes">
+                <template v-if="step.votes === 0">no votes yet</template>
+                <template v-else>{{ step.votes }} of {{ board.min_comparisons }} votes</template>
+              </span>
+              <span class="meter" role="presentation">
+                <span
+                  :style="{
+                    width: `${step.width}%`,
+                    opacity: 0.3 + 0.7 * (step.votes / board.min_comparisons),
+                  }"
+                  class="fill"
+                />
+              </span>
+              <span class="tabular step-count">{{ step.pictures.toLocaleString() }}</span>
+              <span class="sr-only">
+                pictures, {{ step.short }} {{ step.short === 1 ? 'vote' : 'votes' }} from qualifying
+              </span>
+            </li>
+          </ul>
+        </div>
       </section>
 
       <p v-if="!board.rows.length" class="muted empty">
@@ -392,6 +435,78 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.waiting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.waiting-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.scope {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.ladder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ladder li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr) 3.5rem;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.ladder li.near {
+  color: var(--text);
+}
+
+.step-votes {
+  font-variant-numeric: tabular-nums;
+}
+
+.step-count {
+  text-align: right;
+}
+
+.meter {
+  height: 0.4rem;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
 .credit {
   font-size: var(--text-sm);
 }
@@ -531,5 +646,20 @@ h3 a:hover {
   font-size: var(--text-xs);
   line-height: 1.35;
   text-wrap: pretty;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 34rem) {
+  .ladder li {
+    grid-template-columns: 6rem minmax(0, 1fr) 3rem;
+    gap: var(--space-2);
+  }
 }
 </style>

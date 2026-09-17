@@ -89,6 +89,15 @@ fn router(state: &ServerState) -> Router {
             .finish()
             .expect("the reading rate limit is valid"),
     );
+    let shared = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(state.config.rate_limit_shared_per_second)
+            .burst_size(state.config.rate_limit_shared_burst)
+            .key_extractor(by_client)
+            .use_headers()
+            .finish()
+            .expect("the shared rate limit is valid"),
+    );
     let voting = Arc::new(
         GovernorConfigBuilder::default()
             .period(state.config.rating.vote_limit_period)
@@ -105,6 +114,7 @@ fn router(state: &ServerState) -> Router {
 
     let api = Router::new()
         .merge(api::read_routes().route_layer(GovernorLayer::new(reading.clone())))
+        .merge(api::shared_routes().route_layer(GovernorLayer::new(shared)))
         .merge(api::vote_routes().route_layer(GovernorLayer::new(voting)))
         .fallback(api::unknown_route);
 

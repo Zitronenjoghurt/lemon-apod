@@ -1,24 +1,37 @@
 <script lang="ts" setup>
 import { computed, onUnmounted, ref } from 'vue'
+import EclipseDial from './EclipseDial.vue'
 import KpGauge from './KpGauge.vue'
+import MagnitudeMark from './MagnitudeMark.vue'
 import MoonDial from './MoonDial.vue'
 import RangeTrack from './RangeTrack.vue'
 import type { Launch } from '@/api/types'
 import { useLaunches } from '@/composables/useLaunches'
+import { usePreferences } from '@/composables/usePreferences'
 import { useSky } from '@/composables/useSky'
 import {
   clockOf,
   countdown as away,
   isImminent,
+  hasOutcome,
   launchMark,
   statusTone,
   timeOf,
 } from '@/utils/launches'
-import { EVENT_ICONS } from '@/utils/sky'
+import {
+  EVENT_ICONS,
+  eventColor,
+  eventDetail,
+  planetColor,
+  planetIcon,
+  planetScale,
+  VISIBILITY,
+} from '@/utils/sky'
 import { BAND_NAMES, BANDS, inForce, kpReading, levelName, NOTICE_LABELS } from '@/utils/weather'
 import { RouterLink } from 'vue-router'
 
 const { sky, failed, visiblePlanets } = useSky()
+const { hemisphere } = usePreferences()
 const { data: launchFeed } = useLaunches()
 
 const LAUNCHES_BEHIND = 3
@@ -46,6 +59,12 @@ function imminent(launch: Launch): boolean {
 
 function lost(launch: Launch): boolean {
   return statusTone(launch.status) === 'bad'
+}
+
+function launchTone(launch: Launch): 'lost' | 'flown' | 'soon' | 'ahead' {
+  if (lost(launch)) return 'lost'
+  if (hasOutcome(launch.status)) return 'flown'
+  return imminent(launch) ? 'soon' : 'ahead'
 }
 
 const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' })
@@ -128,8 +147,9 @@ function magnitude(value: number): string {
 <template>
   <template v-if="sky && moon">
     <div class="panels">
-      <section class="card panel moon-panel">
+      <section class="card panel moon-panel rise">
         <h2 class="muted">
+          <AppIcon class="lead" name="moon" />
           <RouterLink class="open" to="/sky">
             The moon today
             <AppIcon name="chevron-right" />
@@ -137,7 +157,12 @@ function magnitude(value: number): string {
         </h2>
 
         <div class="row moon-row">
-          <MoonDial :illumination="moon.illumination" :label="moon.label" :waxing="moon.waxing" />
+          <MoonDial
+            :hemisphere="hemisphere"
+            :illumination="moon.illumination"
+            :label="moon.label"
+            :waxing="moon.waxing"
+          />
 
           <div class="moon-facts">
             <p class="phase">{{ moon.label }}</p>
@@ -175,8 +200,9 @@ function magnitude(value: number): string {
         </dl>
       </section>
 
-      <section class="card panel">
+      <section class="card panel rise">
         <h2 class="muted">
+          <AppIcon class="lead" name="planets" />
           <RouterLink class="open" to="/sky">
             Visible planets
             <AppIcon name="chevron-right" />
@@ -189,18 +215,31 @@ function magnitude(value: number): string {
             :key="planet.planet"
             :title="`${Math.round(planet.elongation)}° from the sun`"
           >
+            <AppIcon
+              :name="planetIcon(planet.planet)"
+              :scale="planetScale(planet.planet)"
+              :style="{ color: planetColor(planet.planet) }"
+              class="planet-mark"
+            />
             <span class="planet-name">{{ planet.name }}</span>
             <span aria-hidden="true" class="leader" />
-            <span class="muted where">{{ planet.visibility_label }}</span>
-            <span class="mag">{{ magnitude(planet.magnitude) }}</span>
+            <span :class="['where', VISIBILITY[planet.visibility].tone]">
+              <AppIcon :name="VISIBILITY[planet.visibility].icon" />
+              {{ planet.visibility_label }}
+            </span>
+            <span :title="`Apparent magnitude ${magnitude(planet.magnitude)}`" class="mag">
+              <MagnitudeMark :magnitude="planet.magnitude" />
+              {{ magnitude(planet.magnitude) }}
+            </span>
           </li>
         </ul>
 
         <p v-else class="muted note">All five currently appear too close to the sun.</p>
       </section>
 
-      <section v-if="report" :class="{ stormy }" class="card panel">
+      <section v-if="report" :class="{ stormy }" class="card panel rise">
         <h2 class="muted">
+          <AppIcon class="lead" name="bolt" />
           <RouterLink class="open" to="/space-weather">
             Space weather
             <AppIcon name="chevron-right" />
@@ -229,8 +268,9 @@ function magnitude(value: number): string {
     </div>
 
     <div class="columns">
-      <section v-if="events.length" class="card list">
+      <section v-if="events.length" class="card list rise">
         <h2 class="muted">
+          <AppIcon class="lead" name="calendar-clock" />
           <RouterLink class="open" to="/sky">
             Events in the sky
             <AppIcon name="chevron-right" />
@@ -240,25 +280,64 @@ function magnitude(value: number): string {
         <ol class="events">
           <li
             v-for="event in events"
-            :key="`${event.kind}-${event.at}`"
+            :key="`${event.kind}-${event.title}-${event.at}`"
             :class="[event.kind, { gone: passed(event.at) }]"
           >
-            <AppIcon :name="EVENT_ICONS[event.kind]" />
+            <span
+              v-if="event.planets?.length"
+              :class="['sign', { pair: event.planets.length > 1 }]"
+            >
+              <AppIcon
+                v-for="planet in event.planets"
+                :key="planet"
+                :name="planetIcon(planet)"
+                :scale="planetScale(planet)"
+                :style="{ color: planetColor(planet) }"
+              />
+            </span>
+            <EclipseDial
+              v-else-if="event.kind === 'eclipse' && event.magnitude !== undefined"
+              :label="event.title"
+              :magnitude="event.magnitude"
+              :solar="event.solar ?? false"
+              class="sign"
+            />
+            <span
+              v-else-if="event.kind === 'moon' && event.illumination !== undefined"
+              class="sign"
+            >
+              <MoonDial
+                :hemisphere="hemisphere"
+                :illumination="event.illumination"
+                :label="event.title"
+                :size="17"
+                waxing
+              />
+            </span>
+            <AppIcon
+              v-else
+              :name="EVENT_ICONS[event.kind]"
+              :style="{ color: eventColor(event, hemisphere) }"
+              class="sign"
+            />
             <time :datetime="event.at" class="at">
               <span class="day">{{ when(event.at) }}</span>
               <span class="muted hour">{{ event.time_label ?? timeOf(event.at) }}</span>
             </time>
             <span class="what">
               <span class="title">{{ event.title }}</span>
-              <span v-if="event.detail" class="muted detail">{{ event.detail }}</span>
+              <span v-if="eventDetail(event, hemisphere)" class="muted detail">
+                {{ eventDetail(event, hemisphere) }}
+              </span>
             </span>
             <span class="muted away">{{ countdown(event.at) }}</span>
           </li>
         </ol>
       </section>
 
-      <section v-if="launches.length" class="card list">
+      <section v-if="launches.length" class="card list rise">
         <h2 class="muted">
+          <AppIcon class="lead" name="launch" />
           <RouterLink class="open" to="/launches">
             Rocket launches
             <AppIcon name="chevron-right" />
@@ -272,7 +351,11 @@ function magnitude(value: number): string {
             :class="{ gone: passed(launch.net) && !imminent(launch), soon: imminent(launch) }"
             class="launch"
           >
-            <AppIcon :class="{ lost: lost(launch) }" :name="launchMark(launch, clockNow)" />
+            <AppIcon
+              :class="launchTone(launch)"
+              :name="launchMark(launch, clockNow)"
+              class="sign"
+            />
             <time :datetime="launch.net" class="at">
               <span class="day">{{ when(launch.net) }}</span>
               <span class="muted hour">{{ clockOf(launch) }}</span>
@@ -318,11 +401,28 @@ function magnitude(value: number): string {
   gap: var(--space-3);
 }
 
+.panels > :nth-child(2),
+.columns > :nth-child(2) {
+  --rise-delay: 60ms;
+}
+
+.panels > :nth-child(3) {
+  --rise-delay: 120ms;
+}
+
 h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   font-weight: 600;
+}
+
+h2 .lead {
+  font-size: 1.15em;
+  color: var(--accent);
 }
 
 .open {
@@ -425,6 +525,11 @@ h2 {
   font-size: var(--text-sm);
 }
 
+.planet-mark {
+  align-self: center;
+  font-size: 1.45rem;
+}
+
 .planet-name {
   font-weight: 550;
 }
@@ -437,15 +542,42 @@ h2 {
 }
 
 .where {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0);
   font-size: var(--text-sm);
   white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.where .icon {
+  font-size: 1.05em;
+}
+
+.where.dusk {
+  color: var(--dusk);
+}
+
+.where.dawn {
+  color: var(--dawn);
+}
+
+.where.all-night {
+  color: var(--night);
 }
 
 .mag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
-  min-width: 3ch;
-  text-align: right;
+  min-width: 4.4ch;
+  justify-content: flex-end;
+}
+
+.mag .magnitude {
+  font-size: 1.05em;
 }
 
 .stormy {
@@ -541,7 +673,7 @@ h2 {
 
 .events li {
   display: grid;
-  grid-template-columns: 1.6rem 5.5rem minmax(0, 1fr) auto;
+  grid-template-columns: 2rem 5.5rem minmax(0, 1fr) auto;
   align-items: baseline;
   gap: var(--space-3);
   padding: var(--space-2) 0;
@@ -578,19 +710,33 @@ h2 {
   font-style: italic;
 }
 
-.events .icon {
+.events .sign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-muted);
-  font-size: var(--text-md);
+  font-size: 1.3rem;
   justify-self: center;
 }
 
-.events li.eclipse .icon,
-.events li.shower .icon {
-  color: var(--accent);
+.events .pair .icon {
+  font-size: 1.15rem;
 }
 
-.events .icon.lost {
+.events .pair .icon + .icon {
+  margin-left: -0.35rem;
+}
+
+.events .sign.lost {
   color: var(--bad);
+}
+
+.events .sign.flown {
+  color: var(--good);
+}
+
+.events .sign.ahead {
+  color: var(--accent);
 }
 
 .at {
@@ -656,13 +802,13 @@ a.title:hover .icon {
 
 @container (max-width: 30rem) {
   .events li {
-    grid-template-columns: 1.2rem minmax(0, 1fr) auto;
+    grid-template-columns: 1.6rem minmax(0, 1fr) auto;
     row-gap: var(--space-0);
     column-gap: var(--space-2);
     align-items: start;
   }
 
-  .events .icon {
+  .events .sign {
     grid-column: 1;
     grid-row: 1 / span 2;
     padding-top: var(--space-1);

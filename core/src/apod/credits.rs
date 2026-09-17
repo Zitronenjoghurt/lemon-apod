@@ -154,16 +154,18 @@ impl ApodReader {
     }
 
     pub async fn credits_for(&self, date: ApodDate) -> ApodResult<Vec<Contributor>> {
-        let rows = sqlx::query(AssertSqlSafe(format!(
-            "SELECT c.contributor AS id, {LABEL} AS label, {STRONGEST_KIND} AS kind,
+        let rows = sqlx::query(
+            "SELECT c.contributor AS id, c.name AS label, c.kind AS kind, c.url AS url,
                     (SELECT COUNT(*) FROM entry_credits AS every
                      WHERE every.contributor = c.contributor) AS entries,
-                    MIN(c.date_id) AS first, MAX(c.date_id) AS last, {URL} AS url
+                    (SELECT MIN(date_id) FROM entry_credits AS every
+                     WHERE every.contributor = c.contributor) AS first,
+                    (SELECT MAX(date_id) FROM entry_credits AS every
+                     WHERE every.contributor = c.contributor) AS last
              FROM entry_credits AS c
              WHERE c.date_id = ?1
-             GROUP BY c.contributor
-             ORDER BY entries DESC, c.contributor ASC"
-        )))
+             ORDER BY entries DESC, c.contributor ASC",
+        )
         .bind(date.days())
         .fetch_all(self.db().reader())
         .await?;

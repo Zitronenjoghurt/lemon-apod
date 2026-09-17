@@ -2,16 +2,30 @@
 import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ArchiveStrip from '@/components/ArchiveStrip.vue'
+import EclipseDial from '@/components/EclipseDial.vue'
 import HintPopover from '@/components/HintPopover.vue'
+import MagnitudeMark from '@/components/MagnitudeMark.vue'
 import MoonDial from '@/components/MoonDial.vue'
 import RangeTrack from '@/components/RangeTrack.vue'
 import RetryNotice from '@/components/RetryNotice.vue'
 import { api } from '@/api/client'
-import type { Sky, SkyEventKind, SkyOnDate, SkyStrip } from '@/api/types'
+import type { EclipseEvent, Planet, Sky, SkyEventKind, SkyOnDate, SkyStrip } from '@/api/types'
 import { useArrowKeys } from '@/composables/useArrowKeys'
 import { useAsync } from '@/composables/useAsync'
+import { usePreferences } from '@/composables/usePreferences'
 import { clampDate, formatDate, localDay, localMidnight, nextDay, previousDay } from '@/utils/date'
-import { EVENT_ICONS } from '@/utils/sky'
+import {
+  EVENT_ICONS,
+  eventColor,
+  eventDetail,
+  planetColor,
+  planetIcon,
+  planetScale,
+  seasonColor,
+  seasonOpened,
+  seasonProgress,
+  VISIBILITY,
+} from '@/utils/sky'
 import { pageTitle, setTitle } from '@/utils/title'
 
 const FIRST_YEAR = 1900
@@ -24,6 +38,7 @@ const TIME = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-di
 
 const route = useRoute()
 const router = useRouter()
+const { hemisphere } = usePreferences()
 
 const dated = computed(() => (route.params.date ? String(route.params.date) : null))
 
@@ -59,6 +74,46 @@ function clock(iso: string): string {
 
 function thousands(value: number): string {
   return Math.round(value).toLocaleString()
+}
+
+function signed(magnitude: number): string {
+  return `${magnitude < 0 ? '−' : '+'}${Math.abs(magnitude).toFixed(1)}`
+}
+
+function capitalized(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1)
+}
+
+const season = computed(() =>
+  sky.value ? seasonProgress(sky.value.season.at, sky.value.next_turning.at, sky.value.at) : null,
+)
+
+const seasonNow = computed(() =>
+  sky.value ? seasonColor(seasonOpened(sky.value.season, hemisphere.value)) : 'var(--accent)',
+)
+const seasonNext = computed(() =>
+  sky.value ? seasonColor(seasonOpened(sky.value.next_turning, hemisphere.value)) : 'var(--accent)',
+)
+const seasonFill = computed(() => `linear-gradient(90deg, ${seasonNow.value}, ${seasonNext.value})`)
+
+const seasonLine = computed(() => {
+  const turning = sky.value?.season
+  if (!turning) return ''
+  return hemisphere.value === 'south'
+    ? `${capitalized(turning.opens_southern)} in the south, ${turning.opens_northern} in the north`
+    : `${capitalized(turning.opens_northern)} in the north, ${turning.opens_southern} in the south`
+})
+
+function sight(planet: Planet): { icon: string; title: string } {
+  if (planet.visibility === 'lost') return { icon: 'eye-off', title: 'too close to the sun to see' }
+  if (planet.naked_eye) return { icon: 'eye', title: 'visible to the naked eye' }
+  return { icon: 'telescope', title: 'needs a telescope' }
+}
+
+function eclipseNote(found: EclipseEvent): string {
+  if (found.solar) return 'Along its own track'
+  if (/penumbral/i.test(found.label)) return 'A slight dimming, seen from the whole night side'
+  return 'Whole night side of Earth'
 }
 
 function stripsFor(kind: SkyEventKind): SkyStrip[] {
@@ -97,7 +152,7 @@ watch(
 <template>
   <div class="stack sky">
     <header class="row head">
-      <h1>{{ dated ? `The sky on ${formatDate(dated)}` : 'The sky' }}</h1>
+      <h1>{{ dated ? `The sky on ${formatDate(dated)}` : 'The sky today' }}</h1>
       <HintPopover label="About this page">
         <p>
           Positions come from mean orbital elements and the Espenak and Meeus delta-T polynomials
@@ -142,7 +197,7 @@ watch(
 
     <template v-else-if="sky && now">
       <div class="panels">
-        <section class="card panel moon">
+        <section class="card panel moon rise">
           <h2 class="muted">
             <AppIcon name="moon" />
             The moon
@@ -150,6 +205,7 @@ watch(
 
           <div class="dial">
             <MoonDial
+              :hemisphere="hemisphere"
               :illumination="sky.moon.illumination"
               :label="sky.moon.label"
               :waxing="sky.moon.waxing"
@@ -191,7 +247,7 @@ watch(
           <ArchiveStrip :strips="stripsFor('moon')" />
         </section>
 
-        <section v-if="sky.planets.length" class="card panel">
+        <section v-if="sky.planets.length" class="card panel rise">
           <h2 class="muted">
             <AppIcon name="planets" />
             Planet observability
@@ -211,6 +267,11 @@ watch(
                 to observe them.
               </p>
               <p>
+                Beside the magnitude, an <strong>eye</strong> marks a planet the naked eye can find,
+                a <strong>telescope</strong> one that needs help, and a crossed eye one too close to
+                the sun to see at all.
+              </p>
+              <p>
                 Whether a planet is actually over the horizon for you at a given hour depends on
                 your location.
               </p>
@@ -222,14 +283,36 @@ watch(
             <span>Next best view</span>
           </p>
 
-          <ul class="rows scroller">
+          <ul class="rows marked scroller">
             <li v-for="planet in sky.planets" :key="planet.planet" :class="planet.visibility">
+              <AppIcon
+                :name="planetIcon(planet.planet)"
+                :scale="planetScale(planet.planet)"
+                :style="{ color: planetColor(planet.planet) }"
+                class="sign"
+              />
               <span class="what">
-                <span class="title">{{ planet.name }}</span>
-                <span class="muted detail">
-                  {{ planet.visibility_label }} &middot; mag
-                  {{ planet.magnitude.toFixed(1) }} &middot; {{ planet.distance_au.toFixed(2) }} AU
-                  <template v-if="!planet.naked_eye"> &middot; telescope</template>
+                <span class="title">
+                  {{ planet.name }}
+                  <span class="muted au">{{ planet.distance_au.toFixed(2) }} AU</span>
+                </span>
+                <span class="muted detail bits spaced">
+                  <span :class="['bit', 'window', VISIBILITY[planet.visibility].tone]">
+                    <AppIcon :name="VISIBILITY[planet.visibility].icon" />
+                    {{ planet.visibility_label }}
+                  </span>
+                  <span
+                    :title="`Apparent magnitude ${signed(planet.magnitude)}, ${sight(planet).title}`"
+                    class="bit mag"
+                  >
+                    <MagnitudeMark :magnitude="planet.magnitude" />
+                    {{ signed(planet.magnitude) }}
+                    <AppIcon
+                      :label="sight(planet).title"
+                      :name="sight(planet).icon"
+                      class="sight"
+                    />
+                  </span>
                 </span>
               </span>
               <span v-if="planet.next_milestone" class="away">
@@ -244,7 +327,7 @@ watch(
           <ArchiveStrip :strips="stripsFor('planet')" />
         </section>
 
-        <section v-if="sky.conjunctions.length" class="card panel">
+        <section v-if="sky.conjunctions.length" class="card panel rise">
           <h2 class="muted">
             <AppIcon name="conjunction" />
             Conjunctions
@@ -261,12 +344,25 @@ watch(
             <span>Closest at</span>
           </p>
 
-          <ul class="rows scroller">
+          <ul class="rows marked scroller">
             <li v-for="meet in sky.conjunctions" :key="`${meet.names.join()}-${meet.at}`">
+              <span class="sign pair">
+                <AppIcon
+                  v-for="planet in meet.planets"
+                  :key="planet"
+                  :name="planetIcon(planet)"
+                  :scale="planetScale(planet)"
+                  :style="{ color: planetColor(planet) }"
+                />
+              </span>
               <span class="what">
                 <span class="title">{{ meet.names[0] }} and {{ meet.names[1] }}</span>
-                <span class="muted detail">
-                  {{ meet.separation.toFixed(1) }}&deg; apart &middot; {{ meet.visibility_label }}
+                <span class="muted detail bits spaced">
+                  <span class="bit">{{ meet.separation.toFixed(1) }}&deg; apart</span>
+                  <span :class="['bit', 'window', VISIBILITY[meet.visibility].tone]">
+                    <AppIcon :name="VISIBILITY[meet.visibility].icon" />
+                    {{ meet.visibility_label }}
+                  </span>
                 </span>
               </span>
               <span class="muted away">{{ day(meet.at) }}</span>
@@ -276,7 +372,7 @@ watch(
           <ArchiveStrip :strips="stripsFor('conjunction')" />
         </section>
 
-        <section v-if="sky.showers.length" class="card panel">
+        <section v-if="sky.showers.length" class="card panel rise">
           <h2 class="muted">
             <AppIcon name="shower" />
             Meteor showers
@@ -319,7 +415,7 @@ watch(
           <ArchiveStrip :strips="stripsFor('shower')" />
         </section>
 
-        <section v-if="sky.eclipses.length" class="card panel">
+        <section v-if="sky.eclipses.length" class="card panel rise">
           <h2 class="muted">
             <AppIcon name="eclipse" />
             Eclipses
@@ -333,6 +429,11 @@ watch(
                 <strong>Magnitude</strong> here means how much of the sun or moon is covered, above
                 1 means total.
               </p>
+              <p>
+                A <strong>penumbral</strong> lunar eclipse only crosses the lighter, outer part of
+                Earth's shadow, so the moon dims a little instead of showing a bite. Its magnitude
+                is how far into that outer shadow it goes.
+              </p>
             </HintPopover>
           </h2>
 
@@ -341,13 +442,18 @@ watch(
             <span>When</span>
           </p>
 
-          <ul class="rows scroller">
+          <ul class="rows marked scroller">
             <li v-for="found in sky.eclipses" :key="found.at">
+              <EclipseDial
+                :label="found.label"
+                :magnitude="found.magnitude"
+                :solar="found.solar"
+                class="sign"
+              />
               <span class="what">
                 <span class="title">{{ found.label }}</span>
                 <span class="muted detail">
-                  {{ found.solar ? 'Along its own track' : 'Whole night side of Earth' }} &middot;
-                  magnitude {{ found.magnitude.toFixed(2) }}
+                  {{ eclipseNote(found) }} &middot; magnitude {{ found.magnitude.toFixed(2) }}
                 </span>
               </span>
               <span class="muted away">{{ day(found.at) }} {{ clock(found.at) }}</span>
@@ -357,7 +463,7 @@ watch(
           <ArchiveStrip :strips="stripsFor('eclipse')" />
         </section>
 
-        <section class="card panel earth">
+        <section class="card panel earth rise">
           <h2 class="muted">
             <AppIcon name="orbit" />
             Earth's orbit
@@ -376,15 +482,28 @@ watch(
             </HintPopover>
           </h2>
 
+          <div v-if="season" class="season">
+            <p class="season-line">
+              <span :style="{ color: seasonNow }" class="season-name">{{ seasonLine }}</span>
+              <span class="muted season-left">
+                {{ Math.round(season.fraction * 100) }}% through &middot; {{ season.daysLeft }}
+                {{ season.daysLeft === 1 ? 'day' : 'days' }} left
+              </span>
+            </p>
+            <RangeTrack
+              :fill="seasonFill"
+              :max="1"
+              :max-label="day(sky.next_turning.at)"
+              :max-note="sky.next_turning.label"
+              :min="0"
+              :min-label="day(sky.season.at)"
+              :min-note="sky.season.label"
+              :pin="seasonNow"
+              :value="season.fraction"
+            />
+          </div>
+
           <dl class="facts">
-            <div>
-              <dt class="muted">Season began</dt>
-              <dd>{{ sky.season.label }} &middot; {{ day(sky.season.at) }}</dd>
-            </div>
-            <div>
-              <dt class="muted">Next change</dt>
-              <dd>{{ sky.next_turning.label }} &middot; {{ day(sky.next_turning.at) }}</dd>
-            </div>
             <div v-for="apsis in sky.earth_apsides" :key="apsis.apsis">
               <dt class="muted">{{ apsis.label }}</dt>
               <dd>{{ day(apsis.at) }} &middot; {{ apsis.distance_au.toFixed(4) }} AU</dd>
@@ -395,7 +514,7 @@ watch(
         </section>
       </div>
 
-      <section v-if="sky.events.length" class="card panel wide">
+      <section v-if="sky.events.length" class="card panel wide rise">
         <h2 class="muted">
           <AppIcon name="calendar-clock" />
           Upcoming events
@@ -410,17 +529,55 @@ watch(
         <ol class="timeline scroller">
           <li
             v-for="event in sky.events"
-            :key="`${event.kind}-${event.at}`"
+            :key="`${event.kind}-${event.title}-${event.at}`"
             :class="[event.kind, { gone: new Date(event.at) < now }]"
           >
-            <AppIcon :name="EVENT_ICONS[event.kind]" />
+            <span
+              v-if="event.planets?.length"
+              :class="['sign', { pair: event.planets.length > 1 }]"
+            >
+              <AppIcon
+                v-for="planet in event.planets"
+                :key="planet"
+                :name="planetIcon(planet)"
+                :scale="planetScale(planet)"
+                :style="{ color: planetColor(planet) }"
+              />
+            </span>
+            <EclipseDial
+              v-else-if="event.kind === 'eclipse' && event.magnitude !== undefined"
+              :label="event.title"
+              :magnitude="event.magnitude"
+              :solar="event.solar ?? false"
+              class="sign"
+            />
+            <span
+              v-else-if="event.kind === 'moon' && event.illumination !== undefined"
+              class="sign"
+            >
+              <MoonDial
+                :hemisphere="hemisphere"
+                :illumination="event.illumination"
+                :label="event.title"
+                :size="17"
+                waxing
+              />
+            </span>
+            <AppIcon
+              v-else
+              :name="EVENT_ICONS[event.kind]"
+              :style="{ color: eventColor(event, hemisphere) }"
+              class="sign"
+            />
             <time :datetime="event.at" class="when">
               <span class="date">{{ day(event.at) }}</span>
               <span class="hour">{{ event.time_label ?? clock(event.at) }}</span>
             </time>
             <span class="what">
               <span class="title">{{ event.title }}</span>
-              <span v-if="event.detail" class="muted detail">{{ event.detail }}</span>
+              <span v-if="eventDetail(event, hemisphere)" class="muted detail">
+                {{ eventDetail(event, hemisphere) }}
+              </span>
             </span>
           </li>
         </ol>
@@ -553,8 +710,152 @@ h1 {
 }
 
 .timeline-heads {
-  grid-template-columns: 1.25rem 8.5rem minmax(0, 1fr);
+  grid-template-columns: var(--mark-col) 8.5rem minmax(0, 1fr);
   gap: 0 var(--space-3);
+}
+
+.panels,
+.wide {
+  --mark-col: 2rem;
+}
+
+.sign {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: var(--mark-col);
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+
+.panels > :nth-child(2) {
+  --rise-delay: 50ms;
+}
+
+.panels > :nth-child(3) {
+  --rise-delay: 100ms;
+}
+
+.panels > :nth-child(4) {
+  --rise-delay: 150ms;
+}
+
+.panels > :nth-child(5) {
+  --rise-delay: 200ms;
+}
+
+.panels > :nth-child(6) {
+  --rise-delay: 250ms;
+}
+
+.wide {
+  --rise-delay: 300ms;
+}
+
+.pair .icon {
+  font-size: 1.3rem;
+}
+
+.pair .icon + .icon {
+  margin-left: -0.35rem;
+}
+
+.rows.marked li {
+  grid-template-columns: var(--mark-col) minmax(0, 1fr) minmax(0, 8rem);
+}
+
+.au {
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-1);
+}
+
+.bit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0);
+  white-space: nowrap;
+}
+
+.bit + .bit::before {
+  content: '·';
+  margin-right: var(--space-1);
+  color: var(--text-muted);
+}
+
+.bits.spaced {
+  column-gap: var(--space-4);
+}
+
+.bits.spaced .bit + .bit::before {
+  content: none;
+  margin: 0;
+}
+
+.window .icon {
+  font-size: 1.1em;
+}
+
+.window.dusk {
+  color: var(--dusk);
+}
+
+.window.dawn {
+  color: var(--dawn);
+}
+
+.window.all-night {
+  color: var(--night);
+}
+
+.mag {
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.mag .magnitude {
+  font-size: 1.1em;
+}
+
+.mag .sight {
+  margin-left: var(--space-1);
+  font-size: 1.15em;
+  opacity: 0.85;
+}
+
+.season {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.season-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+  flex-wrap: wrap;
+}
+
+.season-name {
+  font-weight: 550;
+}
+
+.season-left {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .rows li.lost {
@@ -575,12 +876,11 @@ h1 {
 }
 
 .timeline li {
-  grid-template-columns: 1.25rem 8.5rem minmax(0, 1fr);
+  grid-template-columns: var(--mark-col) 8.5rem minmax(0, 1fr);
 }
 
-.timeline .icon {
-  color: var(--text-muted);
-  font-size: var(--text-md);
+.timeline .sign {
+  font-size: 1.3rem;
 }
 
 .timeline .gone {
@@ -651,7 +951,7 @@ h1 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .panel {
+  .panel:has(.scroller) {
     max-height: 26rem;
   }
 
@@ -681,7 +981,18 @@ h1 {
   .picker {
     order: 1;
     width: 100%;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .picker .back {
+    order: 2;
+    width: 100%;
+    text-align: center;
+  }
+
+  .picker .back.away {
+    display: none;
   }
 
   .picker :deep(.p-datepicker) {
@@ -698,11 +1009,25 @@ h1 {
   }
 
   .timeline-heads {
-    grid-template-columns: 1.25rem 6.5rem minmax(0, 1fr);
+    grid-template-columns: var(--mark-col) 6.5rem minmax(0, 1fr);
   }
 
   .rows li {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rows.marked li {
+    grid-template-columns: var(--mark-col) minmax(0, 1fr);
+  }
+
+  .rows.marked .sign {
+    grid-row: 1 / span 2;
+    align-self: start;
+    margin-top: var(--space-0);
+  }
+
+  .rows.marked .away {
+    grid-column: 2;
   }
 
   .away {
@@ -715,7 +1040,7 @@ h1 {
   }
 
   .timeline li {
-    grid-template-columns: 1.25rem 6.5rem minmax(0, 1fr);
+    grid-template-columns: var(--mark-col) 6.5rem minmax(0, 1fr);
   }
 }
 </style>

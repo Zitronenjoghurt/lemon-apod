@@ -39,6 +39,7 @@ import {
   Eraser,
   ExternalLink,
   Eye,
+  EyeOff,
   FastForward,
   File,
   Flag,
@@ -78,6 +79,8 @@ import {
   Sparkles,
   Star,
   Sun,
+  Sunrise,
+  Sunset,
   Telescope,
   Timer,
   Trash2,
@@ -130,6 +133,7 @@ const ICONS: Record<string, Component> = {
   'exclamation-triangle': TriangleAlert,
   external: ExternalLink,
   eye: Eye,
+  'eye-off': EyeOff,
   feed: Newspaper,
   file: File,
   'first-page': ChevronsLeft,
@@ -169,11 +173,12 @@ const ICONS: Record<string, Component> = {
   settings: SlidersHorizontal,
   share: Share2,
   shield: Shield,
-  shower: Sparkles,
   sparkles: Sparkles,
   spinner: LoaderCircle,
   star: Star,
   sun: Sun,
+  sunrise: Sunrise,
+  sunset: Sunset,
   swap: ArrowLeftRight,
   telescope: Telescope,
   times: X,
@@ -189,6 +194,23 @@ const ICONS: Record<string, Component> = {
 
 const BRANDS = new Set(['discord', 'github'])
 
+const GLYPHS: Record<string, string> = {
+  mercury:
+    '<circle cx="12" cy="12" r="8"/><circle cx="9.6" cy="10" r="1.9"/><circle cx="14.6" cy="14.4" r="1.2"/>',
+  venus:
+    '<circle cx="12" cy="12" r="8"/><path d="M6.6 9.6c2 1.4 4.2-1.2 6.8.2 1 .6 1.8.8 3 .6"/><path d="M6.4 14.2c1.6-.4 2.6-.2 3.8.6 2.2 1.4 4.6-1.4 7 0"/>',
+  mars: '<circle cx="12" cy="12" r="8"/><path d="M8.9 6.3c1.9-.9 4.3-.9 6.2 0"/><path d="M9.3 17.8c1.7.7 3.7.7 5.4 0"/>',
+  jupiter:
+    '<circle cx="12" cy="12" r="8"/><path d="M5.4 9.2h13.2"/><path d="M5.4 14.8h13.2"/><ellipse cx="14.6" cy="12" rx="1.9" ry="1"/>',
+  saturn:
+    '<path d="M0.25 16.28A12.5 3.6 -20 0 1 4 11.84"/><path d="M18.02 6.73A12.5 3.6 -20 0 1 23.75 7.72"/><circle cx="12" cy="12" r="8"/><path d="M0.25 16.28A12.5 3.6 -20 0 0 23.75 7.72"/>',
+  uranus:
+    '<path d="M9.83 24.31A3.6 12.5 10 0 1 7.86 18.85"/><path d="M10.45 4.15A3.6 12.5 10 0 1 14.17 -0.31"/><circle cx="12" cy="12" r="8"/><path d="M9.83 24.31A3.6 12.5 10 0 0 14.17 -0.31"/>',
+  neptune: '<circle cx="12" cy="12" r="8"/><path d="M8.6 10.4h4.2"/><path d="M10.4 13.8h5.4"/>',
+  shower:
+    '<g fill="currentColor" stroke="none"><path d="M8.42 17.42 20.5 3.5 6.58 15.58Z"/><circle cx="7.5" cy="16.5" r="1.75"/><path d="M6.42 8.85 15 3.5 5.58 7.15Z"/><circle cx="6" cy="8" r="1.25"/><path d="M16.88 19.87 20 10 15.12 19.13Z"/><circle cx="16" cy="19.5" r="1.25"/></g>',
+}
+
 const props = withDefaults(
   defineProps<{
     name: string
@@ -196,12 +218,19 @@ const props = withDefaults(
     label?: string
     spin?: boolean
     fill?: boolean
+    scale?: number
   }>(),
-  { size: '1em', label: undefined, spin: false, fill: false },
+  { size: '1em', label: undefined, spin: false, fill: false, scale: 1 },
 )
 
 const component = computed(() => ICONS[props.name])
 const brand = computed(() => (BRANDS.has(props.name) ? props.name : null))
+const glyph = computed(() => GLYPHS[props.name])
+
+const glyphTransform = computed(() =>
+  props.scale === 1 ? undefined : `translate(12 12) scale(${props.scale}) translate(-12 -12)`,
+)
+const glyphStroke = computed(() => (2 + (1 - props.scale) * 1.7).toFixed(2))
 </script>
 
 <template>
@@ -237,6 +266,24 @@ const brand = computed(() => (BRANDS.has(props.name) ? props.name : null))
     />
   </svg>
 
+  <svg
+    v-else-if="glyph"
+    :aria-hidden="label ? undefined : 'true'"
+    :aria-label="label"
+    :class="['icon', 'glyph', { spin }]"
+    :height="size"
+    :role="label ? 'img' : undefined"
+    :width="size"
+    fill="none"
+    stroke="currentColor"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="2"
+    viewBox="0 0 24 24"
+  >
+    <g :stroke-width="glyphStroke" :transform="glyphTransform" v-html="glyph" />
+  </svg>
+
   <component
     :is="component"
     v-else-if="component"
@@ -256,6 +303,10 @@ const brand = computed(() => (BRANDS.has(props.name) ? props.name : null))
   align-self: center;
   vertical-align: -0.145em;
   stroke-width: 2px;
+}
+
+.glyph {
+  overflow: visible;
 }
 
 .spin {

@@ -67,8 +67,10 @@ services:
       - ${APOD_DATA:-../data}:/data
     environment:
       APOD_PUBLIC_URL: ${APOD_PUBLIC_URL:-http://localhost:51995}
-      APOD_RATE_LIMIT_PER_SECOND: 5
-      APOD_RATE_LIMIT_BURST: 30
+      APOD_RATE_LIMIT_PER_SECOND: 8
+      APOD_RATE_LIMIT_BURST: 60
+      APOD_RATE_LIMIT_SHARED_PER_SECOND: 20
+      APOD_RATE_LIMIT_SHARED_BURST: 120
       APOD_NTFY_URL: "${APOD_NTFY_PUBLIC_URL:-http://localhost:8080}"
       APOD_NTFY_TOPIC_APOD: apod
       APOD_NTFY_TOPIC_AURORA: apod-aurora

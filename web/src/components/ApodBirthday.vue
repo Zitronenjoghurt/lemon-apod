@@ -17,7 +17,7 @@ const wording = computed(() =>
 
 <template>
   <span v-if="age" :class="['birthday', { compact }]" :title="`${wording} on this day`">
-    <AppIcon name="birthday" />
+    <AppIcon class="cake" name="birthday" />
     <span v-if="compact" class="sr-only">{{ wording }} on this day</span>
     <template v-else>{{ wording }}</template>
   </span>
@@ -37,14 +37,19 @@ const wording = computed(() =>
   white-space: nowrap;
 }
 
-.birthday .icon {
+.birthday .cake {
   color: var(--accent);
-  font-size: var(--text-2xs);
+  font-size: 1.2em;
 }
 
 .compact {
   padding: 0;
   border: 0;
   background: none;
+}
+
+.compact .cake {
+  color: inherit;
+  font-size: var(--text-sm);
 }
 </style>

@@ -10,6 +10,10 @@ pub fn read_routes() -> Router<ServerState> {
     routes::build_routes()
 }
 
+pub fn shared_routes() -> Router<ServerState> {
+    routes::shared_routes()
+}
+
 pub fn vote_routes() -> Router<ServerState> {
     routes::rating_routes()
 }
